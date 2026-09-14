@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
 import { type User } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
@@ -94,6 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
+  const fetchUserDataPromise = useRef<Promise<void> | null>(null);
+
   // Listen to auth state changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -106,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log(`[AuthContext] onAuthStateChange event: ${_event}`);
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
@@ -132,40 +135,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchUserData = async (currentUser: User) => {
-    try {
-      // Fetch user profile and onboarding state from Backend
-      const [dbUser, onboardingProgress] = await Promise.all([
-        api.get<any>('/api/auth/me').catch((e) => {
-          const status = e?.status ?? e?.response?.status;
-          if (status === 403 || status === 404) return null; // Expected if user just signed up and has no DB record yet
-          throw e; // Bubble up true network errors
-        }),
-        api.get<any>('/api/auth/onboarding').catch((e) => {
-          const status = e?.status ?? e?.response?.status;
-          if (status === 403 || status === 404) return null;
-          throw e;
-        })
-      ]);
-
-      if (dbUser) {
-        setOnboardingComplete(!!dbUser.role);
-      } else {
-        setOnboardingComplete(false);
-      }
-
-      if (onboardingProgress && Object.keys(onboardingProgress).length > 0) {
-        setOnboardingData({ ...DEFAULT_ONBOARDING, ...onboardingProgress });
-      } else {
-        setOnboardingData({ ...DEFAULT_ONBOARDING });
-      }
-    } catch (error) {
-      console.error('Network Error fetching user data:', error);
-      alert("Network Error: Could not connect to servers. Please check your connection and restart the app.");
-      // Do NOT push them into default onboarding state. Sign out so they can retry clean.
-      supabase.auth.signOut();
-    } finally {
-      setLoading(false);
+    if (fetchUserDataPromise.current) {
+      console.log('[Startup] fetchUserData already in progress. Waiting...');
+      return fetchUserDataPromise.current;
     }
+
+    fetchUserDataPromise.current = (async () => {
+      try {
+        console.log('[Startup] Fetching user data and onboarding progress...');
+        // Fetch user profile and onboarding state from Backend
+        const [dbUser, onboardingProgress] = await Promise.all([
+          api.get<any>('/api/auth/me').catch((e) => {
+            const status = e?.status ?? e?.response?.status;
+            if (status === 403 || status === 404) return null; // Expected if user just signed up and has no DB record yet
+            throw e; // Bubble up true network errors
+          }),
+          api.get<any>('/api/auth/onboarding').catch((e) => {
+            const status = e?.status ?? e?.response?.status;
+            if (status === 403 || status === 404) return null;
+            throw e;
+          })
+        ]);
+
+        console.log('[Startup] DB User fetched:', !!dbUser);
+        console.log('[Startup] Onboarding progress fetched:', !!onboardingProgress);
+
+        if (dbUser) {
+          setOnboardingComplete(!!dbUser.role);
+        } else {
+          setOnboardingComplete(false);
+        }
+
+        if (onboardingProgress && Object.keys(onboardingProgress).length > 0) {
+          setOnboardingData({ ...DEFAULT_ONBOARDING, ...onboardingProgress });
+        } else {
+          setOnboardingData({ ...DEFAULT_ONBOARDING });
+        }
+      } catch (error) {
+        console.error('[Startup] Network Error fetching user data:', error);
+        alert("Network Error: Could not connect to servers. Please check your connection and restart the app.");
+        // Do NOT push them into default onboarding state. Sign out so they can retry clean.
+        await supabase.auth.signOut();
+      } finally {
+        console.log('[Startup] Finished fetching user data. Setting loading=false');
+        setLoading(false);
+        fetchUserDataPromise.current = null;
+      }
+    })();
+
+    return fetchUserDataPromise.current;
   };
 
   // --- Auth methods ---

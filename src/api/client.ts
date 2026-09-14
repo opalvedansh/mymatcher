@@ -8,7 +8,11 @@ import { Platform } from 'react-native';
 function getBaseUrl(): string {
   // Always respect explicit environment variables first
   if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+    let url = process.env.EXPO_PUBLIC_API_URL;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `https://${url}`;
+    }
+    return url;
   }
 
   if (__DEV__ && Platform.OS !== 'web') {
@@ -44,6 +48,28 @@ async function getToken(): Promise<string | null> {
   }
 }
 
+// ─── Fetch wrapper with timeout ────────────────────────────────────
+export async function fetchWithTimeout(url: string, options: RequestInit = {}) {
+  const timeoutMs = 15000; // 15 seconds
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal as any,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error: any) {
+    clearTimeout(id);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
+
 // ─── Core fetch wrapper ───────────────────────────────────────────
 async function request<T>(
   path: string,
@@ -60,7 +86,7 @@ async function request<T>(
   }
 
   console.log(`[API Request] ${options.method || 'GET'} ${BASE_URL}${path}`);
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetchWithTimeout(`${BASE_URL}${path}`, {
     ...options,
     headers,
   });

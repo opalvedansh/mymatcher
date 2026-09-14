@@ -59,12 +59,14 @@ async function verifySupabaseToken(token) {
   }
 
   // Strategy 1: Local JWT verify with secret
-  // Supabase's JWT secret is base64-encoded in the dashboard — decode it to raw bytes first.
+  // Supabase's JWT secret is a UTF-8 string. Do NOT base64 decode it.
   const secret = process.env.SUPABASE_JWT_SECRET;
   if (secret) {
     try {
-      const secretBuffer = Buffer.from(secret, 'base64');
-      const decoded = jwt.verify(token, secretBuffer);
+      const decoded = jwt.verify(token, secret, {
+        algorithms: ['HS256'],
+        audience: 'authenticated'
+      });
       if (decoded && decoded.sub) {
         return { sub: decoded.sub, email: decoded.email || '' };
       }
@@ -72,15 +74,15 @@ async function verifySupabaseToken(token) {
       if (jwtErr.name === 'TokenExpiredError') {
         throw new Error('Token expired — please re-authenticate');
       }
-      // "invalid algorithm" is expected for OAuth tokens (ES256/ECDSA).
-      // Any other mismatch: fall through to Supabase API verification.
-      if (jwtErr.message !== 'invalid algorithm') {
-        logger.warn({ err: jwtErr.message }, 'Local JWT verify failed — trying Supabase API');
-      }
+      // If local verification fails (e.g. invalid signature, malformed), the token is invalid.
+      // Do NOT fall back to Supabase API, as attackers could spam invalid tokens to exhaust our rate limits.
+      logger.error({ err: jwtErr.message }, 'Local JWT verify failed');
+      throw new Error(`Invalid token: ${jwtErr.message}`);
     }
   }
 
   // Strategy 2: Validate via Supabase Auth API (with circuit breaker)
+  // This is now only reached if SUPABASE_JWT_SECRET is completely missing from .env
   let breakerOpen = false;
   try {
     const data = await supabaseAuthBreaker.fire(token);
