@@ -99,6 +99,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Listen to auth state changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      // ── Safe startup token diagnostics (never logs the actual token) ──
+      const _t = session?.access_token ?? null;
+      console.log(
+        '[AuthContext Startup Debug]',
+        `sessionExists=${!!session}`,
+        `accessTokenExists=${!!_t}`,
+        `tokenType=${_t !== null ? typeof _t : 'null'}`,
+        `tokenLength=${_t?.length ?? 0}`,
+        `jwtPartCount=${_t ? _t.split('.').length : 0}`,
+      );
+      // ──────────────────────────────────────────────────────────
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchUserData(session.user);
@@ -109,6 +120,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       console.log(`[AuthContext] onAuthStateChange event: ${_event}`);
+
+      // ── Safe auth state change token diagnostics (never logs the actual token) ──
+      const _t2 = session?.access_token ?? null;
+      console.log(
+        '[AuthContext Auth State Debug]',
+        `event=${_event}`,
+        `sessionExists=${!!session}`,
+        `accessTokenExists=${!!_t2}`,
+        `tokenType=${_t2 !== null ? typeof _t2 : 'null'}`,
+        `tokenLength=${_t2?.length ?? 0}`,
+        `jwtPartCount=${_t2 ? _t2.split('.').length : 0}`,
+      );
+      // ──────────────────────────────────────────────────────────────────────
+
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {

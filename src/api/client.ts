@@ -42,7 +42,25 @@ export class ApiError extends Error {
 async function getToken(): Promise<string | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
+    const token = session?.access_token ?? null;
+
+    // ── Safe auth diagnostics (no token value is ever logged) ──────
+    const sessionExists = !!session;
+    const accessTokenExists = !!token;
+    const tokenLength = token?.length ?? 0;
+    const jwtPartCount = token ? token.split('.').length : 0;
+    const tokenType = token !== null ? typeof token : 'null';
+    console.log(
+      `[Auth Debug] getToken() →`,
+      `sessionExists=${sessionExists}`,
+      `accessTokenExists=${accessTokenExists}`,
+      `tokenType=${tokenType}`,
+      `tokenLength=${tokenLength}`,
+      `jwtPartCount=${jwtPartCount}`,
+    );
+    // ───────────────────────────────────────────────────────────────
+
+    return token;
   } catch {
     return null;
   }
