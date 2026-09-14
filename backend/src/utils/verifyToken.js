@@ -46,7 +46,7 @@ supabaseAuthBreaker.on('close', () => logger.info('[CircuitBreaker] Supabase API
 
 /**
  * Verifies a Supabase JWT access token.
- * 1. Tries local jwt.verify with SUPABASE_JWT_SECRET (base64-decoded) if available.
+ * 1. Tries local jwt.verify with SUPABASE_JWT_SECRET if available.
  * 2. Tries supabase.auth.getUser(token) via circuit breaker.
  * 3. If circuit is open, falls back to a direct API call bypassing the breaker.
  *
@@ -58,9 +58,23 @@ async function verifySupabaseToken(token) {
     throw new Error('Token is missing');
   }
 
+  // Safe diagnostics (Step 3 & 11) - Do NOT log the token value itself
+  const jwtParts = token.split('.');
+  const secret = process.env.SUPABASE_JWT_SECRET;
+  
+  logger.info({
+    tokenLength: token.length,
+    jwtPartCount: jwtParts.length,
+    verificationStrategy: secret ? 'local_jwt' : 'supabase_api_circuit_breaker',
+  }, 'Starting token verification');
+
+  // Structural validation before passing to parsers
+  if (jwtParts.length !== 3) {
+    throw new Error('jwt malformed: token must have 3 parts');
+  }
+
   // Strategy 1: Local JWT verify with secret
   // Supabase's JWT secret is a UTF-8 string. Do NOT base64 decode it.
-  const secret = process.env.SUPABASE_JWT_SECRET;
   if (secret) {
     try {
       const decoded = jwt.verify(token, secret, {
