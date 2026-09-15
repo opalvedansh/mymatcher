@@ -100,12 +100,17 @@ async function getOnboardingData(req, res, next) {
 // ─── PUT /api/auth/onboarding ────────────────────────────────────
 async function updateOnboardingData(req, res, next) {
   try {
+    // Upsert, not update: onboarding progress is saved before the user has
+    // picked a role, which is the point at which their row would be created.
+    // `role` stays NULL here, so the client still treats onboarding as pending.
     const { rows } = await db.query(
-      `UPDATE users 
-       SET onboarding_data = onboarding_data || $1::jsonb, updated_at = now() 
-       WHERE id = $2 
+      `INSERT INTO users (id, email, onboarding_data)
+       VALUES ($1, $2, $3::jsonb)
+       ON CONFLICT (id) DO UPDATE
+         SET onboarding_data = users.onboarding_data || EXCLUDED.onboarding_data,
+             updated_at      = now()
        RETURNING onboarding_data`,
-      [JSON.stringify(req.body), req.user.id]
+      [req.user.id, req.user.email || '', JSON.stringify(req.body)]
     );
 
     if (redisClient) {

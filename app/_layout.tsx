@@ -4,18 +4,41 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect } from 'react';
 
+// Owns every auth-driven redirect. This lives in the root layout because it
+// must stay mounted across the sign-in transition — a screen that routes itself
+// away (as app/index.tsx used to) unmounts and stops observing auth state.
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, onboardingComplete, onboardingData } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
     if (loading) return;
-    const inAuthGroup = segments[0] === 'auth';
-    if (!user && !inAuthGroup) {
-      router.replace('/auth/login');
+
+    const group = segments[0];
+    const inAuthGroup = group === 'auth';
+    const inOnboarding = group === 'onboarding';
+
+    if (!user) {
+      if (!inAuthGroup) router.replace('/auth/login');
+      return;
     }
-  }, [user, loading, segments, router]);
+
+    if (!onboardingComplete) {
+      // Only steer them into onboarding from outside it. `currentStep` trails
+      // the screen they are actually on, so redirecting while already inside
+      // would pin them to an earlier step.
+      if (!inOnboarding) {
+        const step = (onboardingData?.currentStep || 'role_selection').replace(/_/g, '-');
+        router.replace(`/onboarding/${step}`);
+      }
+      return;
+    }
+
+    if (inAuthGroup || inOnboarding || group === undefined) {
+      router.replace(onboardingData?.role === 'Brand' ? '/(brand-tabs)/home' : '/(influencer-tabs)/home');
+    }
+  }, [user, loading, onboardingComplete, onboardingData, segments, router]);
 
   return <>{children}</>;
 }

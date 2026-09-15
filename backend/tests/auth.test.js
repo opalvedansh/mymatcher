@@ -17,6 +17,11 @@ jest.mock('../src/middleware/auth', () => ({
     };
     next();
   },
+  authenticateTokenOnly: (req, res, next) => {
+    // Mirrors the real middleware: identity from token claims only, no role.
+    req.user = { id: 'test-user-id-123', email: 'test@example.com' };
+    next();
+  },
   requireRole: (...roles) => (req, res, next) => {
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ error: 'Forbidden' });

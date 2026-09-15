@@ -1,6 +1,6 @@
 const { body } = require('express-validator');
 const validate  = require('../middleware/validate');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authenticateTokenOnly } = require('../middleware/auth');
 const { syncUser, me, getOnboardingData, updateOnboardingData, updatePushToken } = require('../controllers/authController');
 
 const router = require('express').Router();
@@ -42,7 +42,8 @@ const pushTokenRules = [
  *       200:
  *         description: User synchronized successfully
  */
-router.post('/sync', authenticate, syncRules, validate, syncUser);
+// Bootstrap route: creates the users row, so it cannot require one to exist.
+router.post('/sync', authenticateTokenOnly, syncRules, validate, syncUser);
 
 /**
  * @swagger
@@ -58,9 +59,10 @@ router.post('/sync', authenticate, syncRules, validate, syncUser);
  */
 router.get ('/me',   authenticate, me);
 
-// Onboarding progress
+// Onboarding progress. The PUT upserts, so it runs before the row exists;
+// the GET does not, and its 403 is handled client-side as "no progress yet".
 router.get ('/onboarding', authenticate, getOnboardingData);
-router.put ('/onboarding', authenticate, updateOnboardingData);
+router.put ('/onboarding', authenticateTokenOnly, updateOnboardingData);
 
 // Push token registration
 router.put ('/push-token', authenticate, pushTokenRules, validate, updatePushToken);
