@@ -196,11 +196,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setOnboardingData({ ...DEFAULT_ONBOARDING });
         }
-      } catch (error) {
-        console.error('[Startup] Network Error fetching user data:', error);
-        alert("Network Error: Could not connect to servers. Please check your connection and restart the app.");
-        // Do NOT push them into default onboarding state. Sign out so they can retry clean.
-        await supabase.auth.signOut();
+      } catch (error: any) {
+        console.error('[Startup] Error fetching user data:', error);
+        const status = error?.status ?? error?.response?.status;
+
+        // Only a real auth rejection invalidates the session. Network failures
+        // and server errors are transient — keep the session so a retry works
+        // without forcing the user to sign in again.
+        if (status === 401) {
+          alert('Your session has expired. Please sign in again.');
+          await supabase.auth.signOut();
+        } else {
+          alert('Network Error: Could not connect to servers. Please check your connection and restart the app.');
+        }
       } finally {
         console.log('[Startup] Finished fetching user data. Setting loading=false');
         setLoading(false);

@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { createPublicKey } = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const CircuitBreaker = require('opossum');
 const logger = require('../config/logger');
@@ -13,6 +14,84 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// ─── JWKS (asymmetric signing keys) ───────────────────────────────
+// Supabase projects using JWT signing keys issue ES256/RS256 tokens that
+// cannot be verified with the legacy shared SUPABASE_JWT_SECRET.
+const JWKS_URL = `${supabaseUrl.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json`;
+// Bounds how often an unrecognised `kid` can trigger an outbound fetch.
+const JWKS_REFRESH_COOLDOWN_MS = 60_000;
+
+/**
+ * Signals that we could not reach the JWKS endpoint, so the token could be
+ * neither proven valid nor proven invalid. Callers must surface this as 503,
+ * never 401 — a 401 makes the client discard a perfectly good session.
+ */
+class JwksUnavailableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'JwksUnavailableError';
+    this.code = 'JWKS_UNAVAILABLE';
+  }
+}
+
+let jwksCache = new Map();
+let jwksLastAttempt = 0;
+let jwksHealthy = false;
+let jwksInflight = null;
+
+function refreshJwks() {
+  if (jwksInflight) return jwksInflight;
+
+  jwksInflight = (async () => {
+    try {
+      const res = await fetch(JWKS_URL, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const { keys } = await res.json();
+      const next = new Map();
+      for (const jwk of keys || []) {
+        if (!jwk.kid) continue;
+        try {
+          next.set(jwk.kid, createPublicKey({ key: jwk, format: 'jwk' }));
+        } catch (err) {
+          logger.warn({ kid: jwk.kid, err: err.message }, 'Skipping unusable JWK');
+        }
+      }
+
+      jwksCache = next;
+      jwksHealthy = true;
+      logger.info({ keyCount: next.size }, '[Auth] JWKS refreshed');
+      return next;
+    } catch (err) {
+      jwksHealthy = false;
+      logger.error({ err: err.message }, '[Auth] JWKS fetch failed');
+      throw new JwksUnavailableError(`Could not fetch signing keys: ${err.message}`);
+    } finally {
+      // Stamped on failure too, so a persistent outage cannot spin the cooldown.
+      jwksLastAttempt = Date.now();
+    }
+  })().finally(() => { jwksInflight = null; });
+
+  return jwksInflight;
+}
+
+/**
+ * Resolves the public key for a token's `kid`.
+ * Returns null when the key is genuinely absent from a freshly fetched JWKS
+ * (an invalid token); throws JwksUnavailableError when we simply cannot tell.
+ */
+async function getSigningKey(kid) {
+  if (kid && jwksCache.has(kid)) return jwksCache.get(kid);
+
+  if (Date.now() - jwksLastAttempt < JWKS_REFRESH_COOLDOWN_MS) {
+    if (jwksHealthy) return null; // cache is fresh and authoritative
+    throw new JwksUnavailableError('Signing keys unavailable (fetch recently failed)');
+  }
+
+  await refreshJwks();
+  return kid ? jwksCache.get(kid) ?? null : null;
+}
 
 // Direct supabase verification (used as fallback when circuit is open)
 async function verifyViaSupabaseAPI(token) {
@@ -62,18 +141,52 @@ async function verifySupabaseToken(token) {
   const jwtParts = token.split('.');
   const secret = process.env.SUPABASE_JWT_SECRET;
   
-  logger.info({
-    tokenLength: token.length,
-    jwtPartCount: jwtParts.length,
-    verificationStrategy: secret ? 'local_jwt' : 'supabase_api_circuit_breaker',
-  }, 'Starting token verification');
-
   // Structural validation before passing to parsers
   if (jwtParts.length !== 3) {
     throw new Error('jwt malformed: token must have 3 parts');
   }
 
-  // Strategy 1: Local JWT verify with secret
+  const header = jwt.decode(token, { complete: true })?.header;
+  if (!header?.alg) {
+    throw new Error('jwt malformed: missing algorithm header');
+  }
+
+  logger.info({
+    tokenLength: token.length,
+    jwtPartCount: jwtParts.length,
+    alg: header.alg,
+    verificationStrategy: header.alg === 'HS256'
+      ? (secret ? 'local_hs256' : 'supabase_api_circuit_breaker')
+      : 'local_jwks',
+  }, 'Starting token verification');
+
+  // Strategy 1a: Asymmetric verify against the project's JWKS (ES256/RS256).
+  // Local verification failures are terminal — we do NOT fall back to the
+  // Supabase API, so invalid tokens cannot be spammed to exhaust rate limits.
+  if (header.alg !== 'HS256') {
+    const key = await getSigningKey(header.kid);
+    if (!key) {
+      throw new Error(`Invalid token: unknown signing key (kid=${header.kid ?? 'none'})`);
+    }
+    try {
+      const decoded = jwt.verify(token, key, {
+        algorithms: ['ES256', 'RS256'],
+        audience: 'authenticated',
+      });
+      if (decoded && decoded.sub) {
+        return { sub: decoded.sub, email: decoded.email || '' };
+      }
+      throw new Error('token payload missing sub claim');
+    } catch (jwtErr) {
+      if (jwtErr.name === 'TokenExpiredError') {
+        throw new Error('Token expired — please re-authenticate');
+      }
+      logger.error({ err: jwtErr.message, alg: header.alg }, 'JWKS verify failed');
+      throw new Error(`Invalid token: ${jwtErr.message}`);
+    }
+  }
+
+  // Strategy 1b: Legacy symmetric verify with the shared secret.
   // Supabase's JWT secret is a UTF-8 string. Do NOT base64 decode it.
   if (secret) {
     try {
@@ -135,4 +248,4 @@ async function verifySupabaseToken(token) {
   throw new Error('Invalid Supabase token');
 }
 
-module.exports = { verifySupabaseToken };
+module.exports = { verifySupabaseToken, JwksUnavailableError };

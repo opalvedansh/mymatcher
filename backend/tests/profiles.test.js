@@ -24,7 +24,7 @@ jest.mock('../src/middleware/auth', () => ({
   },
 }));
 
-jest.mock('../src/middlewares/cacheMiddleware', () => ({
+jest.mock('../src/middleware/cacheMiddleware', () => ({
   cache: () => (req, res, next) => next(),
   invalidateCache: jest.fn().mockResolvedValue(),
 }));

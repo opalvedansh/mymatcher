@@ -22,6 +22,15 @@ async function authenticate(req, res, next) {
       uid = verified.sub;
       email = verified.email;
     } catch (jwtErr) {
+      // We could not reach the signing keys, so the token is unproven rather
+      // than invalid. A 401 here would make the client discard a valid session.
+      if (jwtErr.code === 'JWKS_UNAVAILABLE') {
+        logger.error({ jwtErr: jwtErr.message }, 'Auth unavailable — cannot reach Supabase JWKS');
+        return res.status(503).json({
+          error: 'Authentication temporarily unavailable. Please try again.',
+          code: 'auth_unavailable',
+        });
+      }
       logger.warn({ jwtErr: jwtErr.message }, 'Token verification failed');
       return res.status(401).json({ error: 'Invalid Supabase token', details: jwtErr.message });
     }
