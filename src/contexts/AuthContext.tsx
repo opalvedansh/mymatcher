@@ -95,6 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   const fetchUserDataPromise = useRef<Promise<void> | null>(null);
+  // Onboarding saves fire on every field change, so warn at most once per run.
+  const progressSaveWarned = useRef(false);
 
   // Listen to auth state changes
   useEffect(() => {
@@ -374,8 +376,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       // Save onboarding progress via API
       await api.put('/api/auth/onboarding', newData);
-    } catch (error) {
-      console.error('Error saving onboarding progress:', error);
+      progressSaveWarned.current = false;
+    } catch (error: any) {
+      const reason = [error?.status && `HTTP ${error.status}`, error?.message, error?.detail]
+        .filter(Boolean)
+        .join(' · ');
+      console.error('Error saving onboarding progress:', reason || error);
+
+      // A silent failure here is what hid a broken write path until the very
+      // last step of onboarding. Tell the user once rather than on every field.
+      if (!progressSaveWarned.current) {
+        progressSaveWarned.current = true;
+        alert(`Your progress isn't being saved.\n\n${reason || 'Unknown error'}`);
+      }
     }
   };
 
