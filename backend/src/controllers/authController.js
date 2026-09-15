@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const redisClient = require('../config/redis');
+const logger = require('../config/logger');
 
 /**
  * POST /api/auth/sync
@@ -48,12 +49,18 @@ async function syncUser(req, res, next) {
       );
     }
 
-    // Invalidate Redis cache so the next request pulls the updated role
+    await client.query('COMMIT');
+
+    // Invalidate after COMMIT, and never let it fail the request: a Redis
+    // blip must not roll back a user row that was created successfully.
     if (redisClient) {
-      await redisClient.del(`user:session:${uid}`);
+      try {
+        await redisClient.del(`user:session:${uid}`);
+      } catch (cacheErr) {
+        logger.warn({ err: cacheErr.message, uid }, 'Failed to invalidate session cache after sync');
+      }
     }
 
-    await client.query('COMMIT');
     return res.status(200).json({ user });
   } catch (err) {
     await client.query('ROLLBACK');

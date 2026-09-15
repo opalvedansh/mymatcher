@@ -119,10 +119,12 @@ async function request<T>(
   }
 
   if (!res.ok) {
+    // The API is inconsistent here: auth middleware returns `details`, the
+    // error handler returns `detail`. Read both so the reason is never lost.
     throw new ApiError(
       res.status,
       body?.error ?? `HTTP ${res.status}`,
-      body?.detail,
+      body?.details ?? body?.detail,
     );
   }
 

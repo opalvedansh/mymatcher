@@ -388,9 +388,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       try {
         await api.post('/api/auth/sync', { role });
-      } catch (e) {
+      } catch (e: any) {
         console.error('[API] syncUser on complete failed:', e);
-        alert("Failed to initialize profile. Please try again.");
+        // Report the cause, not just that something went wrong — release
+        // builds have no console, so this alert is the only diagnostic.
+        const reason = [e?.status && `HTTP ${e.status}`, e?.message, e?.detail]
+          .filter(Boolean)
+          .join(' · ');
+        alert(`Failed to initialize profile. Please try again.\n\n${reason || 'Unknown error'}`);
         return; // HALT EXECUTION
       }
 
