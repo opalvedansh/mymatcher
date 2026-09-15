@@ -137,8 +137,19 @@ app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 app.use(globalLimiter);
 
 // ─── Health check ────────────────────────────────────────────────
+// `commit` reports which build is actually serving traffic. Without it a
+// deploy cannot be told apart from a stale one, since auth-gated routes look
+// identical from outside until you hold a valid token.
+const BUILD_COMMIT = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'unknown';
+const STARTED_AT = new Date().toISOString();
+
 app.get('/health', (_req, res) =>
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    commit: BUILD_COMMIT.slice(0, 7),
+    startedAt: STARTED_AT,
+  })
 );
 
 // ─── API Routes ──────────────────────────────────────────────────
