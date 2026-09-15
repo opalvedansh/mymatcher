@@ -2,26 +2,11 @@ const { body } = require('express-validator');
 const validate  = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
 const { syncUser, me, getOnboardingData, updateOnboardingData, updatePushToken } = require('../controllers/authController');
-const rateLimit = require('express-rate-limit');
-const { RedisStore } = require('rate-limit-redis');
-const redisClient = require('../config/redis');
 
 const router = require('express').Router();
 
-// Strict rate limit for auth modifying endpoints
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // 20 requests per IP per window
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Only attach Redis store when the client actually supports raw command dispatch.
-  // ioredis-mock (used in tests) lacks .call(), so we skip Redis in that environment.
-  ...(redisClient && typeof redisClient.call === 'function' ? {
-    store: new RedisStore({
-      sendCommand: (...args) => redisClient.call(...args),
-    }),
-  } : {}),
-});
+// Note: rate limiting for the whole /api/auth path is applied once,
+// at mount time, in app.js (`app.use('/api/auth', authLimiter, authRoutes)`).
 
 // ─── Validation chains ───────────────────────────────────────────
 const syncRules = [
@@ -57,7 +42,7 @@ const pushTokenRules = [
  *       200:
  *         description: User synchronized successfully
  */
-router.post('/sync', authLimiter, authenticate, syncRules, validate, syncUser);
+router.post('/sync', authenticate, syncRules, validate, syncUser);
 
 /**
  * @swagger
@@ -75,7 +60,7 @@ router.get ('/me',   authenticate, me);
 
 // Onboarding progress
 router.get ('/onboarding', authenticate, getOnboardingData);
-router.put ('/onboarding', authLimiter, authenticate, updateOnboardingData);
+router.put ('/onboarding', authenticate, updateOnboardingData);
 
 // Push token registration
 router.put ('/push-token', authenticate, pushTokenRules, validate, updatePushToken);

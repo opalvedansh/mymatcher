@@ -2,7 +2,7 @@ const router = require('express').Router();
 const { param, body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
-const { cache } = require('../middlewares/cacheMiddleware');
+const { cache } = require('../middleware/cacheMiddleware');
 const { getMyProfile, updateMyProfile, getProfileById, verifyFace, syncInstagram, searchInstagram } = require('../controllers/profileController');
 const { requireRole } = require('../middleware/auth');
 

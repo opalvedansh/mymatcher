@@ -1,12 +1,13 @@
 import { supabase } from '../supabase';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
-// ─── Fix 2: Physical Device Networking ────────────────────────────
-// `localhost` resolves to the phone itself on physical devices.
-// We use the Expo Metro bundler host (your Mac's LAN IP) in dev instead.
+// ─── Network-agnostic API URL ──────────────────────────────────────
+// Defaults to the deployed production API so the app works from any
+// network (WiFi, cellular, hotel, VPN...) without extra setup.
+// To point at a local backend during development, set
+// EXPO_PUBLIC_API_URL in .env (e.g. to your Mac's LAN IP) — or set
+// EXPO_PUBLIC_USE_LOCAL_API=1 to auto-detect the Metro bundler's host.
 function getBaseUrl(): string {
-  // Always respect explicit environment variables first
   if (process.env.EXPO_PUBLIC_API_URL) {
     let url = process.env.EXPO_PUBLIC_API_URL;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -15,12 +16,12 @@ function getBaseUrl(): string {
     return url;
   }
 
-  if (__DEV__ && Platform.OS !== 'web') {
+  if (__DEV__ && process.env.EXPO_PUBLIC_USE_LOCAL_API) {
     const debuggerHost = Constants.expoConfig?.hostUri ?? Constants.manifest2?.extra?.expoGo?.debuggerHost;
     const host = debuggerHost?.split(':')[0] ?? 'localhost';
-    return `http://${host}:4000`;
+    return `http://${host}:3000`;
   }
-  
+
   return 'https://api.mymatchr.in';
 }
 

@@ -51,7 +51,7 @@ const PORT = process.env.PORT || 3000;
 // ─── Allowed origins ─────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
   'http://localhost:8081',   // Expo web dev server
-  'http://localhost:4000',   // Local API (health check)
+  'http://localhost:3000',   // Local API (health check)
   'http://localhost:19006',  // Expo web (older port)
   ...(process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())

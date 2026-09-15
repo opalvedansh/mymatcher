@@ -11,7 +11,7 @@ RUN npm ci --omit=dev --legacy-peer-deps
 COPY . .
 
 # Expose API port
-EXPOSE 4000
+EXPOSE 3000
 
 # Start the application
 CMD ["npm", "start"]

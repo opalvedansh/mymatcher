@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { invalidateCache } = require('../middlewares/cacheMiddleware');
+const { invalidateCache } = require('../middleware/cacheMiddleware');
 const logger = require('../config/logger');
 
 // ─── Helper: fetch full profile by userId + role (explicit columns) ──
