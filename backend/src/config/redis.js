@@ -19,10 +19,9 @@ if (process.env.NODE_ENV === 'test') {
     family: 0,             // support Railway's IPv6 private networking
     maxRetriesPerRequest: 3,
     enableOfflineQueue: false, // don't queue commands when disconnected
-    retryStrategy: (times) => {
-      if (times > 5) return null; // stop retrying after 5 attempts — null = disconnect
-      return Math.min(times * 200, 2000);
-    },
+    // Keep reconnecting with capped backoff; giving up would leave the process
+    // without Redis until the next restart.
+    retryStrategy: (times) => Math.min(times * 200, 5000),
   });
 
   redisClient.on('error', (err) => {

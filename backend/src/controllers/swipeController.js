@@ -33,12 +33,19 @@ async function recordSwipe(req, res, next) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Swiped user not found' });
     }
-    if (swipedUser.role === swiperRole) {
+    const oppositeRole = swiperRole === 'brand' ? 'influencer' : 'brand';
+    if (swipedUser.role !== oppositeRole) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'You can only swipe on users of the opposite type',
       });
     }
+
+    // Serialise swipes between this pair. Without it, two people liking each
+    // other at the same moment each miss the other's uncommitted swipe under
+    // READ COMMITTED, and the match is never created.
+    const pairKey = [swiperId, swiped_id].sort().join(':');
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [pairKey]);
 
     // 2. Insert the swipe — ON CONFLICT allows undo then re-swipe
     const { rows: [swipe] } = await client.query(
@@ -50,15 +57,11 @@ async function recordSwipe(req, res, next) {
       [swiperId, swiped_id, direction]
     );
 
-    // Track Swipe Event
-    analytics.trackEvent(swiperId, 'Profile_Swiped', {
-      direction,
-      targetRole: swipedUser.role
-    });
-
     // 3. If the swipe is a "like" or "super_like", check for reciprocal
     let matched = false;
     let match   = null;
+    let relevanceScore = null;
+    let names = [];
 
     if (direction === 'like' || direction === 'super_like') {
       const { rows: reciprocal } = await client.query(
@@ -73,7 +76,7 @@ async function recordSwipe(req, res, next) {
         const influencerId = swiperRole === 'influencer' ? swiperId : swiped_id;
 
         // Calculate a basic relevance score to store on the match
-        const relevanceScore = direction === 'super_like' ? 100 : 75;
+        relevanceScore = direction === 'super_like' ? 100 : 75;
 
         const { rows: [newMatch] } = await client.query(
           `INSERT INTO matches (brand_id, influencer_id, relevance_score)
@@ -87,40 +90,32 @@ async function recordSwipe(req, res, next) {
         matched = true;
         match   = newMatch || null;
 
-        // Track Match Event
-        analytics.trackEvent(swiperId, 'Match_Created', {
-          matchId: match?.id,
-          relevanceScore
-        });
-        analytics.trackEvent(swiped_id, 'Match_Created', {
-          matchId: match?.id,
-          relevanceScore
-        });
-
-        // Trigger push notifications — batched: both tokens fetched in one DB query,
-        // both jobs enqueued in one BullMQ addBulk call.
-        try {
-          const { rows: names } = await client.query(
-            `SELECT user_id, name FROM (
-               SELECT user_id, name FROM brand_profiles WHERE user_id = $1 OR user_id = $2
-               UNION
-               SELECT user_id, name FROM influencer_profiles WHERE user_id = $1 OR user_id = $2
-             ) profiles`,
-            [swiperId, swiped_id]
-          );
-          
-          const swiperName = names.find(n => n.user_id === swiperId)?.name || 'Someone';
-          const swipedName = names.find(n => n.user_id === swiped_id)?.name || 'Someone';
-
-          // Single batched call: 1 DB round trip + 1 BullMQ addBulk
-          notificationService.sendMatchNotifications({ swiperId, swiperName, swipedId: swiped_id, swipedName }).catch(console.error);
-        } catch (err) {
-          console.error('[Push] Match notification failed:', err);
-        }
+        ({ rows: names } = await client.query(
+          `SELECT user_id, name FROM (
+             SELECT user_id, name FROM brand_profiles WHERE user_id = $1 OR user_id = $2
+             UNION
+             SELECT user_id, name FROM influencer_profiles WHERE user_id = $1 OR user_id = $2
+           ) profiles`,
+          [swiperId, swiped_id]
+        ));
       }
     }
 
     await client.query('COMMIT');
+
+    // Side effects run only once the swipe and match are durable, so nobody is
+    // told about a match that was rolled back.
+    analytics.trackEvent(swiperId, 'Profile_Swiped', { direction, targetRole: swipedUser.role });
+    if (matched) {
+      analytics.trackEvent(swiperId, 'Match_Created', { matchId: match?.id, relevanceScore });
+      analytics.trackEvent(swiped_id, 'Match_Created', { matchId: match?.id, relevanceScore });
+
+      const swiperName = names.find(n => n.user_id === swiperId)?.name || 'Someone';
+      const swipedName = names.find(n => n.user_id === swiped_id)?.name || 'Someone';
+      notificationService
+        .sendMatchNotifications({ swiperId, swiperName, swipedId: swiped_id, swipedName })
+        .catch((err) => console.error('[Push] Match notification failed:', err));
+    }
 
     res.status(201).json({ swipe, matched, match });
   } catch (err) {

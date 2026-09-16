@@ -10,6 +10,20 @@ const DEFAULT_WEIGHTS = {
   COMPLETENESS:     10,
 };
 
+// Stored weights are admin-editable JSON, so anything non-numeric falls back
+// to the default rather than breaking the feed query for every user.
+function sanitizeWeights(raw) {
+  const weights = {};
+  for (const [key, fallback] of Object.entries(DEFAULT_WEIGHTS)) {
+    const value = Number(raw?.[key]);
+    weights[key] = Number.isFinite(value) ? value : fallback;
+  }
+  return weights;
+}
+
+// Distance is bucketed so exact positions can't be triangulated from the feed.
+const PUBLIC_DISTANCE = 'CEIL(dist_km / 5.0) * 5 AS dist_km';
+
 /**
  * GET /api/feed
  *
@@ -33,13 +47,16 @@ async function getFeed(req, res, next) {
     if (!WEIGHTS) {
       try {
         const { rows } = await db.query("SELECT value FROM admin_settings WHERE key = 'algorithm_weights'");
-        WEIGHTS = rows.length ? rows[0].value : DEFAULT_WEIGHTS;
+        WEIGHTS = sanitizeWeights(rows[0]?.value);
         feedCache.set('algorithm_weights', WEIGHTS);
       } catch (e) {
         // Fallback if table doesn't exist yet
         WEIGHTS = DEFAULT_WEIGHTS;
       }
     }
+    const weightParams = [
+      WEIGHTS.CATEGORY_OVERLAP, WEIGHTS.BUDGET_FIT, WEIGHTS.LOCATION_MATCH, WEIGHTS.COMPLETENESS,
+    ];
 
     // ── Fetch current user's profile for scoring context ─────────
     const selfCacheKey = `feed-self:${userId}`;
@@ -111,14 +128,14 @@ async function getFeed(req, res, next) {
              id AS user_id,
              ROUND(CAST(
                -- 1. Category overlap (40 pts)
-               ${WEIGHTS.CATEGORY_OVERLAP}.0 * (
+               $11::numeric * (
                  CASE
                    WHEN their_cat_len IS NULL OR their_cat_len = 0 THEN 0.5
                    ELSE LEAST(cat_overlap_count::numeric / their_cat_len::numeric, 1.0)
                  END
                )
                -- 2. Budget ↔ price fit (30 pts)
-               + ${WEIGHTS.BUDGET_FIT}.0 * (
+               + $12::numeric * (
                  CASE
                    WHEN $5 = 0 AND $6 = 0 THEN 0.5
                    WHEN price_min = 0 AND price_max = 0 THEN 0.5
@@ -128,7 +145,7 @@ async function getFeed(req, res, next) {
                  END
                )
                -- 3. Location proximity (20 pts)
-               + ${WEIGHTS.LOCATION_MATCH}.0 * (
+               + $13::numeric * (
                  CASE
                    WHEN dist_km IS NOT NULL THEN (
                      CASE WHEN dist_km < 50 THEN 1.0 WHEN dist_km < 200 THEN 0.67 WHEN dist_km < 500 THEN 0.33 ELSE 0 END
@@ -139,18 +156,20 @@ async function getFeed(req, res, next) {
                  END
                )
                -- 4. Profile completeness (10 pts)
-               + ${WEIGHTS.COMPLETENESS}.0 * (
+               + $14::numeric * (
                  CASE WHEN name IS NOT NULL AND bio IS NOT NULL AND avatar_url IS NOT NULL THEN 1.0 WHEN name IS NOT NULL THEN 0.5 ELSE 0 END
                )
              AS NUMERIC), 2) AS relevance_score
            FROM Candidates
          )
-         SELECT *
+         SELECT id, user_id, role, created_at, name, avatar_url, cover_url, bio, categories,
+                location, age, gender, platforms, followers, engagement_rate, avg_views,
+                price_min, price_max, verified, ${PUBLIC_DISTANCE}, relevance_score
          FROM Scored
          WHERE ($2::numeric IS NULL OR relevance_score < $2::numeric OR (relevance_score = $2::numeric AND id < $3::text))
          ORDER BY relevance_score DESC, id DESC
          LIMIT $10`,
-        [userId, cursorScore, cursorId, myCategories, myBudgetMin, myBudgetMax, myLat, myLng, myLocation, limit]
+        [userId, cursorScore, cursorId, myCategories, myBudgetMin, myBudgetMax, myLat, myLng, myLocation, limit, ...weightParams]
       ));
 
     } else {
@@ -200,14 +219,14 @@ async function getFeed(req, res, next) {
              id AS user_id,
              ROUND(CAST(
                -- 1. Category overlap (40 pts)
-               ${WEIGHTS.CATEGORY_OVERLAP}.0 * (
+               $11::numeric * (
                  CASE
                    WHEN their_cat_len IS NULL OR their_cat_len = 0 THEN 0.5
                    ELSE LEAST(cat_overlap_count::numeric / their_cat_len::numeric, 1.0)
                  END
                )
                -- 2. Budget ↔ price fit (30 pts)
-               + ${WEIGHTS.BUDGET_FIT}.0 * (
+               + $12::numeric * (
                  CASE
                    WHEN budget_min = 0 AND budget_max = 0 THEN 0.5
                    WHEN $5 = 0 AND $6 = 0 THEN 0.5
@@ -217,7 +236,7 @@ async function getFeed(req, res, next) {
                  END
                )
                -- 3. Location proximity (20 pts)
-               + ${WEIGHTS.LOCATION_MATCH}.0 * (
+               + $13::numeric * (
                  CASE
                    WHEN dist_km IS NOT NULL THEN (
                      CASE WHEN dist_km < 50 THEN 1.0 WHEN dist_km < 200 THEN 0.67 WHEN dist_km < 500 THEN 0.33 ELSE 0 END
@@ -228,18 +247,20 @@ async function getFeed(req, res, next) {
                  END
                )
                -- 4. Profile completeness (10 pts)
-               + ${WEIGHTS.COMPLETENESS}.0 * (
+               + $14::numeric * (
                  CASE WHEN name IS NOT NULL AND bio IS NOT NULL AND logo_url IS NOT NULL THEN 1.0 WHEN name IS NOT NULL THEN 0.5 ELSE 0 END
                )
              AS NUMERIC), 2) AS relevance_score
            FROM Candidates
          )
-         SELECT *
+         SELECT id, user_id, role, created_at, name, logo_url, cover_url, bio, categories,
+                location, budget_min, budget_max, campaign_types, vibes, website, verified,
+                ${PUBLIC_DISTANCE}, relevance_score
          FROM Scored
          WHERE ($2::numeric IS NULL OR relevance_score < $2::numeric OR (relevance_score = $2::numeric AND id < $3::text))
          ORDER BY relevance_score DESC, id DESC
          LIMIT $10`,
-        [userId, cursorScore, cursorId, myCategories, myPriceMin, myPriceMax, myLat, myLng, myLocation, limit]
+        [userId, cursorScore, cursorId, myCategories, myPriceMin, myPriceMax, myLat, myLng, myLocation, limit, ...weightParams]
       ));
     }
 

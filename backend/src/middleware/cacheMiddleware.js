@@ -54,19 +54,15 @@ function cache(durationInSeconds) {
 }
 
 /**
- * Utility to manually invalidate a cache key (or pattern).
- * No-ops when Redis is not available.
+ * Deletes one exact cache key. No-ops when Redis is not available.
+ * (Pattern deletes via KEYS would block Redis for every client at scale.)
  */
-async function invalidateCache(pattern) {
+async function invalidateCache(key) {
   if (!redisClient) return;
   try {
-    const keys = await redisClient.keys(pattern);
-    if (keys.length > 0) {
-      await redisClient.del(...keys);
-      logger.debug(`[Cache] Invalidated keys matching: ${pattern}`);
-    }
+    await redisClient.del(key);
   } catch (err) {
-    logger.error('[Cache] Failed to invalidate cache:', err.message);
+    logger.error({ err: err.message, key }, '[Cache] Failed to invalidate cache');
   }
 }
 

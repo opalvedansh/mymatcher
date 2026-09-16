@@ -1,11 +1,11 @@
 const { body } = require('express-validator');
 const validate  = require('../middleware/validate');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
 const { recordSwipe, undoLastSwipe, getMySwipes, getLikesReceived } = require('../controllers/swipeController');
 
 const router = require('express').Router();
 
-router.use(authenticate);
+router.use(authenticate, requireRole('brand', 'influencer'));
 
 const swipeRules = [
   body('swiped_id')

@@ -1,4 +1,6 @@
-const router = require('express').Router();
+const express = require('express');
+const { rateLimit } = require('express-rate-limit');
+const router = express.Router();
 const { param, body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
@@ -24,11 +26,31 @@ const userIdRules = [
   param('userId').isString().notEmpty().withMessage('userId is required')
 ];
 
-// ─── Public route: no auth needed ───
-router.get('/search-instagram', searchInstagram);
+// Per-user limits on routes that call paid third-party APIs.
+function perUserLimiter(limit, windowMs, message) {
+  return rateLimit({
+    windowMs,
+    limit,
+    keyGenerator: (req) => req.user.id,
+    message: { error: message },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+}
+const instagramSearchLimiter = perUserLimiter(20, 60 * 1000, 'Too many searches — try again in a minute');
+const faceVerifyLimiter = perUserLimiter(5, 60 * 60 * 1000, 'Too many verification attempts — try again later');
+// The 24h cooldown only covers re-syncing the same handle, so cap attempts too.
+const instagramSyncLimiter = perUserLimiter(5, 60 * 60 * 1000, 'Too many Instagram syncs — try again later');
 
-// All other profile routes require authentication
+// The selfie is sent as base64, so this route gets its own body limit; the
+// global 50kb JSON parser skips it (see app.js).
+const faceBodyParser = express.json({ limit: '6mb' });
+
+// Every profile route requires authentication — including Instagram search,
+// which runs a paid scraper per request.
 router.use(authenticate);
+
+router.get('/search-instagram', instagramSearchLimiter, searchInstagram);
 
 
 /**
@@ -45,8 +67,8 @@ router.use(authenticate);
  */
 router.get ('/me',          getMyProfile);
 router.put ('/me',          profileRules, validate, updateMyProfile);
-router.post('/verify-face', verifyFace);
-router.post('/sync-instagram', requireRole('influencer'), syncInstagram);
+router.post('/verify-face', faceVerifyLimiter, faceBodyParser, verifyFace);
+router.post('/sync-instagram', requireRole('influencer'), instagramSyncLimiter, syncInstagram);
 /**
  * @swagger
  * /api/profiles/{userId}:

@@ -12,18 +12,16 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
+import api from '@/api/client';
 import { colors } from '@/theme/colors';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.mymatchr.in';
 
 const fetchInstagramUsers = async (query: string): Promise<string[]> => {
   if (!query || query.length < 3) return [];
   const q = encodeURIComponent(query.replace('@', '').toLowerCase().trim());
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/profiles/search-instagram?q=${q}`);
-    if (!response.ok) return [];
-    return await response.json();
+    // Goes through the API client so the request carries the user's token.
+    return await api.get<string[]>(`/api/profiles/search-instagram?q=${q}`);
   } catch (error) {
     console.warn('Failed to fetch Instagram suggestions:', error);
     return [];

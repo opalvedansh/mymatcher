@@ -76,7 +76,7 @@ export function PostCard({ post, onLikeToggle, onViewProfile }: PostCardProps) {
 
     try {
       setIsLiking(true);
-      await api.post(`/api/posts/${post.id}/like`, {});
+      await api.post(`/api/posts/${post.id}/like`, { liked: newLiked });
     } catch {
       // Revert on failure
       setLiked(!newLiked);

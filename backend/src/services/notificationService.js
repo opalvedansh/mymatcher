@@ -154,7 +154,7 @@ async function sendMatchNotification(userId, matchName) {
  * Triggers when a chat message is received.
  * Looks up the sender's name in a UNION query then sends via sendBulkNotifications.
  */
-async function sendChatNotification(receiverId, senderId, messageContent) {
+async function sendChatNotification(receiverId, senderId) {
   try {
     // Fetch sender name — single query
     const { rows } = await db.query(
@@ -167,10 +167,12 @@ async function sendChatNotification(receiverId, senderId, messageContent) {
     );
     const senderName = rows[0]?.name || 'Someone';
 
+    // The body stays generic: message text would otherwise pass in plaintext
+    // through Expo/Apple/Google and show on the lock screen.
     await sendBulkNotifications([{
       userId: receiverId,
       title:  `New message from ${senderName}`,
-      body:   messageContent,
+      body:   'Tap to read',
       data:   { type: 'new_message', senderId },
     }]);
   } catch (err) {

@@ -1,6 +1,6 @@
 const { param, query } = require('express-validator');
 const validate = require('../middleware/validate');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
 const { getMatches, getMatchStats, getMatchById, archiveMatch } = require('../controllers/matchController');
 
 const router = require('express').Router();
@@ -14,7 +14,7 @@ const matchIdRules = [
   param('matchId').isUUID().withMessage('matchId must be a valid UUID')
 ];
 
-router.use(authenticate);
+router.use(authenticate, requireRole('brand', 'influencer'));
 
 router.get   ('/',          paginationRules, validate, getMatches);    // list my active matches
 router.get   ('/stats',     getMatchStats); // aggregate stats

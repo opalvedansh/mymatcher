@@ -47,17 +47,23 @@ async function authenticate(req, res, next) {
     if (!identity) return;
     const { uid } = identity;
 
-    // Try Redis Cache First
+    // The cache is an optimisation: if Redis is unavailable, fall through to
+    // the database rather than failing every authenticated request.
     const cacheKey = `user:session:${uid}`;
+    let cached = null;
     if (redisClient) {
-      const cached = await redisClient.get(cacheKey);
-      if (cached) {
-        req.user = JSON.parse(cached);
-        if (req.user.banned) {
-          return res.status(403).json(SUSPENDED);
-        }
-        return next();
+      try {
+        cached = await redisClient.get(cacheKey);
+      } catch (err) {
+        logger.warn({ err: err.message }, 'Session cache read failed; using database');
       }
+    }
+    if (cached) {
+      req.user = JSON.parse(cached);
+      if (req.user.banned) {
+        return res.status(403).json(SUSPENDED);
+      }
+      return next();
     }
 
     // Cache miss or Redis unavailable — query DB
@@ -76,7 +82,9 @@ async function authenticate(req, res, next) {
 
     // Populate Cache (5 minute TTL)
     if (redisClient) {
-      await redisClient.setex(cacheKey, 300, JSON.stringify(req.user));
+      redisClient.setex(cacheKey, 300, JSON.stringify(req.user)).catch((err) => {
+        logger.warn({ err: err.message }, 'Session cache write failed');
+      });
     }
 
     // Check if user is banned

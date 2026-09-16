@@ -14,8 +14,9 @@ function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-va
   }, err.message || 'Unhandled error');
 
   // Postgres unique-violation (duplicate email, duplicate swipe, etc.)
+  // err.detail echoes the conflicting row values, so it stays in the logs only.
   if (err.code === '23505') {
-    return res.status(409).json({ error: 'Duplicate entry', detail: err.detail });
+    return res.status(409).json({ error: 'Duplicate entry' });
   }
 
   // Postgres foreign-key violation
@@ -23,8 +24,17 @@ function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-va
     return res.status(400).json({ error: 'Referenced resource does not exist' });
   }
 
-  const status  = err.statusCode || err.status || 500;
-  const message = err.message    || 'Internal server error';
+  // Postgres invalid input syntax (e.g. a malformed UUID)
+  if (err.code === '22P02') {
+    return res.status(400).json({ error: 'Invalid input' });
+  }
+
+  const status = err.statusCode || err.status || 500;
+  // Client errors raised deliberately (body-parser 413, etc.) carry a safe
+  // message; 5xx messages can contain SQL or internals and are never sent.
+  const message = status < 500 && err.expose !== false
+    ? (err.message || 'Bad request')
+    : 'Internal server error';
 
   res.status(status).json({ error: message });
 }

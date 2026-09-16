@@ -21,29 +21,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import api from '@/api/client';
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-async function uploadImageToSupabase(uri: string): Promise<string> {
-  const filename = uri.split('/').pop() || 'post.jpg';
-  const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
-  const mimeMap: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
-  const contentType = mimeMap[ext] || 'image/jpeg';
-
-  // Step 1: Get presigned upload URL from our backend
-  const { data: urlData } = await api.post('/api/upload/presigned-url', { filename, contentType }) as any;
-
-  // Step 2: Upload directly to Supabase storage
-  const blob = await (await fetch(uri)).blob();
-  const uploadResp = await fetch(urlData.signedUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body: blob,
-  });
-
-  if (!uploadResp.ok) throw new Error('Image upload failed');
-  return urlData.publicUrl;
-}
+import { uploadImage } from '@/api';
 
 // ─── Aspect Ratio Options ────────────────────────────────────────────────────
 const ASPECTS = [
@@ -106,7 +84,7 @@ export default function CreatePostScreen() {
         useNativeDriver: false,
       }).start();
 
-      const publicUrl = await uploadImageToSupabase(imageUri);
+      const publicUrl = await uploadImage(imageUri);
       await api.post('/api/posts', { image_url: publicUrl, caption: caption.trim() || null });
 
       router.back();

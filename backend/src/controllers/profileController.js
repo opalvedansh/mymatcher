@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const { invalidateCache } = require('../middleware/cacheMiddleware');
 const logger = require('../config/logger');
+const { isOwnUploadUrl } = require('../utils/storage');
 
 // ─── Helper: fetch full profile by userId + role (explicit columns) ──
 async function fetchProfile(userId, role) {
@@ -35,6 +36,16 @@ async function fetchProfile(userId, role) {
     );
     return rows[0] || null;
   }
+}
+
+// Fields only the owner may see. Exact coordinates would let anyone locate
+// a user's home, and emails would let the whole user base be scraped.
+const PRIVATE_PROFILE_FIELDS = ['email', 'lat', 'lng', 'instagram_synced_at'];
+
+function toPublicProfile(profile) {
+  const publicProfile = { ...profile };
+  for (const field of PRIVATE_PROFILE_FIELDS) delete publicProfile[field];
+  return publicProfile;
 }
 
 // ─── GET /api/profiles/me ────────────────────────────────────────
@@ -73,9 +84,10 @@ async function updateMyProfile(req, res, next) {
     const { id: userId, role } = req.user;
 
     if (role === 'brand') {
+      // `verified` is deliberately not accepted: only face verification sets it.
       const {
         name, logo_url, cover_url, bio, categories,
-        location, lat, lng, budget_min, budget_max, campaign_days, campaign_types, vibes, website, photos, platforms, verified
+        location, lat, lng, budget_min, budget_max, campaign_days, campaign_types, vibes, website, photos, platforms
       } = req.body;
 
       await db.query(
@@ -95,19 +107,20 @@ async function updateMyProfile(req, res, next) {
           vibes          = COALESCE($13, vibes),
           website        = COALESCE($14, website),
           photos         = COALESCE($15, photos),
-          platforms      = COALESCE($16, platforms),
-          verified       = COALESCE($17, verified)
-        WHERE user_id = $18`,
+          platforms      = COALESCE($16, platforms)
+        WHERE user_id = $17`,
         [name, logo_url, cover_url, bio, categories,
          location, lat, lng, budget_min, budget_max, campaign_days, campaign_types, vibes, website, photos, platforms,
-         verified !== undefined ? verified : null,
          userId]
       );
     } else {
+      // `verified`, `followers`, `engagement_rate` and `avg_views` are
+      // deliberately not accepted: brands rely on them, so only face
+      // verification and the Instagram sync may set them.
       const {
         name, avatar_url, cover_url, bio, categories,
         location, lat, lng, age, gender, platforms, photos, reels,
-        followers, engagement_rate, avg_views, price_min, price_max, verified, instagram_handle
+        price_min, price_max, instagram_handle
       } = req.body;
 
       await db.query(
@@ -125,19 +138,14 @@ async function updateMyProfile(req, res, next) {
           platforms       = COALESCE($11, platforms),
           photos          = COALESCE($12, photos),
           reels           = COALESCE($13, reels),
-          followers       = COALESCE($14, followers),
-          engagement_rate = COALESCE($15, engagement_rate),
-          avg_views       = COALESCE($16, avg_views),
-          price_min       = COALESCE($17, price_min),
-          price_max       = COALESCE($18, price_max),
-          verified        = COALESCE($19, verified),
-          instagram_handle = COALESCE($20, instagram_handle)
-        WHERE user_id = $21`,
+          price_min       = COALESCE($14, price_min),
+          price_max       = COALESCE($15, price_max),
+          instagram_handle = COALESCE($16, instagram_handle)
+        WHERE user_id = $17`,
         [name, avatar_url, cover_url, bio, categories,
          location, lat, lng, age, gender, platforms, photos,
          reels !== undefined ? JSON.stringify(reels) : null,
-         followers, engagement_rate, avg_views, price_min, price_max,
-         verified !== undefined ? verified : null,
+         price_min, price_max,
          instagram_handle,
          userId]
       );
@@ -171,7 +179,7 @@ async function getProfileById(req, res, next) {
     const profile = await fetchProfile(userId, user.role);
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
 
-    res.json(profile);
+    res.json(toPublicProfile(profile));
   } catch (err) {
     next(err);
   }
@@ -194,8 +202,14 @@ async function verifyFace(req, res, next) {
       return res.status(400).json({ error: 'Please upload at least one profile picture before verifying.' });
     }
 
+    // The reference URL is user-editable, so only fetch files from this user's
+    // own uploads — otherwise the server could be pointed at internal hosts.
+    if (!isOwnUploadUrl(referenceImageUrl, req.user.id)) {
+      return res.status(400).json({ error: 'Please re-upload your profile picture before verifying.' });
+    }
+
     // Download the reference image
-    const response = await fetch(referenceImageUrl);
+    const response = await fetch(referenceImageUrl, { redirect: 'error' });
     if (!response.ok) {
       throw new Error('Failed to download reference image for verification');
     }
@@ -214,7 +228,7 @@ async function verifyFace(req, res, next) {
       // Update verification status in DB
       const table = req.user.role === 'brand' ? 'brand_profiles' : 'influencer_profiles';
       await db.query(`UPDATE ${table} SET verified = true, updated_at = NOW() WHERE user_id = $1`, [req.user.id]);
-      await invalidateCache(`profile:${req.user.id}`);
+      await invalidateCache(`cache:/api/profiles/${req.user.id}`);
       
       return res.json({ success: true, message: 'Profile verified successfully', similarity: result.similarity });
     } else {
@@ -300,15 +314,26 @@ async function syncInstagram(req, res, next) {
   }
 }
 
-// ─── Simple in-memory cache (5 min TTL) to avoid 429s ───────────
+// ─── In-memory search cache (5 min TTL, bounded) ─────────────────
+// Bounded because every distinct query string adds an entry.
 const _igSearchCache = new Map();
 const _IG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const _IG_CACHE_MAX = 1000;
+
+function cacheInstagramSearch(q, data) {
+  _igSearchCache.delete(q);
+  _igSearchCache.set(q, { ts: Date.now(), data });
+  if (_igSearchCache.size > _IG_CACHE_MAX) {
+    // Maps iterate in insertion order, so the first key is the oldest.
+    _igSearchCache.delete(_igSearchCache.keys().next().value);
+  }
+}
 
 // ─── GET /api/profiles/search-instagram ─────────────────────────
 async function searchInstagram(req, res, next) {
   try {
     let { q } = req.query;
-    if (!q || q.length < 3) return res.json([]);
+    if (typeof q !== 'string' || q.length < 3) return res.json([]);
 
     q = q.replace('@', '').toLowerCase().trim();
 
@@ -332,8 +357,7 @@ async function searchInstagram(req, res, next) {
       usernames.unshift(`@${q}`);
     }
 
-    // Cache the result
-    _igSearchCache.set(q, { ts: Date.now(), data: usernames });
+    cacheInstagramSearch(q, usernames);
 
     res.json(usernames);
   } catch (err) {

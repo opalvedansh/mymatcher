@@ -1,7 +1,18 @@
 const { createClient } = require('@supabase/supabase-js');
 const { v4: uuidv4 } = require('uuid');
+const logger = require('../config/logger');
+const { UPLOAD_BUCKET, publicUploadPrefix } = require('../utils/storage');
+
+// The extension comes from the validated content type, never the client's
+// filename, so an upload can't be stored as .html or .svg.
+const EXTENSION_BY_TYPE = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
 
 let supabase = null;
+let bucketReady = null;
 
 function getSupabaseClient() {
   if (!supabase) {
@@ -29,40 +40,34 @@ async function generatePresignedUrl(req, res, next) {
       return res.status(400).json({ error: 'filename and contentType are required' });
     }
 
-    // Only allow safe image types
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(contentType)) {
+    const ext = EXTENSION_BY_TYPE[contentType];
+    if (!ext) {
       return res.status(400).json({ error: 'Invalid content type. Only JPEG, PNG, WEBP allowed.' });
     }
 
-    // Generate a unique path: e.g. avatars/user-123/uuid-filename.jpg
-    const ext = filename.split('.').pop() || 'jpg';
-    const filePath = `uploads/${userId}/${uuidv4()}.${ext}`;
+    const objectName = `${uuidv4()}.${ext}`;
+    const filePath = `uploads/${userId}/${objectName}`;
 
-    // Note: In Supabase, creating a presigned *upload* URL requires the bucket name and the path.
-    // The bucket 'public' must exist in the Supabase project.
-    // Ensure bucket exists. We catch errors silently if it already exists.
     const client = getSupabaseClient();
-    await client.storage.createBucket('public', { public: true }).catch(() => {});
+    // Creating the bucket is a network call; do it once per process, not per upload.
+    bucketReady ??= client.storage.createBucket(UPLOAD_BUCKET, { public: true }).catch(() => {});
+    await bucketReady;
 
     const { data, error } = await client
       .storage
-      .from('public')
+      .from(UPLOAD_BUCKET)
       .createSignedUploadUrl(filePath);
 
     if (error) {
-      console.error('[Upload] Supabase error:', error);
-      return res.status(500).json({ error: `Failed to generate upload URL: ${error.message || JSON.stringify(error)}` });
+      logger.error({ err: error, userId }, '[Upload] Failed to create signed upload URL');
+      return res.status(500).json({ error: 'Failed to generate upload URL' });
     }
-
-    // Return the signed URL and the final public URL where the image will be accessible
-    const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/public/${filePath}`;
 
     res.json({
       signedUrl: data.signedUrl,
       path: filePath,
       token: data.token,
-      publicUrl
+      publicUrl: publicUploadPrefix(userId) + objectName,
     });
   } catch (err) {
     next(err);

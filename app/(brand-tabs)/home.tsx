@@ -22,7 +22,7 @@ import { BrandProfileScreen } from '@/screens/main/brand/BrandProfileScreen';
 import { InfluencerProfileScreen } from '@/screens/main/influencer/InfluencerProfileScreen';
 import { useWindowDimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { getFeedStories, uploadStory } from '@/api';
+import { getFeedStories, uploadImage, uploadStory } from '@/api';
 import { StoryViewer } from '@/components/StoryViewer';
 
 // ─── Mock Data ───────────────────────────────────────────────────
@@ -171,12 +171,10 @@ export default function BrandHomeScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.5,
-      base64: true,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const newUri = `data:image/jpeg;base64,${result.assets[0].base64}`;
       try {
-        await uploadStory(newUri);
+        await uploadStory(await uploadImage(result.assets[0].uri));
         fetchStories();
       } catch (err) {
         console.error('Failed to upload story', err);

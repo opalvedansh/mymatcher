@@ -1,12 +1,13 @@
 const db = require('../config/db');
+const { isOwnUploadUrl } = require('../utils/storage');
 
 async function uploadStory(req, res, next) {
   try {
     const userId = req.user.id;
     const { media_url } = req.body;
 
-    if (!media_url) {
-      return res.status(400).json({ error: 'media_url is required' });
+    if (!isOwnUploadUrl(media_url, userId)) {
+      return res.status(400).json({ error: 'media_url must be an image you uploaded' });
     }
 
     const { rows } = await db.query(
@@ -30,7 +31,9 @@ async function getFeedStories(req, res, next) {
     const matchesResult = await db.query(
       `SELECT brand_id, influencer_id 
        FROM matches 
-       WHERE (brand_id = $1 OR influencer_id = $1) AND status = 'active'`,
+       WHERE (brand_id = $1 OR influencer_id = $1) AND status = 'active'
+       ORDER BY matched_at DESC
+       LIMIT 1000`,
       [userId]
     );
 
@@ -52,6 +55,7 @@ async function getFeedStories(req, res, next) {
       LEFT JOIN influencer_profiles ip ON ip.user_id = u.id
       WHERE s.user_id = ANY($1) AND s.expires_at > NOW()
       ORDER BY s.created_at ASC
+      LIMIT 1000
     `, [allowedUserIds]);
 
     // Group stories by user
@@ -161,7 +165,8 @@ async function getViewers(req, res, next) {
        LEFT JOIN brand_profiles bp ON bp.user_id = u.id
        LEFT JOIN influencer_profiles ip ON ip.user_id = u.id
        WHERE v.story_id = $1
-       ORDER BY v.viewed_at DESC`,
+       ORDER BY v.viewed_at DESC
+       LIMIT 500`,
       [storyId]
     );
 

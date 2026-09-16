@@ -37,13 +37,16 @@ export async function uploadImage(uri: string): Promise<string> {
     });
 
     // Upload to Supabase Storage
-    await fetch(data.signedUrl, {
+    const uploadResponse = await fetch(data.signedUrl, {
       method: 'PUT',
       headers: {
         'Content-Type': contentType,
       },
       body: blob,
     });
+    if (!uploadResponse.ok) {
+      throw new Error(`Image upload failed (HTTP ${uploadResponse.status})`);
+    }
 
     return data.publicUrl;
   } catch (error) {

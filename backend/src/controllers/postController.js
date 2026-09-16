@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { isOwnUploadUrl } = require('../utils/storage');
 
 /**
  * POST /api/posts
@@ -9,8 +10,8 @@ async function createPost(req, res, next) {
     const { image_url, caption } = req.body;
     const userId = req.user.id;
 
-    if (!image_url) {
-      return res.status(400).json({ error: 'image_url is required' });
+    if (!isOwnUploadUrl(image_url, userId)) {
+      return res.status(400).json({ error: 'image_url must be an image you uploaded' });
     }
 
     const { rows: [post] } = await db.query(
@@ -38,8 +39,7 @@ async function getFeedPosts(req, res, next) {
 
     const { rows } = await db.query(
       `SELECT
-         p.*,
-         u.email,
+         p.id, p.user_id, p.image_url, p.caption, p.likes_count, p.created_at,
          COALESCE(ip.name, bp.name) AS author_name,
          COALESCE(ip.avatar_url, bp.logo_url) AS author_avatar,
          COALESCE(ip.categories, bp.categories) AS author_categories,
@@ -48,7 +48,6 @@ async function getFeedPosts(req, res, next) {
            WHERE pl.post_id = p.id AND pl.user_id = $1
          ) AS liked_by_me
        FROM posts p
-       JOIN users u ON u.id = p.user_id
        LEFT JOIN influencer_profiles ip ON ip.user_id = p.user_id
        LEFT JOIN brand_profiles bp ON bp.user_id = p.user_id
        ORDER BY p.created_at DESC
@@ -70,7 +69,7 @@ async function getMyPosts(req, res, next) {
   try {
     const userId = req.user.id;
     const { rows } = await db.query(
-      `SELECT * FROM posts WHERE user_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM posts WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`,
       [userId]
     );
     res.json({ posts: rows });
@@ -79,44 +78,52 @@ async function getMyPosts(req, res, next) {
   }
 }
 
+// Each statement changes likes_count only when its insert/delete actually
+// changed a row, so concurrent or retried requests can't drift the count.
+const LIKE_SQL = `
+  WITH ins AS (
+    INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+    RETURNING 1
+  )
+  UPDATE posts SET likes_count = likes_count + (SELECT count(*) FROM ins)
+  WHERE id = $1
+  RETURNING likes_count`;
+
+const UNLIKE_SQL = `
+  WITH del AS (
+    DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2
+    RETURNING 1
+  )
+  UPDATE posts SET likes_count = GREATEST(likes_count - (SELECT count(*) FROM del), 0)
+  WHERE id = $1
+  RETURNING likes_count`;
+
 /**
  * POST /api/posts/:postId/like
- * Toggle like on a post
+ * Body: { liked?: boolean }. With `liked` the call sets that state, so retries
+ * are safe; without it the like is toggled (kept for older app builds).
  */
 async function toggleLike(req, res, next) {
   try {
     const { postId } = req.params;
     const userId = req.user.id;
 
-    // Check if already liked
-    const { rows: existing } = await db.query(
-      `SELECT 1 FROM post_likes WHERE post_id = $1 AND user_id = $2`,
-      [postId, userId]
-    );
-
-    if (existing.length > 0) {
-      // Unlike
-      await db.query(
-        `DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2`,
+    let liked = req.body?.liked;
+    if (typeof liked !== 'boolean') {
+      const { rows } = await db.query(
+        `SELECT 1 FROM post_likes WHERE post_id = $1 AND user_id = $2`,
         [postId, userId]
       );
-      await db.query(
-        `UPDATE posts SET likes_count = GREATEST(likes_count - 1, 0) WHERE id = $1`,
-        [postId]
-      );
-      res.json({ liked: false });
-    } else {
-      // Like
-      await db.query(
-        `INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [postId, userId]
-      );
-      await db.query(
-        `UPDATE posts SET likes_count = likes_count + 1 WHERE id = $1`,
-        [postId]
-      );
-      res.json({ liked: true });
+      liked = rows.length === 0;
     }
+
+    const { rows } = await db.query(liked ? LIKE_SQL : UNLIKE_SQL, [postId, userId]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    res.json({ liked, likes_count: rows[0].likes_count });
   } catch (err) {
     next(err);
   }

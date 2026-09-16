@@ -147,7 +147,7 @@ function initSocket(server) {
 
         // 4. Trigger Push Notification to the receiver
         // (Don't await this, let it happen in background)
-        notificationService.sendChatNotification(receiverId, socket.user.id, safeContent)
+        notificationService.sendChatNotification(receiverId, socket.user.id)
           .catch(err => console.error('[Socket] Push notification failed:', err));
 
       } catch (err) {

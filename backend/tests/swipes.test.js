@@ -62,6 +62,7 @@ describe('Swipe Routes', () => {
         query: jest.fn()
           .mockResolvedValueOnce({}) // BEGIN
           .mockResolvedValueOnce({ rows: [{ id: 'target-user', role: 'influencer' }] }) // Verify target
+          .mockResolvedValueOnce({}) // pair advisory lock
           .mockResolvedValueOnce({ rows: [{ id: 'swipe-1', direction: 'like' }] }) // INSERT swipe
           .mockResolvedValueOnce({ rows: [] }) // No reciprocal swipe
           .mockResolvedValueOnce({}), // COMMIT
@@ -82,6 +83,7 @@ describe('Swipe Routes', () => {
         query: jest.fn()
           .mockResolvedValueOnce({}) // BEGIN
           .mockResolvedValueOnce({ rows: [{ id: 'target-user', role: 'influencer' }] }) // Verify target
+          .mockResolvedValueOnce({}) // pair advisory lock
           .mockResolvedValueOnce({ rows: [{ id: 'swipe-1', direction: 'like' }] }) // INSERT swipe
           .mockResolvedValueOnce({ rows: [{ id: 'reciprocal-swipe' }] }) // RECIPROCAL exists!
           .mockResolvedValueOnce({ rows: [{ id: 'match-1', brand_id: 'test-user-id-123', influencer_id: 'target-user' }] }) // INSERT match
@@ -98,6 +100,48 @@ describe('Swipe Routes', () => {
       expect(res.status).toBe(201);
       expect(res.body.matched).toBe(true);
       expect(res.body.match).toBeDefined();
+    });
+
+    it('takes the pair lock before writing, keyed the same for both users', async () => {
+      const mockClient = {
+        query: jest.fn()
+          .mockResolvedValueOnce({}) // BEGIN
+          .mockResolvedValueOnce({ rows: [{ id: 'target-user', role: 'influencer' }] })
+          .mockResolvedValueOnce({}) // lock
+          .mockResolvedValueOnce({ rows: [{ id: 'swipe-1', direction: 'like' }] })
+          .mockResolvedValueOnce({ rows: [] })
+          .mockResolvedValueOnce({}), // COMMIT
+        release: jest.fn(),
+      };
+      db.getClient.mockResolvedValue(mockClient);
+
+      await request(server)
+        .post('/api/swipes')
+        .send({ swiped_id: 'target-user', direction: 'like' });
+
+      const [lockSql, lockParams] = mockClient.query.mock.calls[2];
+      expect(lockSql).toMatch(/pg_advisory_xact_lock/);
+      // Sorted, so A→B and B→A contend for the same lock.
+      expect(lockParams).toEqual(['target-user:test-user-id-123']);
+      const insertIndex = mockClient.query.mock.calls.findIndex(([sql]) => /INSERT INTO swipes/.test(sql));
+      expect(insertIndex).toBeGreaterThan(2);
+    });
+
+    it('rejects swiping on a user who has not picked a role', async () => {
+      const mockClient = {
+        query: jest.fn()
+          .mockResolvedValueOnce({}) // BEGIN
+          .mockResolvedValueOnce({ rows: [{ id: 'target-user', role: null }] })
+          .mockResolvedValueOnce({}), // ROLLBACK
+        release: jest.fn(),
+      };
+      db.getClient.mockResolvedValue(mockClient);
+
+      const res = await request(server)
+        .post('/api/swipes')
+        .send({ swiped_id: 'target-user', direction: 'like' });
+
+      expect(res.status).toBe(400);
     });
 
     it('should reject swiping on a user with the same role', async () => {

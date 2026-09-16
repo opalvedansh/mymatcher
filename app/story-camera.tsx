@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadStory } from '@/api';
+import { uploadImage, uploadStory } from '@/api';
 
 export default function StoryCameraScreen() {
   const router = useRouter();
@@ -53,10 +53,9 @@ export default function StoryCameraScreen() {
     
     try {
       setIsUploading(true);
-      const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.5 });
-      if (photo && photo.base64) {
-        const newUri = `data:image/jpeg;base64,${photo.base64}`;
-        await uploadStory(newUri);
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
+      if (photo?.uri) {
+        await uploadStory(await uploadImage(photo.uri));
         router.back();
       }
     } catch (err) {
@@ -72,14 +71,12 @@ export default function StoryCameraScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.5,
-      base64: true,
     });
     
     if (!result.canceled && result.assets && result.assets.length > 0) {
       try {
         setIsUploading(true);
-        const newUri = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        await uploadStory(newUri);
+        await uploadStory(await uploadImage(result.assets[0].uri));
         router.back();
       } catch (err) {
         console.error('Failed to upload picked story', err);

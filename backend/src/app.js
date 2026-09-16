@@ -72,7 +72,7 @@ function getRedisStore(prefix) {
 // phones behind one address, so an IP key lets users exhaust each other's quota.
 // The sub is read without verification — a forged one only earns a fresh bucket
 // for a request `authenticate` then rejects, and globalLimiter still caps the IP.
-function authLimiterKey(req) {
+function userOrIpKey(req) {
   const header = req.headers.authorization;
   if (header?.startsWith('Bearer ')) {
     const sub = jwt.decode(header.slice(7))?.sub;
@@ -87,7 +87,7 @@ const authLimiter = rateLimit({
   // One onboarding run makes ~25 requests here (a save per screen plus startup
   // fetches), so this leaves room for several retries.
   max: process.env.NODE_ENV === 'development' ? 3000 : 150,
-  keyGenerator: authLimiterKey,
+  keyGenerator: userOrIpKey,
   message: { error: 'Too many auth requests — try again in 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -105,7 +105,8 @@ const globalLimiter = rateLimit({
 const swipeLimiter = rateLimit({
   store: getRedisStore('rl:swipe:'),
   windowMs: 60 * 1000,       // 1 minute
-  max: 100,                  // 100 swipes/min per IP
+  max: 100,                  // 100 swipes/min per user
+  keyGenerator: userOrIpKey,
   message: { error: 'Swipe rate limit exceeded' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -149,7 +150,10 @@ app.use(shrinkRay({
 }));
 // Global JSON limit is intentionally small — file uploads use presigned S3 URLs
 // and never send large bodies through this API.
-app.use(express.json({ limit: '50kb' }));
+const jsonParser = express.json({ limit: '50kb' });
+// Face verification carries a base64 selfie and parses its own larger body.
+const LARGE_BODY_PATHS = new Set(['/api/profiles/verify-face']);
+app.use((req, res, next) => (LARGE_BODY_PATHS.has(req.path) ? next() : jsonParser(req, res, next)));
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 app.use(globalLimiter);
 
