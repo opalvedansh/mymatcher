@@ -3,7 +3,8 @@ require('dotenv').config();
 const express      = require('express');
 const helmet       = require('helmet');
 const cors         = require('cors');
-const rateLimit    = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
+const jwt          = require('jsonwebtoken');
 const { RedisStore } = require('rate-limit-redis');
 const redisClient  = require('./config/redis');
 const http         = require('http');
@@ -67,10 +68,26 @@ function getRedisStore(prefix) {
   });
 }
 
+// Keys authenticated traffic per user, not per IP: mobile carriers put many
+// phones behind one address, so an IP key lets users exhaust each other's quota.
+// The sub is read without verification — a forged one only earns a fresh bucket
+// for a request `authenticate` then rejects, and globalLimiter still caps the IP.
+function authLimiterKey(req) {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    const sub = jwt.decode(header.slice(7))?.sub;
+    if (typeof sub === 'string' && sub) return `user:${sub}`;
+  }
+  return `ip:${ipKeyGenerator(req.ip)}`;
+}
+
 const authLimiter = rateLimit({
   store: getRedisStore('rl:auth:'),
   windowMs: 15 * 60 * 1000,  // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 3000 : 30, // Increased for dev
+  // One onboarding run makes ~25 requests here (a save per screen plus startup
+  // fetches), so this leaves room for several retries.
+  max: process.env.NODE_ENV === 'development' ? 3000 : 150,
+  keyGenerator: authLimiterKey,
   message: { error: 'Too many auth requests — try again in 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false,

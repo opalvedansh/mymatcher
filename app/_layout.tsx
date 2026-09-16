@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 // must stay mounted across the sign-in transition — a screen that routes itself
 // away (as app/index.tsx used to) unmounts and stops observing auth state.
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { user, loading, onboardingComplete, onboardingData } = useAuth();
+  const { user, loading, onboardingComplete, onboardingData, userDataError } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
@@ -21,6 +21,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
     if (!user) {
       if (!inAuthGroup) router.replace('/auth/login');
+      return;
+    }
+
+    // Without their saved state we can't know where they belong; the index
+    // screen offers a retry instead of dropping them at role selection.
+    if (userDataError) {
+      if (group !== undefined) router.replace('/');
       return;
     }
 
@@ -38,7 +45,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     if (inAuthGroup || inOnboarding || group === undefined) {
       router.replace(onboardingData?.role === 'Brand' ? '/(brand-tabs)/home' : '/(influencer-tabs)/home');
     }
-  }, [user, loading, onboardingComplete, onboardingData, segments, router]);
+  }, [user, loading, onboardingComplete, onboardingData, userDataError, segments, router]);
 
   return <>{children}</>;
 }

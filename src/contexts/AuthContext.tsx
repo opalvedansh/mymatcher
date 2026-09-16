@@ -62,6 +62,8 @@ interface AuthContextType {
   loading: boolean;
   onboardingData: OnboardingData | null;
   onboardingComplete: boolean;
+  userDataError: string | null;
+  retryUserData: () => Promise<void>;
   // Auth methods
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
@@ -93,6 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  // Set when the user's backend state couldn't be loaded. Routing must wait on a
+  // retry rather than guess, or a transient error looks like lost progress.
+  const [userDataError, setUserDataError] = useState<string | null>(null);
 
   const fetchUserDataPromise = useRef<Promise<void> | null>(null);
   // Onboarding saves fire on every field change, so warn at most once per run.
@@ -169,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     fetchUserDataPromise.current = (async () => {
       try {
+        setUserDataError(null);
         console.log('[Startup] Fetching user data and onboarding progress...');
         // Fetch user profile and onboarding state from Backend
         const [dbUser, onboardingProgress] = await Promise.all([
@@ -209,7 +215,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           alert('Your session has expired. Please sign in again.');
           await supabase.auth.signOut();
         } else {
-          alert('Network Error: Could not connect to servers. Please check your connection and restart the app.');
+          setUserDataError(
+            status === 429
+              ? 'Too many requests. Please wait a moment and try again.'
+              : 'Could not connect to servers. Please check your connection and try again.',
+          );
         }
       } finally {
         console.log('[Startup] Finished fetching user data. Setting loading=false');
@@ -219,6 +229,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
 
     return fetchUserDataPromise.current;
+  };
+
+  const retryUserData = async () => {
+    if (!user) return;
+    setLoading(true);
+    await fetchUserData(user);
   };
 
   // --- Auth methods ---
@@ -500,6 +516,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         onboardingData,
         onboardingComplete,
+        userDataError,
+        retryUserData,
         signInWithEmail,
         signUpWithEmail,
         signInWithGoogle,
