@@ -1,3 +1,6 @@
+-- uuid_generate_v4() below needs this; Supabase preinstalls it, fresh databases do not.
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE TABLE IF NOT EXISTS stories (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

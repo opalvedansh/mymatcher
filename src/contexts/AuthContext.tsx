@@ -3,7 +3,7 @@ import { type User } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
 import { supabase } from '../supabase';
-import { syncUser, updateMyProfile, uploadImage, syncInstagram } from '../api';
+import { syncUser, updateMyProfile, uploadImage, syncInstagram, deleteMyAccount } from '../api';
 import api from '../api/client';
 import { socketService } from '../api/socket';
 import * as WebBrowser from 'expo-web-browser';
@@ -71,6 +71,7 @@ interface AuthContextType {
   signInWithApple: () => Promise<void>;
   signInWithLinkedIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   // Email verification methods
   verifyOtpCode: (email: string, otp: string) => Promise<void>;
   resendOtp: (email: string) => Promise<void>;
@@ -381,6 +382,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Permanently deletes the account on the server, then clears the local session.
+  // Throws if the server call fails so the caller can tell the user.
+  const deleteAccount = async () => {
+    await deleteMyAccount();
+    await signOut();
+  };
+
   // --- Onboarding methods ---
 
   const updateOnboarding = async (data: Partial<OnboardingData>) => {
@@ -524,6 +532,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithApple,
         signInWithLinkedIn,
         signOut,
+        deleteAccount,
         verifyOtpCode,
         resendOtp,
         resetPassword,

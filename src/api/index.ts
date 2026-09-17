@@ -163,6 +163,27 @@ export function getStoryViewers(storyId: string) {
   return api.get<any[]>(`/api/stories/${storyId}/viewers`);
 }
 
+// ─── Trust & safety ───────────────────────────────────────────────
+
+export type ReportTargetType = 'user' | 'post' | 'story' | 'message';
+export type ReportReason = 'spam' | 'inappropriate' | 'harassment' | 'fake_profile' | 'other';
+
+export function blockUser(userId: string) {
+  return api.post('/api/blocks', { user_id: userId });
+}
+
+export function unblockUser(userId: string) {
+  return api.delete(`/api/blocks/${encodeURIComponent(userId)}`);
+}
+
+export function reportContent(targetType: ReportTargetType, targetId: string, reason: ReportReason, details?: string) {
+  return api.post('/api/reports', { target_type: targetType, target_id: targetId, reason, details });
+}
+
+export function deleteMyAccount() {
+  return api.delete<{ deleted: boolean }>('/api/account');
+}
+
 // ─── Maps ─────────────────────────────────────────────────────────
 
 export function getMapAutocomplete(input: string, types: string = '(cities)') {

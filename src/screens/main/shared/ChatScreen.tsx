@@ -67,12 +67,14 @@ export function ChatScreen({ onConversationStateChange }: ChatScreenProps) {
   const getMatchPerson = (m: MatchRecord) => {
     if (role === 'brand') {
       return { 
+        userId: m.influencer_id,
         name: m.influencer_name, 
         avatar: m.influencer_avatar,
         myAvatar: m.brand_logo
       };
     }
     return { 
+      userId: m.brand_id,
       name: m.brand_name, 
       avatar: m.brand_logo,
       myAvatar: m.influencer_avatar
@@ -128,6 +130,7 @@ export function ChatScreen({ onConversationStateChange }: ChatScreenProps) {
     return (
       <ConversationScreen
         matchId={selectedMatch.match_id}
+        otherUserId={person.userId}
         chatName={person.name ?? 'Chat'}
         chatAvatar={person.avatar ?? undefined}
         myAvatar={person.myAvatar ?? undefined}

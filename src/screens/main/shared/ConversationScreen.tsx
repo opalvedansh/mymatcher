@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
 import { getMessages } from '@/api';
+import { openSafetyMenu } from '@/components/safetyMenu';
 import { socketService } from '@/api/socket';
 import { useAuth } from '@/contexts/AuthContext';
 import type { ChatMessage } from '@/api/types';
@@ -37,13 +38,14 @@ const AvatarImage = ({ uri, style }: { uri?: string, style: any }) => {
 
 interface Props {
   matchId: string;
+  otherUserId: string;
   chatName: string;
   chatAvatar?: string;
   myAvatar?: string;
   onBack: () => void;
 }
 
-export function ConversationScreen({ matchId, chatName, chatAvatar, myAvatar, onBack }: Props) {
+export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar, myAvatar, onBack }: Props) {
   const { user } = useAuth(); // Need to know who I am to determine isMe
   
   const [inputText, setInputText] = useState('');
@@ -186,10 +188,20 @@ export function ConversationScreen({ matchId, chatName, chatAvatar, myAvatar, on
           <Text style={styles.headerName}>{chatName}</Text>
         </View>
         <View style={styles.headerRight}>
-          <View>
-            <Ionicons name="notifications" size={26} color="#FFF" />
-            <View style={styles.notificationDot} />
-          </View>
+          <Pressable
+            accessibilityLabel="Report or block"
+            hitSlop={8}
+            onPress={() =>
+              openSafetyMenu({
+                userId: otherUserId,
+                name: chatName,
+                target: { type: 'message', id: matchId },
+                onBlocked: onBack,
+              })
+            }
+          >
+            <Ionicons name="ellipsis-horizontal" size={26} color="#FFF" />
+          </Pressable>
         </View>
       </View>
 
@@ -290,17 +302,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FFF',
-    borderWidth: 2,
-    borderColor: '#121212',
   },
   messageRow: {
     flexDirection: 'row',

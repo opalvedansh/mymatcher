@@ -1,7 +1,7 @@
-const { createClient } = require('@supabase/supabase-js');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../config/logger');
 const { UPLOAD_BUCKET, publicUploadPrefix } = require('../utils/storage');
+const { getSupabaseAdmin } = require('../config/supabaseAdmin');
 
 // The extension comes from the validated content type, never the client's
 // filename, so an upload can't be stored as .html or .svg.
@@ -11,21 +11,7 @@ const EXTENSION_BY_TYPE = {
   'image/webp': 'webp',
 };
 
-let supabase = null;
 let bucketReady = null;
-
-function getSupabaseClient() {
-  if (!supabase) {
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in backend/.env for uploads.");
-    }
-    supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY // Needs to be the service role key to generate signed upload URLs
-    );
-  }
-  return supabase;
-}
 
 /**
  * POST /api/upload/presigned-url
@@ -48,7 +34,7 @@ async function generatePresignedUrl(req, res, next) {
     const objectName = `${uuidv4()}.${ext}`;
     const filePath = `uploads/${userId}/${objectName}`;
 
-    const client = getSupabaseClient();
+    const client = getSupabaseAdmin();
     // Creating the bucket is a network call; do it once per process, not per upload.
     bucketReady ??= client.storage.createBucket(UPLOAD_BUCKET, { public: true }).catch(() => {});
     await bucketReady;

@@ -23,6 +23,7 @@ import { Ionicons, MaterialCommunityIcons, FontAwesome6 } from '@expo/vector-ico
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMyProfile, updateMyProfile, uploadImage, getProfileById } from '@/api';
+import { openAccountMenu, openSafetyMenu } from '@/components/safetyMenu';
 import { ReelsIcon } from '@/components/ReelsIcon';
 import { StoriesIcon } from '@/components/StoriesIcon';
 import { PostIcon } from '@/components/PostIcon';
@@ -69,7 +70,7 @@ const MOCK_RATING_AVATARS = [
 
 export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: string, onBack?: () => void }) {
   const { width } = useWindowDimensions();
-  const { signOut } = useAuth();
+  const { signOut, deleteAccount } = useAuth();
   const [profile, setProfile] = useState<BrandProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -297,13 +298,24 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
           </TouchableOpacity>
         </View>
       )}
-      {!publicUserId && (
-        <View style={{ position: 'absolute', top: 50, right: 16, zIndex: 10 }}>
-          <Pressable onPress={signOut} style={{ padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="log-out-outline" size={20} color="#FFF" />
-          </Pressable>
-        </View>
-      )}
+      <View style={{ position: 'absolute', top: 50, right: 16, zIndex: 10 }}>
+        <Pressable
+          accessibilityLabel={publicUserId ? 'Report or block' : 'Account options'}
+          onPress={() =>
+            publicUserId
+              ? openSafetyMenu({
+                  userId: publicUserId,
+                  name: profile?.name || 'this brand',
+                  target: { type: 'user', id: publicUserId },
+                  onBlocked: onBack,
+                })
+              : openAccountMenu({ signOut, deleteAccount })
+          }
+          style={{ padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}
+        >
+          <Ionicons name={publicUserId ? 'ellipsis-horizontal' : 'settings-outline'} size={20} color="#FFF" />
+        </Pressable>
+      </View>
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
         
         {/* ════ HERO COVER ════ */}

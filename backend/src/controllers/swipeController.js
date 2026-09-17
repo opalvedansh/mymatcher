@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const notificationService = require('../services/notificationService');
 const analytics = require('../services/analytics');
+const { blockedBetween } = require('../utils/blocks');
 
 // Undo window in seconds (30s)
 const UNDO_WINDOW_SECONDS = 30;
@@ -26,10 +27,11 @@ async function recordSwipe(req, res, next) {
 
     // 1. Verify the swiped user exists and is the opposite role
     const { rows: [swipedUser] } = await client.query(
-      'SELECT id, role FROM users WHERE id = $1',
-      [swiped_id]
+      `SELECT id, role, ${blockedBetween('$2', 'id')} AS blocked FROM users WHERE id = $1`,
+      [swiped_id, swiperId]
     );
-    if (!swipedUser) {
+    // A blocked pair looks the same as a missing user, so blocks aren't revealed.
+    if (!swipedUser || swipedUser.blocked) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Swiped user not found' });
     }
@@ -231,6 +233,7 @@ async function getLikesReceived(req, res, next) {
        LEFT JOIN brand_profiles bp ON bp.user_id = u.id AND u.role = 'brand'
        WHERE s.swiped_id = $1
          AND s.direction IN ('like', 'super_like')
+         AND NOT ${blockedBetween('$1', 's.swiper_id')}
          AND NOT EXISTS (
            SELECT 1 FROM matches m 
            WHERE (m.brand_id = $1 AND m.influencer_id = s.swiper_id)

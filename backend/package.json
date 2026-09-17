@@ -4,10 +4,11 @@
   "description": "REST API backend for the Matcherc brand-influencer matching platform",
   "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js",
+    "start": "node migrate.js && node src/app.js",
     "dev": "nodemon src/app.js",
     "migrate": "node migrate.js",
-    "test": "jest --forceExit --detectOpenHandles --verbose"
+    "test": "jest --forceExit --detectOpenHandles --verbose",
+    "test:integration": "node tests/integration/controllers.js && node tests/integration/migrate.mjs"
   },
   "jest": {
     "testEnvironment": "node",
@@ -56,6 +57,9 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-postgis": "^0.2.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "ioredis-mock": "^8.13.1",
     "jest": "^30.4.2",
     "nodemon": "^3.1.3",

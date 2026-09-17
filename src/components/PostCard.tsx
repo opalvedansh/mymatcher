@@ -13,6 +13,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import api from '@/api/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { openSafetyMenu } from '@/components/safetyMenu';
 
 export interface Post {
   id: string;
@@ -24,6 +26,7 @@ export interface Post {
   author_name?: string;
   author_avatar?: string;
   author_categories?: string[];
+  author_verified?: boolean;
   liked_by_me?: boolean;
 }
 
@@ -31,6 +34,7 @@ interface PostCardProps {
   post: Post;
   onLikeToggle?: (postId: string, liked: boolean, newCount: number) => void;
   onViewProfile?: (userId: string) => void;
+  onAuthorBlocked?: (userId: string) => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -51,7 +55,9 @@ function fmtCount(n: number): string {
   return String(n);
 }
 
-export function PostCard({ post, onLikeToggle, onViewProfile }: PostCardProps) {
+export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }: PostCardProps) {
+  const { user } = useAuth();
+  const isOwnPost = user?.id === post.user_id;
   const [liked, setLiked] = useState(post.liked_by_me ?? false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [isLiking, setIsLiking] = useState(false);
@@ -117,13 +123,32 @@ export function PostCard({ post, onLikeToggle, onViewProfile }: PostCardProps) {
             <Text style={styles.authorName} numberOfLines={1}>
               {post.author_name || 'Creator'}
             </Text>
-            <MaterialCommunityIcons name="check-decagram" size={14} color="#1DA1F2" style={{ marginLeft: 4 }} />
+            {post.author_verified && (
+              <MaterialCommunityIcons name="check-decagram" size={14} color="#1DA1F2" style={{ marginLeft: 4 }} />
+            )}
           </View>
           <Text style={styles.meta}>{category} · {timeAgo(post.created_at)}</Text>
         </View>
         <Pressable style={styles.followBtn}>
           <Text style={styles.followBtnText}>Follow</Text>
         </Pressable>
+        {!isOwnPost && (
+          <Pressable
+            accessibilityLabel="Report or block"
+            hitSlop={8}
+            style={{ marginLeft: 8 }}
+            onPress={() =>
+              openSafetyMenu({
+                userId: post.user_id,
+                name: post.author_name || 'this creator',
+                target: { type: 'post', id: post.id },
+                onBlocked: () => onAuthorBlocked?.(post.user_id),
+              })
+            }
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />
+          </Pressable>
+        )}
       </TouchableOpacity>
 
       {/* ── Post Image ── */}

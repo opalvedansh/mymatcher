@@ -44,6 +44,7 @@ const adminRoutes   = require('./routes/admin');
 const storiesRoutes = require('./routes/stories');
 const mapsRoutes    = require('./routes/maps');
 const postsRoutes   = require('./routes/posts');
+const safetyRoutes  = require('./routes/safety');
 
 const app  = express();
 app.set('trust proxy', 1);
@@ -185,6 +186,7 @@ app.use('/api/admin',    adminRoutes);
 app.use('/api/stories',  storiesRoutes);
 app.use('/api/maps',     mapsRoutes);
 app.use('/api/posts',    postsRoutes);
+app.use('/api',          safetyRoutes);
 
 // ─── API Documentation ───────────────────────────────────────────
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

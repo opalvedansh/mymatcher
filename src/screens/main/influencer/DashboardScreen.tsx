@@ -173,6 +173,7 @@ export function DashboardScreen() {
                 post={item}
                 onLikeToggle={handleLikeToggle}
                 onViewProfile={(id) => setViewingProfileId(id)}
+                onAuthorBlocked={(authorId) => setPosts(prev => prev.filter(p => p.user_id !== authorId))}
               />
             )}
             keyExtractor={(item) => item.id}

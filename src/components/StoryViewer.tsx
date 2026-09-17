@@ -17,6 +17,7 @@ import {
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { recordStoryView, getStoryViewers } from '@/api';
+import { openSafetyMenu } from '@/components/safetyMenu';
 
 const { width, height } = Dimensions.get('window');
 
@@ -266,9 +267,27 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                 <Pressable onPress={togglePause} style={styles.headerIconBtn}>
                   <Ionicons name={isPaused.current ? "play" : "pause"} size={22} color="#FFF" />
                 </Pressable>
-                <Pressable onPress={onClose} style={styles.headerIconBtn}>
-                  {/* Replaced 'ellipsis-horizontal' with a close button or keep ellipsis to close */}
-                  <Ionicons name="ellipsis-horizontal" size={24} color="#FFF" />
+                {!currentGroup.isMe && (
+                  <Pressable
+                    accessibilityLabel="Report or block"
+                    style={styles.headerIconBtn}
+                    onPress={() => {
+                      isPaused.current = true;
+                      progressAnim.stopAnimation();
+                      // The story group id is the author's user id.
+                      openSafetyMenu({
+                        userId: currentGroup.id,
+                        name: currentGroup.name,
+                        target: { type: 'story', id: currentItem.id },
+                        onBlocked: onClose,
+                      });
+                    }}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={24} color="#FFF" />
+                  </Pressable>
+                )}
+                <Pressable accessibilityLabel="Close" onPress={onClose} style={styles.headerIconBtn}>
+                  <Ionicons name="close" size={26} color="#FFF" />
                 </Pressable>
               </View>
             </View>

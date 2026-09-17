@@ -24,6 +24,7 @@ import { useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { getMyProfile, updateMyProfile, getProfileById, syncInstagram } from '@/api';
+import { openAccountMenu, openSafetyMenu } from '@/components/safetyMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/supabase';
 import type { InfluencerProfile } from '@/api/types';
@@ -192,7 +193,7 @@ const chartSt = StyleSheet.create({
 type Tab = 'overview' | 'engagement' | 'audience';
 
 export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId?: string, onBack?: () => void }) {
-  const { signOut } = useAuth();
+  const { signOut, deleteAccount } = useAuth();
   const { width, height } = useWindowDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -480,13 +481,24 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         </View>
       )}
 
-      {!publicUserId && (
-        <View style={{ position: 'absolute', top: 50, right: 16, zIndex: 10 }}>
-          <Pressable onPress={signOut} style={{ padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="log-out-outline" size={20} color="#FFF" />
-          </Pressable>
-        </View>
-      )}
+      <View style={{ position: 'absolute', top: 50, right: 16, zIndex: 10 }}>
+        <Pressable
+          accessibilityLabel={publicUserId ? 'Report or block' : 'Account options'}
+          onPress={() =>
+            publicUserId
+              ? openSafetyMenu({
+                  userId: publicUserId,
+                  name: activeProfile?.name || 'this user',
+                  target: { type: 'user', id: publicUserId },
+                  onBlocked: onBack,
+                })
+              : openAccountMenu({ signOut, deleteAccount })
+          }
+          style={{ padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}
+        >
+          <Ionicons name={publicUserId ? 'ellipsis-horizontal' : 'settings-outline'} size={20} color="#FFF" />
+        </Pressable>
+      </View>
 
       <Animated.ScrollView 
         style={{ flex: 1 }} 

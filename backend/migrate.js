@@ -3,6 +3,9 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
+// The last migration that existed before this runner tracked what it applied.
+const LEGACY_BASELINE = '020_posts.sql';
+
 async function runMigrations() {
   console.log(`Connecting to database...`);
   const client = new Client({
@@ -46,10 +49,12 @@ async function runMigrations() {
       if (checkUsers.rows[0].exists) {
         console.log('Existing database detected. Seeding tracking table to prevent data loss...');
         const migrationsDir = path.join(__dirname, 'migrations');
+        // Only migrations that predate tracking were applied by the old script.
+        // Seeding anything newer would mark it applied without ever running it.
         const files = fs.readdirSync(migrationsDir)
-          .filter(f => f.endsWith('.sql'))
+          .filter(f => f.endsWith('.sql') && f <= LEGACY_BASELINE)
           .sort();
-        
+
         for (const file of files) {
           await client.query('INSERT INTO _migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING', [file]);
         }

@@ -7,6 +7,19 @@ const { authenticate } = require('../middleware/auth');
 const { cache } = require('../middleware/cacheMiddleware');
 const { getMyProfile, updateMyProfile, getProfileById, verifyFace, syncInstagram, searchInstagram } = require('../controllers/profileController');
 const { requireRole } = require('../middleware/auth');
+const { isBlockedBetween } = require('../utils/blocks');
+
+// Runs before the response cache, since cached profiles are shared by all viewers.
+async function hideIfBlocked(req, res, next) {
+  try {
+    if (await isBlockedBetween(req.user.id, req.params.userId)) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
 
 const profileRules = [
   body('name').optional().isString().trim(),
@@ -87,6 +100,6 @@ router.post('/sync-instagram', requireRole('influencer'), instagramSyncLimiter, 
  *       200:
  *         description: Profile data
  */
-router.get ('/:userId',   userIdRules, validate, cache(300), getProfileById);
+router.get ('/:userId',   userIdRules, validate, hideIfBlocked, cache(300), getProfileById);
 
 module.exports = router;

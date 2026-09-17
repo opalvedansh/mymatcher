@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const { feedCache } = require('../config/cache');
 const logger = require('../config/logger');
+const { blockedBetween } = require('../utils/blocks');
 
 // ─── Default Scoring weights ──────────────────────────────────────
 const DEFAULT_WEIGHTS = {
@@ -119,6 +120,7 @@ async function getFeed(req, res, next) {
              AND NOT EXISTS (
                SELECT 1 FROM swipes s WHERE s.swiper_id = $1 AND s.swiped_id = u.id
              )
+             AND NOT ${blockedBetween('$1', 'u.id')}
              AND ($7::numeric IS NULL OR $8::numeric IS NULL
                   OR ip.location_geog IS NULL
                   OR ST_DWithin(ip.location_geog, ST_SetSRID(ST_MakePoint($8::numeric, $7::numeric), 4326), 500000))
@@ -210,6 +212,7 @@ async function getFeed(req, res, next) {
              AND NOT EXISTS (
                SELECT 1 FROM swipes s WHERE s.swiper_id = $1 AND s.swiped_id = u.id
              )
+             AND NOT ${blockedBetween('$1', 'u.id')}
              AND ($7::numeric IS NULL OR $8::numeric IS NULL
                   OR bp.location_geog IS NULL
                   OR ST_DWithin(bp.location_geog, ST_SetSRID(ST_MakePoint($8::numeric, $7::numeric), 4326), 500000))

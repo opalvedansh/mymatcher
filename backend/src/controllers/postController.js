@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { isOwnUploadUrl } = require('../utils/storage');
+const { blockedBetween } = require('../utils/blocks');
 
 /**
  * POST /api/posts
@@ -43,6 +44,7 @@ async function getFeedPosts(req, res, next) {
          COALESCE(ip.name, bp.name) AS author_name,
          COALESCE(ip.avatar_url, bp.logo_url) AS author_avatar,
          COALESCE(ip.categories, bp.categories) AS author_categories,
+         COALESCE(ip.verified, bp.verified, false) AS author_verified,
          EXISTS(
            SELECT 1 FROM post_likes pl
            WHERE pl.post_id = p.id AND pl.user_id = $1
@@ -50,6 +52,7 @@ async function getFeedPosts(req, res, next) {
        FROM posts p
        LEFT JOIN influencer_profiles ip ON ip.user_id = p.user_id
        LEFT JOIN brand_profiles bp ON bp.user_id = p.user_id
+       WHERE NOT ${blockedBetween('$1', 'p.user_id')}
        ORDER BY p.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset]
