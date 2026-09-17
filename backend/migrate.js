@@ -6,6 +6,8 @@ const path = require('path');
 // The last migration that existed before this runner tracked what it applied.
 const LEGACY_BASELINE = '020_posts.sql';
 
+const DESTRUCTIVE_MIGRATIONS = new Set(['002_firebase_uid.sql']);
+
 async function runMigrations() {
   console.log(`Connecting to database...`);
   const client = new Client({
@@ -76,6 +78,22 @@ async function runMigrations() {
     for (const file of files) {
       if (appliedMigrations.has(file)) {
         continue; // Skip already applied migrations
+      }
+
+      // 002 drops and recreates the core tables. Migrations run on every
+      // deploy, so refuse it outright if there is any user data to lose.
+      if (DESTRUCTIVE_MIGRATIONS.has(file)) {
+        const { rows: [{ has_table }] } = await client.query(
+          `SELECT to_regclass('public.users') IS NOT NULL AS has_table`
+        );
+        if (has_table) {
+          const { rows: [{ has_users }] } = await client.query(
+            'SELECT EXISTS (SELECT 1 FROM users) AS has_users'
+          );
+          if (has_users) {
+            throw new Error(`Refusing to run destructive migration ${file}: the users table contains data.`);
+          }
+        }
       }
 
       console.log(`Running migration: ${file}`);

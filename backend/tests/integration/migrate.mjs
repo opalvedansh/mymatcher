@@ -97,5 +97,21 @@ await withServer(55433, async (db) => {
   check('tracked DB: data kept', (await db.query(`SELECT count(*)::int AS n FROM users`)).rows[0].n === 1);
 });
 
+// 4. Tracking lost its record of the destructive 002 while data exists:
+//    the deploy must fail loudly instead of wiping users.
+await withServer(55434, async (db) => {
+  await db.exec('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
+  await db.exec(`CREATE TABLE _migrations (id SERIAL PRIMARY KEY, filename VARCHAR(255) UNIQUE NOT NULL, applied_at TIMESTAMPTZ DEFAULT NOW())`);
+  for (const f of allFiles) {
+    await db.exec(fs.readFileSync(`${BACKEND}/migrations/${f}`, 'utf8'));
+    if (f !== '002_firebase_uid.sql') await db.query(`INSERT INTO _migrations (filename) VALUES ($1)`, [f]);
+  }
+  await db.exec(`INSERT INTO users (id, email, role) VALUES ('keep-me', 'k@x.com', 'brand')`);
+}, async (db) => {
+  const r = await runMigrate(55434);
+  check('destructive 002 is refused when users exist', !r.ok && /Refusing to run destructive migration/.test(r.out), r.out.slice(-200));
+  check('...and the data survives', (await db.query(`SELECT count(*)::int AS n FROM users`)).rows[0].n === 1);
+});
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);
