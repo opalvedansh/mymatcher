@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const realtime = require('../realtime');
 const { decrypt } = require('../utils/encryption');
 
 /**
@@ -183,6 +184,7 @@ async function archiveMatch(req, res, next) {
          AND status = 'active'`,
       [matchId, userId]
     );
+    if (rowCount) await realtime.closeMatches([matchId]);
 
     if (!rowCount) {
       return res.status(404).json({ error: 'Match not found or already archived' });

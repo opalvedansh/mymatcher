@@ -32,10 +32,15 @@ const adminStub = {
 require.cache[`${BACKEND}/src/config/supabaseAdmin.js`] = {
   id: 'sa', filename: `${BACKEND}/src/config/supabaseAdmin.js`, loaded: true, exports: { getSupabaseAdmin: () => adminStub }, children: [], paths: [],
 };
+// Stands in for the Socket.io server and records what the backend asks of it.
 const disconnected = [];
-require.cache[`${BACKEND}/src/socket.js`] = {
-  id: 'sock', filename: `${BACKEND}/src/socket.js`, loaded: true, children: [], paths: [],
-  exports: { getIO: () => ({ in: (room) => ({ disconnectSockets: () => disconnected.push(room) }) }) },
+const roomEvents = [];
+const fakeIo = {
+  to: (room) => ({ emit: (event, payload) => roomEvents.push({ room, event, payload }) }),
+  in: (room) => ({
+    disconnectSockets: () => disconnected.push(room),
+    socketsLeave: (left) => roomEvents.push({ room, event: 'leave', payload: left }),
+  }),
 };
 
 let failures = 0;
@@ -63,6 +68,7 @@ async function main() {
   const { pg_trgm } = await import('@electric-sql/pglite/contrib/pg_trgm');
   const { uuid_ossp } = await import('@electric-sql/pglite/contrib/uuid_ossp');
   const { pgcrypto } = await import('@electric-sql/pglite/contrib/pgcrypto');
+  require(`${BACKEND}/src/realtime`).setServer(fakeIo);
   pg = await PGlite.create({ extensions: { postgis, pg_trgm, uuid_ossp, pgcrypto } });
   await pg.exec('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
 
@@ -100,7 +106,7 @@ async function main() {
   check('feed distance is bucketed to 5 km', rows.every((x) => x.dist_km === null || Number(x.dist_km) % 5 === 0), JSON.stringify(rows.map((x) => x.dist_km)));
 
   await pg.exec(`INSERT INTO admin_settings (key, value) VALUES ('algorithm_weights', '{"CATEGORY_OVERLAP":"1.5","BUDGET_FIT":"x"}') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
-  require(`${BACKEND}/src/config/cache`).feedCache.flush();
+  require(`${BACKEND}/src/utils/sharedCache`)._local.flush();
   r = await call(getFeed, { user: { id: B, role: 'brand' } });
   check('decimal / junk admin weights no longer break the feed', r.status === 200, r.err?.message || '');
 

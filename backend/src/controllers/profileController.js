@@ -2,6 +2,8 @@ const db = require('../config/db');
 const { invalidateCache } = require('../middleware/cacheMiddleware');
 const logger = require('../config/logger');
 const { isOwnUploadUrl } = require('../utils/storage');
+const sharedCache = require('../utils/sharedCache');
+const feedDeck = require('../services/feedDeck');
 
 // ─── Helper: fetch full profile by userId + role (explicit columns) ──
 async function fetchProfile(userId, role) {
@@ -153,6 +155,8 @@ async function updateMyProfile(req, res, next) {
 
     // Invalidate the public profile API endpoint cache in Redis
     await invalidateCache(`cache:/api/profiles/${userId}`);
+    // Categories, budget and location drive the user's own feed ranking.
+    await feedDeck.refreshAfterProfileChange(userId, role);
 
     const updated = await fetchProfile(userId, role);
     res.json(updated);
@@ -314,20 +318,8 @@ async function syncInstagram(req, res, next) {
   }
 }
 
-// ─── In-memory search cache (5 min TTL, bounded) ─────────────────
-// Bounded because every distinct query string adds an entry.
-const _igSearchCache = new Map();
-const _IG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const _IG_CACHE_MAX = 1000;
-
-function cacheInstagramSearch(q, data) {
-  _igSearchCache.delete(q);
-  _igSearchCache.set(q, { ts: Date.now(), data });
-  if (_igSearchCache.size > _IG_CACHE_MAX) {
-    // Maps iterate in insertion order, so the first key is the oldest.
-    _igSearchCache.delete(_igSearchCache.keys().next().value);
-  }
-}
+// Results are shared across instances: each miss runs a paid scraper.
+const IG_SEARCH_TTL_SECONDS = 5 * 60;
 
 // ─── GET /api/profiles/search-instagram ─────────────────────────
 async function searchInstagram(req, res, next) {
@@ -338,10 +330,9 @@ async function searchInstagram(req, res, next) {
     q = q.replace('@', '').toLowerCase().trim();
 
     // Return cached result if still fresh
-    const cached = _igSearchCache.get(q);
-    if (cached && Date.now() - cached.ts < _IG_CACHE_TTL) {
-      return res.json(cached.data);
-    }
+    const cacheKey = `ig-search:${q}`;
+    const cached = await sharedCache.get(cacheKey);
+    if (cached) return res.json(cached);
 
     // Use Apify search service
     const { searchInstagramProfiles } = require('../services/instagramSyncService');
@@ -357,7 +348,7 @@ async function searchInstagram(req, res, next) {
       usernames.unshift(`@${q}`);
     }
 
-    cacheInstagramSearch(q, usernames);
+    await sharedCache.set(cacheKey, usernames, IG_SEARCH_TTL_SECONDS);
 
     res.json(usernames);
   } catch (err) {

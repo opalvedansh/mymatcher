@@ -63,6 +63,7 @@ async function sendBulkNotifications(notifications) {
       return;
     }
 
+    let queued = false;
     if (pushQueue) {
       // ── 4a. BullMQ path: enqueue in chunks ──────────────────────────
       const jobs = messages.map(m => ({
@@ -71,13 +72,22 @@ async function sendBulkNotifications(notifications) {
         opts: {
           attempts: 3,
           backoff: { type: 'exponential', delay: 1000 },
+          removeOnComplete: true,
+          removeOnFail: 1000,
         },
       }));
 
-      for (const jobChunk of chunk(jobs, CHUNK_SIZE)) {
-        await pushQueue.addBulk(jobChunk);
+      try {
+        for (const jobChunk of chunk(jobs, CHUNK_SIZE)) {
+          await pushQueue.addBulk(jobChunk);
+        }
+        queued = true;
+      } catch (err) {
+        // Redis unavailable: send directly rather than lose the notifications.
+        console.error('[Push] Queue unavailable, sending inline:', err.message);
       }
-    } else {
+    }
+    if (!queued) {
       // ── 4b. Inline fallback: send directly via Expo SDK ─────────────
       console.log(`[Push] BullMQ unavailable — sending ${messages.length} notification(s) inline.`);
 

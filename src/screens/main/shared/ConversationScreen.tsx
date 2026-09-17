@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
+import * as Crypto from 'expo-crypto';
 import { getMessages } from '@/api';
 import { openSafetyMenu } from '@/components/safetyMenu';
 import { socketService } from '@/api/socket';
@@ -52,6 +53,9 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Client ids of messages the server has not confirmed.
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
+  const [closed, setClosed] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -81,29 +85,17 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
       await socketService.connect();
       socketService.joinMatch(matchId);
       
-      const handleReceive = (msg: ChatMessage) => {
-        setMessages((prev: ChatMessage[]) => {
-          // Prevent duplicates if REST already caught it or we double-received
-          if (prev.find((m: ChatMessage) => m.id === msg.id)) return prev;
-          
-          // If this is our own message coming back, replace the temp version
-          if (msg.sender_id === user?.id) {
-            const tempIndex = prev.findIndex(m => m.id.startsWith('temp-') && m.content === msg.content);
-            if (tempIndex >= 0) {
-              const updated = [...prev];
-              updated[tempIndex] = msg; // replace temp with real
-              return updated;
-            }
-          }
-          
-          return [...prev, msg];
-        });
-      };
-      
+      const handleReceive = (msg: ChatMessage) => setMessages((prev) => upsertMessage(prev, msg));
+      const offClosed = socketService.onMatchClosed((closedId) => {
+        if (closedId === matchId) setClosed(true);
+      });
+
       socketService.onReceiveMessage(handleReceive);
-      
+
       return () => {
         socketService.offReceiveMessage(handleReceive);
+        socketService.leaveMatch(matchId);
+        offClosed();
       };
     };
     
@@ -114,24 +106,41 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
     };
   }, [matchId]);
 
+  const deliver = async (clientId: string, text: string) => {
+    setFailedIds((prev) => {
+      if (!prev.has(clientId)) return prev;
+      const next = new Set(prev);
+      next.delete(clientId);
+      return next;
+    });
+    const result = await socketService.sendMessage(matchId, text, clientId);
+    if (result.ok) {
+      setMessages((prev) => upsertMessage(prev, result.message));
+    } else {
+      setFailedIds((prev) => new Set(prev).add(clientId));
+    }
+  };
+
   const handleSend = () => {
-    if (!inputText.trim()) return;
-    
+    if (!inputText.trim() || closed) return;
+
     const text = inputText.trim();
     setInputText('');
     Keyboard.dismiss();
 
-    // Optimistically update UI
+    // Optimistically update UI; the client id ties it to the stored message.
+    const clientId = Crypto.randomUUID();
     const tempMsg: ChatMessage = {
-      id: `temp-${Date.now()}-${Math.random()}`,
+      id: `temp-${clientId}`,
       sender_id: user?.id || 'unknown',
       content: text,
       created_at: new Date().toISOString(),
       read_at: null,
+      client_msg_id: clientId,
     };
     setMessages(prev => [...prev, tempMsg]);
 
-    socketService.sendMessage(matchId, text);
+    deliver(clientId, text);
   };
 
   const formatTime = (iso: string) => {
@@ -141,6 +150,7 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isMe = item.sender_id === user?.id;
+    const failed = !!item.client_msg_id && item.id.startsWith('temp-') && failedIds.has(item.client_msg_id);
 
     return (
       <View style={[styles.messageRow, isMe ? styles.messageRowRight : styles.messageRowLeft]}>
@@ -162,9 +172,17 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
               {item.content}
             </Text>
           </View>
-          <Text style={[styles.timeText, isMe ? styles.timeTextRight : styles.timeTextLeft]}>
-            {formatTime(item.created_at)}
-          </Text>
+          {failed ? (
+            <Pressable onPress={() => deliver(item.client_msg_id!, item.content)} hitSlop={8}>
+              <Text style={[styles.timeText, styles.timeTextRight, styles.failedText]}>
+                Not sent · Tap to retry
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.timeText, isMe ? styles.timeTextRight : styles.timeTextLeft]}>
+              {formatTime(item.created_at)}
+            </Text>
+          )}
         </View>
 
         {isMe && (
@@ -232,6 +250,11 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
         )}
 
         {/* Input Area */}
+        {closed ? (
+          <View style={styles.inputContainer}>
+            <Text style={styles.closedText}>This conversation has ended</Text>
+          </View>
+        ) : (
         <View style={styles.inputContainer}>
           <View style={styles.inputBackground}>
             <Pressable style={styles.smileIcon}>
@@ -250,12 +273,33 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
             </Pressable>
           </View>
         </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+// Adds a message, replacing its optimistic copy (same client id) or an
+// already-present copy (same id) so each message shows once.
+function upsertMessage(prev: ChatMessage[], msg: ChatMessage): ChatMessage[] {
+  const index = prev.findIndex(
+    (m) => m.id === msg.id || (!!msg.client_msg_id && m.client_msg_id === msg.client_msg_id)
+  );
+  if (index < 0) return [...prev, msg];
+  const next = [...prev];
+  next[index] = msg;
+  return next;
+}
+
 const styles = StyleSheet.create({
+  failedText: {
+    color: '#FF3B30',
+  },
+  closedText: {
+    color: '#888',
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#121212',

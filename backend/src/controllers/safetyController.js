@@ -1,9 +1,10 @@
 const db = require('../config/db');
 const logger = require('../config/logger');
-const redisClient = require('../config/redis');
 const { getSupabaseAdmin } = require('../config/supabaseAdmin');
 const { UPLOAD_BUCKET } = require('../utils/storage');
-const { getIO } = require('../socket');
+const realtime = require('../realtime');
+const { endSessions } = require('../utils/sessions');
+const feedDeck = require('../services/feedDeck');
 
 // ─── POST /api/blocks ────────────────────────────────────────────
 async function blockUser(req, res, next) {
@@ -24,13 +25,21 @@ async function blockUser(req, res, next) {
     );
     // Blocking ends the conversation for both sides; chat and stories only
     // follow active matches.
-    await client.query(
+    const { rows: closed } = await client.query(
       `UPDATE matches SET status = 'archived'
-       WHERE (brand_id = $1 AND influencer_id = $2)
-          OR (brand_id = $2 AND influencer_id = $1)`,
+       WHERE ((brand_id = $1 AND influencer_id = $2)
+          OR (brand_id = $2 AND influencer_id = $1))
+         AND status = 'active'
+       RETURNING id`,
       [blockerId, blockedId]
     );
     await client.query('COMMIT');
+    await Promise.all([
+      realtime.closeMatches(closed.map((m) => m.id)),
+      // The block hides each user from the other's deck.
+      feedDeck.invalidate(blockerId),
+      feedDeck.invalidate(blockedId),
+    ]);
     res.status(201).json({ blocked: true });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -47,6 +56,8 @@ async function unblockUser(req, res, next) {
       'DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2',
       [req.user.id, req.params.userId]
     );
+    // Decks dropped each other while blocked; rebuild so they can reappear.
+    await Promise.all([feedDeck.invalidate(req.user.id), feedDeck.invalidate(req.params.userId)]);
     // The archived match is not restored; they would need to match again.
     res.json({ blocked: false });
   } catch (err) {
@@ -129,14 +140,7 @@ async function deleteAccount(req, res, next) {
     const { error } = await admin.auth.admin.deleteUser(userId);
     if (error && error.status !== 404) throw error;
 
-    if (redisClient) {
-      redisClient.del(`user:session:${userId}`).catch(() => {});
-    }
-    try {
-      getIO().in(`user_${userId}`).disconnectSockets(true);
-    } catch (err) {
-      logger.warn({ err: err.message }, 'Could not disconnect deleted user sockets');
-    }
+    await endSessions([userId]);
 
     logger.warn({ userId }, 'Account deleted by user');
     res.json({ deleted: true });

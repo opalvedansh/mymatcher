@@ -8,9 +8,10 @@
  * When you scale to multiple server instances, swap this for Redis.
  */
 class CacheStore {
-  constructor(defaultTtlMs = 60_000) {
+  constructor(defaultTtlMs = 60_000, maxEntries = 10_000) {
     this._store = new Map();
     this._defaultTtl = defaultTtlMs;
+    this._maxEntries = maxEntries;
 
     // Periodic cleanup every 30 seconds to prevent memory leaks
     this._cleanupInterval = setInterval(() => this._cleanup(), 30_000);
@@ -38,6 +39,11 @@ class CacheStore {
    */
   set(key, value, ttlMs) {
     const ttl = ttlMs ?? this._defaultTtl;
+    this._store.delete(key);
+    if (this._store.size >= this._maxEntries) {
+      // Maps iterate in insertion order, so the first key is the oldest write.
+      this._store.delete(this._store.keys().next().value);
+    }
     this._store.set(key, {
       value,
       expiresAt: Date.now() + ttl,

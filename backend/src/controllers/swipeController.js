@@ -2,6 +2,8 @@ const db = require('../config/db');
 const notificationService = require('../services/notificationService');
 const analytics = require('../services/analytics');
 const { blockedBetween } = require('../utils/blocks');
+const feedDeck = require('../services/feedDeck');
+const realtime = require('../realtime');
 
 // Undo window in seconds (30s)
 const UNDO_WINDOW_SECONDS = 30;
@@ -138,6 +140,7 @@ async function recordSwipe(req, res, next) {
  */
 async function undoLastSwipe(req, res, next) {
   const client = await db.getClient();
+  let removedMatchIds = [];
   try {
     await client.query('BEGIN');
 
@@ -168,15 +171,19 @@ async function undoLastSwipe(req, res, next) {
 
     // If it was a like/super_like, remove any resulting match
     if (lastSwipe.direction === 'like' || lastSwipe.direction === 'super_like') {
-      await client.query(
+      const { rows } = await client.query(
         `DELETE FROM matches
          WHERE (brand_id = $1 AND influencer_id = $2)
-            OR (brand_id = $2 AND influencer_id = $1)`,
+            OR (brand_id = $2 AND influencer_id = $1)
+         RETURNING id`,
         [userId, lastSwipe.swiped_id]
       );
+      removedMatchIds = (rows || []).map((m) => m.id);
     }
 
     await client.query('COMMIT');
+    // The undone profile was dropped from the deck when it was swiped.
+    await Promise.all([feedDeck.invalidate(userId), realtime.closeMatches(removedMatchIds)]);
 
     res.json({ undone: true, swipe: lastSwipe });
   } catch (err) {

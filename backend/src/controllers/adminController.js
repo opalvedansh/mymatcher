@@ -1,5 +1,6 @@
 const db = require('../config/db');
-const { feedCache } = require('../config/cache');
+const { invalidateWeights } = require('../services/feedRanking');
+const { endSessions } = require('../utils/sessions');
 const logger = require('../config/logger');
 
 // ─── GET /api/admin/stats ────────────────────────────────────────
@@ -76,6 +77,7 @@ async function banUser(req, res, next) {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    await endSessions([userId]);
     logger.info({ userId, admin: req.user.id }, 'User banned by admin');
     res.json({ message: 'User banned successfully' });
   } catch (err) {
@@ -96,6 +98,7 @@ async function unbanUser(req, res, next) {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    await endSessions([userId], { disconnect: false });
     logger.info({ userId, admin: req.user.id }, 'User unbanned by admin');
     res.json({ message: 'User unbanned successfully' });
   } catch (err) {
@@ -118,6 +121,7 @@ async function deleteUser(req, res, next) {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    await endSessions([userId]);
     logger.warn({ userId, admin: req.user.id }, 'User hard-deleted by admin');
     res.json({ message: 'User and all related data deleted' });
   } catch (err) {
@@ -149,6 +153,7 @@ async function bulkBanUsers(req, res, next) {
         [idChunk]
       );
       totalBanned += rowCount;
+      await endSessions(idChunk);
     }
 
     logger.info({ admin: req.user.id, count: totalBanned }, 'Bulk ban applied');
@@ -175,6 +180,7 @@ async function bulkUnbanUsers(req, res, next) {
         [idChunk]
       );
       totalUnbanned += rowCount;
+      await endSessions(idChunk, { disconnect: false });
     }
 
     logger.info({ admin: req.user.id, count: totalUnbanned }, 'Bulk unban applied');
@@ -217,7 +223,7 @@ async function updateAlgorithmWeights(req, res, next) {
       [JSON.stringify(weights)]
     );
 
-    feedCache.del('algorithm_weights');
+    await invalidateWeights();
 
     logger.info({ admin: req.user.id, weights }, 'Algorithm weights updated');
     res.json(weights);

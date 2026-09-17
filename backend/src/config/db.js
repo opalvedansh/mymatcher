@@ -6,7 +6,10 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production'
     ? { rejectUnauthorized: false }
     : false,
-  max: 100,             // high concurrency for 100k scale
+  // Per instance. Supabase's pooler caps total client connections, so
+  // instances × PG_POOL_MAX (plus the chat and worker services) must stay
+  // under that cap; scale out with more instances, not bigger pools.
+  max: Number(process.env.PG_POOL_MAX) || 20,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 5000, // fail fast under load
 });

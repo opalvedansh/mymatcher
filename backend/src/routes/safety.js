@@ -2,6 +2,7 @@ const express = require('express');
 const { body, param } = require('express-validator');
 const { rateLimit } = require('express-rate-limit');
 const validate = require('../middleware/validate');
+const { redisStore, limiterDefaults } = require('../config/rateLimitStore');
 const { authenticate, authenticateTokenOnly } = require('../middleware/auth');
 const {
   blockUser,
@@ -14,12 +15,12 @@ const {
 const router = express.Router();
 
 const reportLimiter = rateLimit({
+  store: redisStore('rl:report:'),
   windowMs: 60 * 60 * 1000,
   limit: 30,
   keyGenerator: (req) => req.user.id,
   message: { error: 'Too many reports — try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  ...limiterDefaults,
 });
 
 const userIdBody = [body('user_id').isString().notEmpty().isLength({ max: 128 })];

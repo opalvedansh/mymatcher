@@ -5,8 +5,7 @@ const helmet       = require('helmet');
 const cors         = require('cors');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const jwt          = require('jsonwebtoken');
-const { RedisStore } = require('rate-limit-redis');
-const redisClient  = require('./config/redis');
+const { redisStore: getRedisStore, limiterDefaults } = require('./config/rateLimitStore');
 const http         = require('http');
 const pinoHttp     = require('pino-http');
 const Sentry       = require('@sentry/node');
@@ -15,7 +14,9 @@ const swaggerUi    = require('swagger-ui-express');
 const swaggerSpec  = require('./config/swagger');
 const logger       = require('./config/logger');
 const errorHandler = require('./middleware/errorHandler');
-const { initSocket } = require('./socket');
+const { initSocket, closeSocket } = require('./socket');
+const { startWorkers, stopWorkers } = require('./config/queue');
+const { healthBody, onShutdown, closeDatabase, closeRedis } = require('./lifecycle');
 const compression  = require('compression');
 const shrinkRay    = require('shrink-ray-current');
 // ─── Sentry (activates only when DSN is set) ─────────────────────
@@ -61,14 +62,6 @@ const ALLOWED_ORIGINS = [
 ];
 
 // ─── Rate limiters (Redis-backed when available, in-memory fallback) ──
-function getRedisStore(prefix) {
-  if (!redisClient || process.env.NODE_ENV === 'test') return undefined;
-  return new RedisStore({
-    sendCommand: (...args) => redisClient.call(...args),
-    prefix,
-  });
-}
-
 // Keys authenticated traffic per user, not per IP: mobile carriers put many
 // phones behind one address, so an IP key lets users exhaust each other's quota.
 // The sub is read without verification — a forged one only earns a fresh bucket
@@ -90,8 +83,7 @@ const authLimiter = rateLimit({
   max: process.env.NODE_ENV === 'development' ? 3000 : 150,
   keyGenerator: userOrIpKey,
   message: { error: 'Too many auth requests — try again in 15 minutes' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  ...limiterDefaults,
 });
 
 const globalLimiter = rateLimit({
@@ -99,8 +91,7 @@ const globalLimiter = rateLimit({
   windowMs: 60 * 1000,       // 1 minute
   max: 200,                  // 200 requests per minute per IP
   message: { error: 'Global rate limit exceeded' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  ...limiterDefaults,
 });
 
 const swipeLimiter = rateLimit({
@@ -109,8 +100,7 @@ const swipeLimiter = rateLimit({
   max: 100,                  // 100 swipes/min per user
   keyGenerator: userOrIpKey,
   message: { error: 'Swipe rate limit exceeded' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  ...limiterDefaults,
 });
 
 // ─── Global middleware ───────────────────────────────────────────
@@ -159,20 +149,7 @@ app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 app.use(globalLimiter);
 
 // ─── Health check ────────────────────────────────────────────────
-// `commit` reports which build is actually serving traffic. Without it a
-// deploy cannot be told apart from a stale one, since auth-gated routes look
-// identical from outside until you hold a valid token.
-const BUILD_COMMIT = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'unknown';
-const STARTED_AT = new Date().toISOString();
-
-app.get('/health', (_req, res) =>
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    commit: BUILD_COMMIT.slice(0, 7),
-    startedAt: STARTED_AT,
-  })
-);
+app.get('/health', (_req, res) => res.json(healthBody('api')));
 
 // ─── API Routes ──────────────────────────────────────────────────
 app.use('/api/auth',     authLimiter,  authRoutes);
@@ -203,42 +180,30 @@ if (process.env.SENTRY_DSN) {
 app.use(errorHandler);
 
 // ─── Start server ────────────────────────────────────────────────
+// ENABLE_SOCKETS=false once chat runs as its own service (npm run chat);
+// RUN_WORKERS=false once jobs run as their own service (npm run worker).
+const SOCKETS_ENABLED = process.env.ENABLE_SOCKETS !== 'false';
+const WORKERS_ENABLED = process.env.RUN_WORKERS !== 'false';
+
 const server = http.createServer(app);
-initSocket(server);
+if (SOCKETS_ENABLED) initSocket(server);
+if (WORKERS_ENABLED) startWorkers();
 
 server.listen(PORT, () => {
   console.log(`\n🚀 Matcherc API running on http://localhost:${PORT}`);
   console.log(`   Environment : ${process.env.NODE_ENV || 'development'}`);
   console.log(`   Database    : ${process.env.DATABASE_URL?.split('@')[1] || 'not configured'}`);
-  console.log(`   WebSockets  : Attached\n`);
+  console.log(`   WebSockets  : ${SOCKETS_ENABLED ? 'Attached' : 'Disabled (separate chat service)'}`);
+  console.log(`   Workers     : ${WORKERS_ENABLED ? 'In process' : 'Disabled (separate worker service)'}\n`);
 });
 
 // ─── Graceful Shutdown ───────────────────────────────────────────
-function gracefulShutdown(signal) {
-  logger.info(`Received ${signal}, starting graceful shutdown...`);
-  server.close(async () => {
-    logger.info('HTTP server closed. Closing database and Redis connections...');
-    try {
-      const db = require('./config/db');
-      await db.end(); // close Postgres pool
-      if (redisClient) await redisClient.quit(); // close Redis client (if active)
-      logger.info('Graceful shutdown completed successfully.');
-      process.exit(0);
-    } catch (err) {
-      logger.error('Error during graceful shutdown:', err);
-      process.exit(1);
-    }
-  });
-
-  // Force close after 10s if connections hang
-  setTimeout(() => {
-    logger.error('Could not close connections in time, forcefully shutting down');
-    process.exit(1);
-  }, 10000);
-}
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+// Closing Socket.io also closes the HTTP server.
+onShutdown([
+  () => (SOCKETS_ENABLED ? closeSocket() : new Promise((resolve) => server.close(() => resolve()))),
+  stopWorkers,
+  closeDatabase,
+  closeRedis,
+]);
 
 module.exports = server; // for testing
- 

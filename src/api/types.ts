@@ -147,6 +147,7 @@ export interface ChatMessage {
   content: string;
   created_at: string;
   read_at: string | null;
+  client_msg_id?: string | null;
 }
 
 export interface ChatResponse {

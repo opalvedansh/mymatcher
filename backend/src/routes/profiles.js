@@ -8,6 +8,7 @@ const { cache } = require('../middleware/cacheMiddleware');
 const { getMyProfile, updateMyProfile, getProfileById, verifyFace, syncInstagram, searchInstagram } = require('../controllers/profileController');
 const { requireRole } = require('../middleware/auth');
 const { isBlockedBetween } = require('../utils/blocks');
+const { redisStore, limiterDefaults } = require('../config/rateLimitStore');
 
 // Runs before the response cache, since cached profiles are shared by all viewers.
 async function hideIfBlocked(req, res, next) {
@@ -40,20 +41,20 @@ const userIdRules = [
 ];
 
 // Per-user limits on routes that call paid third-party APIs.
-function perUserLimiter(limit, windowMs, message) {
+function perUserLimiter(name, limit, windowMs, message) {
   return rateLimit({
+    store: redisStore(`rl:${name}:`),
     windowMs,
     limit,
     keyGenerator: (req) => req.user.id,
     message: { error: message },
-    standardHeaders: true,
-    legacyHeaders: false,
+    ...limiterDefaults,
   });
 }
-const instagramSearchLimiter = perUserLimiter(20, 60 * 1000, 'Too many searches — try again in a minute');
-const faceVerifyLimiter = perUserLimiter(5, 60 * 60 * 1000, 'Too many verification attempts — try again later');
+const instagramSearchLimiter = perUserLimiter('ig-search', 20, 60 * 1000, 'Too many searches — try again in a minute');
+const faceVerifyLimiter = perUserLimiter('face', 5, 60 * 60 * 1000, 'Too many verification attempts — try again later');
 // The 24h cooldown only covers re-syncing the same handle, so cap attempts too.
-const instagramSyncLimiter = perUserLimiter(5, 60 * 60 * 1000, 'Too many Instagram syncs — try again later');
+const instagramSyncLimiter = perUserLimiter('ig-sync', 5, 60 * 60 * 1000, 'Too many Instagram syncs — try again later');
 
 // The selfie is sent as base64, so this route gets its own body limit; the
 // global 50kb JSON parser skips it (see app.js).

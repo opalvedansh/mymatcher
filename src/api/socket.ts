@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { supabase } from '../supabase';
 import Constants from 'expo-constants';
+import type { ChatMessage } from './types';
 
 // ─── Network-agnostic API URL ──────────────────────────────────────
 // Defaults to the deployed production API so the app works from any
@@ -20,15 +21,23 @@ function getBaseUrl(): string {
   return 'https://api.mymatchr.in';
 }
 
-const SOCKET_URL = getBaseUrl();
+// Chat can run as its own service; without a separate URL it shares the API's.
+const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL || getBaseUrl();
+const SEND_TIMEOUT_MS = 10000;
 
 type StatusListener = (connected: boolean) => void;
+type MatchClosedListener = (matchId: string) => void;
+
+export type SendResult =
+  | { ok: true; message: ChatMessage }
+  | { ok: false; error: string };
 
 class SocketService {
   private socket: Socket | null = null;
   private currentMatchId: string | null = null;
   // Fix 4: Track connection status for UI awareness
   private statusListeners: Set<StatusListener> = new Set();
+  private matchClosedListeners: Set<MatchClosedListener> = new Set();
   private isConnected: boolean = false;
 
   private notifyStatus(connected: boolean) {
@@ -61,7 +70,18 @@ class SocketService {
 
     this.socket.on('connect', () => {
       console.log('[Socket] Connected to server:', this.socket?.id);
+      // Rooms don't survive a reconnect, so rejoin the open conversation.
+      if (this.currentMatchId) this.socket?.emit('join_match', this.currentMatchId);
       this.notifyStatus(true);
+    });
+
+    this.socket.on('match_closed', ({ matchId }: { matchId: string }) => {
+      this.matchClosedListeners.forEach((fn) => fn(matchId));
+    });
+
+    // Banned or signed out server-side: stop reconnecting.
+    this.socket.on('session_ended', () => {
+      this.disconnect();
     });
 
     this.socket.on('connect_error', (err) => {
@@ -87,6 +107,10 @@ class SocketService {
     if (!this.socket) return;
     // Update the auth token on the socket instance
     this.socket.auth = { token: newToken };
+    // Keep an open connection authorised past the old token's expiry.
+    if (this.socket.connected) {
+      this.socket.emit('refresh_token', newToken);
+    }
     // If the socket is currently disconnected, try to reconnect with the fresh token
     if (!this.socket.connected) {
       console.log('[Socket] Reconnecting with refreshed token...');
@@ -109,8 +133,9 @@ class SocketService {
    * Joins a specific match room to receive messages.
    */
   joinMatch(matchId: string) {
-    if (!this.socket?.connected) return;
+    // Remembered even while connecting: the 'connect' handler joins it then.
     this.currentMatchId = matchId;
+    if (!this.socket?.connected) return;
     this.socket.emit('join_match', matchId);
     console.log(`[Socket] Joined match room: ${matchId}`);
   }
@@ -118,9 +143,27 @@ class SocketService {
   /**
    * Sends a message to the currently joined match.
    */
-  sendMessage(matchId: string, content: string) {
-    if (!this.socket?.connected) return;
-    this.socket.emit('send_message', { matchId, content });
+  /**
+   * Sends a message and resolves once the server has stored it. Passing the
+   * same clientId again (a retry) never creates a second copy.
+   */
+  sendMessage(matchId: string, content: string, clientId: string): Promise<SendResult> {
+    const socket = this.socket;
+    if (!socket?.connected) return Promise.resolve({ ok: false, error: 'offline' });
+    return socket
+      .timeout(SEND_TIMEOUT_MS)
+      .emitWithAck('send_message', { matchId, content, clientId })
+      .catch(() => ({ ok: false as const, error: 'timeout' }));
+  }
+
+  /** Fires when a conversation ends (block or unmatch). Returns an unsubscribe function. */
+  onMatchClosed(listener: MatchClosedListener): () => void {
+    this.matchClosedListeners.add(listener);
+    return () => this.matchClosedListeners.delete(listener);
+  }
+
+  leaveMatch(matchId: string) {
+    if (this.currentMatchId === matchId) this.currentMatchId = null;
   }
 
   /**
