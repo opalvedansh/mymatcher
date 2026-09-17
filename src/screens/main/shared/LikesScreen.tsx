@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getMatches, getLikesReceived } from '@/api';
 import type { MatchRecord } from '@/api/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { NotificationBell } from '@/components/NotificationBell';
 
 const GRID_SPACING = 16;
 
@@ -107,9 +108,7 @@ export function LikesScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Likes</Text>
-          <Pressable>
-            <Ionicons name="notifications" size={24} color="#FFF" />
-          </Pressable>
+          <NotificationBell />
         </View>
 
         {loading ? (
@@ -130,7 +129,7 @@ export function LikesScreen() {
               </View>
               <Text style={styles.premiumTitle}>View your likes</Text>
               <Text style={styles.premiumSubtitle}>
-                Activate Matcherc Premium and see the people whose likes you already have.
+                Activate Matchr Premium and see the people whose likes you already have.
               </Text>
               <Pressable style={styles.premiumBtn}>
                 <Text style={styles.premiumBtnText}>Activate Premium</Text>

@@ -28,6 +28,7 @@ import type { InfluencerProfile } from '@/api/types';
 import { MatchrLogo } from '@/components/MatchrLogo';
 import { MatchBoomModal } from '@/components/MatchBoomModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { NotificationBell } from '@/components/NotificationBell';
 
 const { width } = Dimensions.get('window');
 
@@ -367,9 +368,7 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
           </View>
           <Text style={ss.logoWord}>Matchr</Text>
         </View>
-        <Pressable>
-          <Ionicons name="notifications" size={24} color="#fff" />
-        </Pressable>
+        <NotificationBell />
       </View>
 
       {/* Title */}

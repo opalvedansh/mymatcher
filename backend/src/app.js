@@ -44,6 +44,7 @@ const uploadRoutes  = require('./routes/upload');
 const adminRoutes   = require('./routes/admin');
 const storiesRoutes = require('./routes/stories');
 const mapsRoutes    = require('./routes/maps');
+const notificationRoutes = require('./routes/notifications');
 const postsRoutes   = require('./routes/posts');
 const safetyRoutes  = require('./routes/safety');
 
@@ -163,6 +164,7 @@ app.use('/api/admin',    adminRoutes);
 app.use('/api/stories',  storiesRoutes);
 app.use('/api/maps',     mapsRoutes);
 app.use('/api/posts',    postsRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api',          safetyRoutes);
 
 // ─── API Documentation ───────────────────────────────────────────

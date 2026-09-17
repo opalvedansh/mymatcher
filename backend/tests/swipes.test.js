@@ -43,6 +43,7 @@ process.env.PORT = '0';
 process.env.NODE_ENV = 'test';
 
 const db = require('../src/config/db');
+const notificationService = require('../src/services/notificationService');
 const server = require('../src/app');
 
 afterAll(async () => {
@@ -76,6 +77,29 @@ describe('Swipe Routes', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.matched).toBe(false);
+      // An unmatched like tells the other person, anonymously.
+      expect(notificationService.sendLikeNotification).toHaveBeenCalledWith('target-user', 'test-user-id-123');
+      expect(notificationService.sendMatchNotifications).not.toHaveBeenCalled();
+    });
+
+    it('should not send a like notification for a reject', async () => {
+      const mockClient = {
+        query: jest.fn()
+          .mockResolvedValueOnce({}) // BEGIN
+          .mockResolvedValueOnce({ rows: [{ id: 'target-user', role: 'influencer' }] }) // Verify target
+          .mockResolvedValueOnce({}) // pair advisory lock
+          .mockResolvedValueOnce({ rows: [{ id: 'swipe-2', direction: 'reject' }] }) // INSERT swipe
+          .mockResolvedValueOnce({}), // COMMIT
+        release: jest.fn(),
+      };
+      db.getClient.mockResolvedValue(mockClient);
+
+      const res = await request(server)
+        .post('/api/swipes')
+        .send({ swiped_id: 'target-user', direction: 'reject' });
+
+      expect(res.status).toBe(201);
+      expect(notificationService.sendLikeNotification).not.toHaveBeenCalled();
     });
 
     it('should create a match on reciprocal like', async () => {
@@ -100,6 +124,10 @@ describe('Swipe Routes', () => {
       expect(res.status).toBe(201);
       expect(res.body.matched).toBe(true);
       expect(res.body.match).toBeDefined();
+      expect(notificationService.sendMatchNotifications).toHaveBeenCalledWith(
+        expect.objectContaining({ swiperId: 'test-user-id-123', swipedId: 'target-user', matchId: 'match-1' })
+      );
+      expect(notificationService.sendLikeNotification).not.toHaveBeenCalled();
     });
 
     it('takes the pair lock before writing, keyed the same for both users', async () => {

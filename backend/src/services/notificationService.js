@@ -119,6 +119,47 @@ async function sendBulkNotifications(notifications) {
 }
 
 /**
+ * Saves notifications to the in-app inbox (what the bell shows).
+ * A `new_message` item is kept to one unread row per conversation: a newer
+ * message bumps the existing row instead of adding another.
+ * Failures are logged, never thrown, so the push still goes out.
+ *
+ * @param {Array<{ userId: string, type: 'new_match'|'new_like'|'new_message',
+ *   actorId?: string|null, matchId?: string|null, title: string, body?: string }>} items
+ */
+async function recordNotifications(items) {
+  if (!items.length) return;
+  try {
+    const others = items.filter(i => i.type !== 'new_message');
+    if (others.length) {
+      await db.query(
+        `INSERT INTO notifications (user_id, type, actor_id, match_id, title, body)
+         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::uuid[], $5::text[], $6::text[])`,
+        [
+          others.map(i => i.userId),
+          others.map(i => i.type),
+          others.map(i => i.actorId ?? null),
+          others.map(i => i.matchId ?? null),
+          others.map(i => i.title),
+          others.map(i => i.body ?? ''),
+        ]
+      );
+    }
+    for (const i of items.filter(n => n.type === 'new_message')) {
+      await db.query(
+        `INSERT INTO notifications (user_id, type, actor_id, match_id, title, body)
+         VALUES ($1, 'new_message', $2, $3, $4, $5)
+         ON CONFLICT (user_id, match_id) WHERE type = 'new_message' AND read_at IS NULL
+         DO UPDATE SET created_at = now(), title = EXCLUDED.title, body = EXCLUDED.body`,
+        [i.userId, i.actorId ?? null, i.matchId ?? null, i.title, i.body ?? '']
+      );
+    }
+  } catch (err) {
+    console.error('[Notifications] Failed to record inbox items:', err);
+  }
+}
+
+/**
  * Sends a push notification to a single user.
  * Internally delegates to sendBulkNotifications (1-element batch).
  *
@@ -134,37 +175,78 @@ async function sendNotification(userId, title, body, data = {}) {
 /**
  * Notifies BOTH users when a match is formed — single DB round trip for both tokens.
  *
- * @param {{ swiperId: string, swiperName: string, swipedId: string, swipedName: string }} params
+ * @param {{ swiperId: string, swiperName: string, swipedId: string, swipedName: string, matchId?: string }} params
  */
-async function sendMatchNotifications({ swiperId, swiperName, swipedId, swipedName }) {
-  await sendBulkNotifications([
+async function sendMatchNotifications({ swiperId, swiperName, swipedId, swipedName, matchId = null }) {
+  const items = [
     {
       userId: swipedId,
-      title:  'New Match! 🎉',
-      body:   `You matched with ${swiperName}. Say hi!`,
-      data:   { type: 'new_match' },
+      actorId: swiperId,
+      type: 'new_match',
+      matchId,
+      title: 'New match',
+      body: `You matched with ${swiperName}. Say hi!`,
     },
     {
       userId: swiperId,
-      title:  'New Match! 🎉',
-      body:   `You matched with ${swipedName}. Say hi!`,
-      data:   { type: 'new_match' },
+      actorId: swipedId,
+      type: 'new_match',
+      matchId,
+      title: 'New match',
+      body: `You matched with ${swipedName}. Say hi!`,
     },
-  ]);
+  ];
+  try {
+    // A like that turned into a match is now shown as the match instead.
+    await db.query(
+      `DELETE FROM notifications
+       WHERE type = 'new_like' AND read_at IS NULL
+         AND ((user_id = $1 AND actor_id = $2) OR (user_id = $2 AND actor_id = $1))`,
+      [swiperId, swipedId]
+    );
+  } catch (err) {
+    console.error('[Notifications] Failed to clear like items:', err);
+  }
+  await recordNotifications(items);
+  await sendBulkNotifications(items.map(i => ({
+    userId: i.userId,
+    title: i.title,
+    body: i.body,
+    data: { type: 'new_match', matchId },
+  })));
 }
 
 /**
  * Legacy single-user match notification (kept for backwards compatibility).
  */
 async function sendMatchNotification(userId, matchName) {
-  await sendNotification(userId, 'New Match! 🎉', `You matched with ${matchName}. Say hi!`, { type: 'new_match' });
+  await sendNotification(userId, 'New match', `You matched with ${matchName}. Say hi!`, { type: 'new_match' });
+}
+
+/**
+ * Tells a user someone liked them, without saying who: seeing who liked
+ * you is a premium feature, so the liker stays anonymous here too.
+ *
+ * @param {string} likedUserId
+ * @param {string} likerId  stored for blocking checks only, never returned for likes
+ */
+async function sendLikeNotification(likedUserId, likerId) {
+  const item = {
+    userId: likedUserId,
+    actorId: likerId,
+    type: 'new_like',
+    title: 'Someone likes you',
+    body: 'Check your Likes tab.',
+  };
+  await recordNotifications([item]);
+  await sendBulkNotifications([{ userId: item.userId, title: item.title, body: item.body, data: { type: 'new_like' } }]);
 }
 
 /**
  * Triggers when a chat message is received.
  * Looks up the sender's name in a UNION query then sends via sendBulkNotifications.
  */
-async function sendChatNotification(receiverId, senderId) {
+async function sendChatNotification(receiverId, senderId, matchId = null) {
   try {
     // Fetch sender name — single query
     const { rows } = await db.query(
@@ -179,11 +261,20 @@ async function sendChatNotification(receiverId, senderId) {
 
     // The body stays generic: message text would otherwise pass in plaintext
     // through Expo/Apple/Google and show on the lock screen.
+    const title = `New message from ${senderName}`;
+    await recordNotifications([{
+      userId: receiverId,
+      actorId: senderId,
+      type: 'new_message',
+      matchId,
+      title,
+      body: 'Tap to read',
+    }]);
     await sendBulkNotifications([{
       userId: receiverId,
-      title:  `New message from ${senderName}`,
+      title,
       body:   'Tap to read',
-      data:   { type: 'new_message', senderId },
+      data:   { type: 'new_message', senderId, matchId },
     }]);
   } catch (err) {
     console.error('[Push] Error sending chat notification:', err);
@@ -191,7 +282,9 @@ async function sendChatNotification(receiverId, senderId) {
 }
 
 module.exports = {
+  recordNotifications,
   sendNotification,
+  sendLikeNotification,
   sendBulkNotifications,
   sendMatchNotification,
   sendMatchNotifications,

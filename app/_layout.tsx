@@ -1,8 +1,13 @@
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { ActionSheetHost } from '@/components/ActionSheet';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import * as Notifications from 'expo-notifications';
+import { pushDataOf, pushSupported } from '@/services/pushNotifications';
+import { notificationHref } from '@/services/notificationRoutes';
+import { refreshUnreadNotifications } from '@/hooks/useUnreadNotifications';
 
 // Owns every auth-driven redirect. This lives in the root layout because it
 // must stay mounted across the sign-in transition — a screen that routes itself
@@ -42,12 +47,46 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (inAuthGroup || inOnboarding || group === undefined) {
-      router.replace(onboardingData?.role === 'Brand' ? '/(brand-tabs)/home' : '/(influencer-tabs)/home');
+    const isBrand = onboardingData?.role === 'Brand';
+    // Also catch the other role's tab group: on web both groups share URLs
+    // (/profile, /home, ...), so a reload can resolve into the wrong one.
+    const inWrongTabs = group === (isBrand ? '(influencer-tabs)' : '(brand-tabs)');
+
+    if (inAuthGroup || inOnboarding || group === undefined || inWrongTabs) {
+      router.replace(isBrand ? '/(brand-tabs)/home' : '/(influencer-tabs)/home');
     }
   }, [user, loading, onboardingComplete, onboardingData, userDataError, segments, router]);
 
   return <>{children}</>;
+}
+
+// Opens the right screen when a push notification is tapped, including the
+// one that launched the app. Waits until the user is signed in and set up.
+function PushResponseHandler() {
+  const { user, loading, onboardingComplete, onboardingData } = useAuth();
+  const router = useRouter();
+  const handled = useRef(new Set<string>());
+  const ready = !!user && !loading && onboardingComplete && !!onboardingData?.role;
+  const role = onboardingData?.role;
+
+  useEffect(() => {
+    if (!pushSupported || !ready) return;
+
+    const open = (response: Notifications.NotificationResponse | null) => {
+      const data = pushDataOf(response);
+      const id = response?.notification.request.identifier;
+      if (!data || !id || handled.current.has(id)) return;
+      handled.current.add(id);
+      refreshUnreadNotifications();
+      router.navigate(notificationHref(role, data.type, data.matchId));
+    };
+
+    Notifications.getLastNotificationResponseAsync().then(open).catch(() => {});
+    const sub = Notifications.addNotificationResponseReceivedListener(open);
+    return () => sub.remove();
+  }, [ready, role, router]);
+
+  return null;
 }
 
 export default function RootLayout() {
@@ -58,7 +97,10 @@ export default function RootLayout() {
           <StatusBar style="light" />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="story-camera" options={{ presentation: 'fullScreenModal', headerShown: false }} />
+            <Stack.Screen name="notifications" options={{ headerShown: false, animation: 'slide_from_right' }} />
           </Stack>
+          <ActionSheetHost />
+          <PushResponseHandler />
         </AuthGuard>
       </AuthProvider>
     </GestureHandlerRootView>

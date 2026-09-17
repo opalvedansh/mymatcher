@@ -5,6 +5,7 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node migrate.js && node src/app.js",
+    "predev": "sh scripts/predev.sh",
     "dev": "nodemon src/app.js",
     "chat": "node src/chatServer.js",
     "worker": "node src/worker.js",

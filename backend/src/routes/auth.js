@@ -3,6 +3,7 @@ const validate  = require('../middleware/validate');
 const { authenticate, authenticateTokenOnly } = require('../middleware/auth');
 const { syncUser, me, getOnboardingData, updateOnboardingData, updatePushToken } = require('../controllers/authController');
 
+const { Expo } = require('expo-server-sdk');
 const router = require('express').Router();
 
 // Note: rate limiting for the whole /api/auth path is applied once,
@@ -15,8 +16,11 @@ const syncRules = [
     .isIn(['brand', 'influencer']).withMessage('Role must be "brand" or "influencer"'),
 ];
 
+// `token: null` clears the token (used on sign-out).
 const pushTokenRules = [
-  body('token').isString().notEmpty().withMessage('Expo push token is required'),
+  body('token')
+    .custom((value) => value === null || (typeof value === 'string' && Expo.isExpoPushToken(value)))
+    .withMessage('token must be an Expo push token or null'),
 ];
 
 // ─── Routes ──────────────────────────────────────────────────────

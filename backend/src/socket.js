@@ -253,7 +253,7 @@ function initSocket(server) {
         reply(ack, { ok: true, message: newMessage });
 
         // Push notification in the background
-        notificationService.sendChatNotification(receiverId, userId)
+        notificationService.sendChatNotification(receiverId, userId, matchId)
           .catch(err => logger.error({ err: err.message }, '[Socket] Push notification failed'));
       } catch (err) {
         logger.error({ err: err.message }, '[Socket] send_message error');

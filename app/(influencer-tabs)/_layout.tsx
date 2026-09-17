@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { TAB_BAR_STYLE } from '@/theme/tabBar';
 import { NavHomeIcon, NavMatchIcon, NavHeartIcon, NavMessageIcon, NavProfileIcon } from '@/components/BottomNavIcons';
 
 export default function InfluencerTabsLayout() {
@@ -6,21 +7,7 @@ export default function InfluencerTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopWidth: 0,
-          height: 55, // Reduced height
-          paddingBottom: 5,
-          paddingTop: 5,
-          borderTopLeftRadius: 25,
-          borderTopRightRadius: 25,
-          position: 'absolute', // To show rounded corners over content
-          elevation: 10, // For Android shadow
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 10,
-        },
+        tabBarStyle: TAB_BAR_STYLE,
         tabBarItemStyle: {
           height: 55,
           paddingTop: 8,

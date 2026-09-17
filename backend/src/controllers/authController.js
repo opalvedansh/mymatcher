@@ -133,7 +133,15 @@ async function updateOnboardingData(req, res, next) {
 // ─── PUT /api/auth/push-token ────────────────────────────────────
 async function updatePushToken(req, res, next) {
   try {
-    const { token } = req.body;
+    const token = req.body.token ?? null;
+    if (token) {
+      // A phone belongs to whoever signed in last; stop sending it other accounts' notifications.
+      await db.query(
+        `UPDATE users SET expo_push_token = NULL, updated_at = now()
+         WHERE expo_push_token = $1 AND id <> $2`,
+        [token, req.user.id]
+      );
+    }
     await db.query(
       `UPDATE users SET expo_push_token = $1, updated_at = now() WHERE id = $2`,
       [token, req.user.id]

@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { showAlert } from '@/components/ActionSheet';
 import { blockUser, reportContent, type ReportReason, type ReportTargetType } from '@/api';
 
 const REPORT_REASONS: { label: string; value: ReportReason }[] = [
@@ -17,15 +17,15 @@ const TARGET_LABEL: Record<ReportTargetType, string> = {
 };
 
 function askReportReason(targetType: ReportTargetType, targetId: string) {
-  Alert.alert(`Report ${TARGET_LABEL[targetType]}`, 'Why are you reporting this?', [
+  showAlert(`Report ${TARGET_LABEL[targetType]}`, 'Why are you reporting this?', [
     ...REPORT_REASONS.map(({ label, value }) => ({
       text: label,
       onPress: async () => {
         try {
           await reportContent(targetType, targetId, value);
-          Alert.alert('Thanks for letting us know', 'Our team will review this report.');
+          showAlert('Thanks for letting us know', 'Our team will review this report.');
         } catch {
-          Alert.alert('Report failed', 'Please try again.');
+          showAlert('Report failed', 'Please try again.');
         }
       },
     })),
@@ -34,7 +34,7 @@ function askReportReason(targetType: ReportTargetType, targetId: string) {
 }
 
 function confirmBlock(userId: string, name: string, onBlocked?: () => void) {
-  Alert.alert(
+  showAlert(
     `Block ${name}?`,
     "They won't be able to see your profile, posts or stories, and your conversation will end.",
     [
@@ -47,7 +47,7 @@ function confirmBlock(userId: string, name: string, onBlocked?: () => void) {
             await blockUser(userId);
             onBlocked?.();
           } catch {
-            Alert.alert('Block failed', 'Please try again.');
+            showAlert('Block failed', 'Please try again.');
           }
         },
       },
@@ -70,9 +70,9 @@ export function openSafetyMenu({
   target: { type: ReportTargetType; id: string };
   onBlocked?: () => void;
 }) {
-  Alert.alert(name, undefined, [
-    { text: `Report ${TARGET_LABEL[target.type]}`, onPress: () => askReportReason(target.type, target.id) },
-    { text: `Block ${name}`, style: 'destructive', onPress: () => confirmBlock(userId, name, onBlocked) },
+  showAlert(name, undefined, [
+    { text: `Report ${TARGET_LABEL[target.type]}`, icon: 'flag-outline', onPress: () => askReportReason(target.type, target.id) },
+    { text: `Block ${name}`, icon: 'ban-outline', style: 'destructive', onPress: () => confirmBlock(userId, name, onBlocked) },
     { text: 'Cancel', style: 'cancel' },
   ]);
 }
@@ -81,17 +81,20 @@ export function openSafetyMenu({
 export function openAccountMenu({
   signOut,
   deleteAccount,
+  email,
 }: {
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
+  email?: string | null;
 }) {
-  Alert.alert('Account', undefined, [
-    { text: 'Sign out', onPress: () => { signOut(); } },
+  showAlert('Account', email ? `Signed in as ${email}` : undefined, [
+    { text: 'Sign out', icon: 'log-out-outline', onPress: () => { signOut(); } },
     {
       text: 'Delete account',
+      icon: 'trash-outline',
       style: 'destructive',
       onPress: () =>
-        Alert.alert(
+        showAlert(
           'Delete your account?',
           'This permanently deletes your profile, photos, matches and messages. This cannot be undone.',
           [
@@ -103,7 +106,7 @@ export function openAccountMenu({
                 try {
                   await deleteAccount();
                 } catch {
-                  Alert.alert('Could not delete account', 'Please check your connection and try again.');
+                  showAlert('Could not delete account', 'Please check your connection and try again.');
                 }
               },
             },

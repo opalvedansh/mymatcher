@@ -17,6 +17,7 @@ import type {
   ProfileUpdate,
   UserRole,
   ChatResponse,
+  NotificationsResponse,
 } from './types';
 
 // ─── Upload ───────────────────────────────────────────────────────
@@ -182,6 +183,24 @@ export function reportContent(targetType: ReportTargetType, targetId: string, re
 
 export function deleteMyAccount() {
   return api.delete<{ deleted: boolean }>('/api/account');
+}
+
+// ─── Notifications ────────────────────────────────────────────────
+
+export function getNotifications(limit = 30, before?: string) {
+  const url = before
+    ? `/api/notifications?limit=${limit}&before=${encodeURIComponent(before)}`
+    : `/api/notifications?limit=${limit}`;
+  return api.get<NotificationsResponse>(url);
+}
+
+export function getUnreadNotificationCount() {
+  return api.get<{ count: number }>('/api/notifications/unread-count');
+}
+
+/** Marks the given notifications read, or all of them when `ids` is omitted. */
+export function markNotificationsRead(ids?: string[]) {
+  return api.post<{ updated: number }>('/api/notifications/read', ids ? { ids } : {});
 }
 
 // ─── Maps ─────────────────────────────────────────────────────────

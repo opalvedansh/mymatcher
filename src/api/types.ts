@@ -38,6 +38,16 @@ export interface BrandProfile {
   member_since: string;
 }
 
+/** A LinkedIn recommendation the influencer added; links back to LinkedIn as proof. */
+export interface LinkedinReview {
+  id: string;
+  quote: string;
+  reviewer_name: string;
+  reviewer_title: string | null;
+  linkedin_url: string;
+  added_at: string;
+}
+
 export interface InfluencerProfile {
   user_id: string;
   name: string | null;
@@ -61,6 +71,7 @@ export interface InfluencerProfile {
   price_max: number;
   verified: boolean;
   worked_with?: string[];
+  linkedin_reviews?: LinkedinReview[];
   email: string;
   role: 'influencer';
   member_since: string;
@@ -199,6 +210,31 @@ export interface InfluencerProfileUpdate {
   price_min?: number;
   price_max?: number;
   verified?: boolean;
+  worked_with?: string[];
+  linkedin_reviews?: LinkedinReview[];
 }
 
 export type ProfileUpdate = BrandProfileUpdate | InfluencerProfileUpdate;
+
+// ── Notifications ─────────────────────────────────────────────────
+
+export type NotificationType = 'new_match' | 'new_like' | 'new_message';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  match_id: string | null;
+  title: string;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+  /** Always null for likes: who liked you is a premium feature. */
+  actor_id: string | null;
+  actor_name: string | null;
+  actor_avatar: string | null;
+}
+
+export interface NotificationsResponse {
+  data: AppNotification[];
+  next_before: string | null;
+}

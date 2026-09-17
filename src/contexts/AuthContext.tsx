@@ -6,6 +6,7 @@ import { supabase } from '../supabase';
 import { syncUser, updateMyProfile, uploadImage, syncInstagram, deleteMyAccount } from '../api';
 import api from '../api/client';
 import { socketService } from '../api/socket';
+import { registerForPush, unregisterPush } from '../services/pushNotifications';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
@@ -167,6 +168,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Push needs a finished account (the token route requires a role).
+  useEffect(() => {
+    if (user && onboardingComplete) registerForPush();
+  }, [user?.id, onboardingComplete]);
+
   const fetchUserData = async (currentUser: User) => {
     if (fetchUserDataPromise.current) {
       console.log('[Startup] fetchUserData already in progress. Waiting...');
@@ -200,11 +206,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setOnboardingComplete(false);
         }
 
-        if (onboardingProgress && Object.keys(onboardingProgress).length > 0) {
-          setOnboardingData({ ...DEFAULT_ONBOARDING, ...onboardingProgress });
-        } else {
-          setOnboardingData({ ...DEFAULT_ONBOARDING });
-        }
+        const progress = onboardingProgress && Object.keys(onboardingProgress).length > 0
+          ? { ...DEFAULT_ONBOARDING, ...onboardingProgress }
+          : { ...DEFAULT_ONBOARDING };
+        // users.role is authoritative and never changes once set; the copy in
+        // onboarding_data can drift (e.g. the user went back and picked the
+        // other role), which would route them to the wrong tabs and profile.
+        if (dbUser?.role === 'brand') progress.role = 'Brand';
+        else if (dbUser?.role === 'influencer') progress.role = 'Influencer';
+        setOnboardingData(progress);
       } catch (error: any) {
         console.error('[Startup] Error fetching user data:', error);
         const status = error?.status ?? error?.response?.status;
@@ -372,6 +382,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // Clear this device's push token while the session can still call the API.
+    await unregisterPush();
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {

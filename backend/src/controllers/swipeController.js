@@ -117,8 +117,12 @@ async function recordSwipe(req, res, next) {
       const swiperName = names.find(n => n.user_id === swiperId)?.name || 'Someone';
       const swipedName = names.find(n => n.user_id === swiped_id)?.name || 'Someone';
       notificationService
-        .sendMatchNotifications({ swiperId, swiperName, swipedId: swiped_id, swipedName })
+        .sendMatchNotifications({ swiperId, swiperName, swipedId: swiped_id, swipedName, matchId: match?.id })
         .catch((err) => console.error('[Push] Match notification failed:', err));
+    } else if (direction === 'like' || direction === 'super_like') {
+      notificationService
+        .sendLikeNotification(swiped_id, swiperId)
+        .catch((err) => console.error('[Push] Like notification failed:', err));
     }
 
     res.status(201).json({ swipe, matched, match });
@@ -179,6 +183,12 @@ async function undoLastSwipe(req, res, next) {
         [userId, lastSwipe.swiped_id]
       );
       removedMatchIds = (rows || []).map((m) => m.id);
+      // The liked user shouldn't keep an unread "someone likes you" for a like that no longer exists.
+      await client.query(
+        `DELETE FROM notifications
+         WHERE type = 'new_like' AND user_id = $1 AND actor_id = $2 AND read_at IS NULL`,
+        [lastSwipe.swiped_id, userId]
+      );
     }
 
     await client.query('COMMIT');

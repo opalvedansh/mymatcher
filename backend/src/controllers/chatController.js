@@ -55,6 +55,12 @@ async function getMessages(req, res, next) {
         `UPDATE messages SET read_at = now() WHERE id = ANY($1::uuid[])`,
         [unreadIds]
       );
+      // The inbox item for this conversation is read once the chat is opened.
+      await db.query(
+        `UPDATE notifications SET read_at = now()
+         WHERE user_id = $1 AND match_id = $2 AND type = 'new_message' AND read_at IS NULL`,
+        [userId, matchId]
+      );
     }
 
     // 4. Decrypt messages before sending to client

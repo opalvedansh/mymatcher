@@ -20,6 +20,8 @@ jest.mock('../src/services/notificationService', () => ({
   sendMatchNotifications: jest.fn().mockResolvedValue(),
   sendBulkNotifications: jest.fn().mockResolvedValue(),
   sendChatNotification: jest.fn().mockResolvedValue(),
+  sendLikeNotification: jest.fn().mockResolvedValue(),
+  recordNotifications: jest.fn().mockResolvedValue(),
 }));
 
 // Mock socket.io initialization

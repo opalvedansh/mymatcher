@@ -1,125 +1,154 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   FlatList,
-  Image,
   Keyboard,
   Pressable,
-  TouchableWithoutFeedback,
-  ActivityIndicator,
+  Platform,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { getMatches } from '@/api';
 import type { MatchRecord } from '@/api/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConversationScreen } from '@/screens/main/shared/ConversationScreen';
+import { Avatar } from '@/components/ChatAvatar';
+import { formatListTime } from '@/utils/relativeTime';
+import { NotificationBell } from '@/components/NotificationBell';
+
+const ACCENT = '#FF6B2B';
 
 interface ChatScreenProps {
   onConversationStateChange?: (isOpen: boolean) => void;
+  /** Opens this conversation once the list has loaded (from a notification). */
+  initialMatchId?: string;
+  onInitialMatchOpened?: () => void;
 }
 
-export function ChatScreen({ onConversationStateChange }: ChatScreenProps) {
-  const { onboardingData } = useAuth();
+const webNoOutline = Platform.select({ web: { outlineStyle: 'none' } as any, default: undefined });
+
+export function ChatScreen({ onConversationStateChange, initialMatchId, onInitialMatchOpened }: ChatScreenProps) {
+  const { onboardingData, user } = useAuth();
   const role = onboardingData?.role?.toLowerCase() as 'brand' | 'influencer' | undefined;
-  
+
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(false);
+  const [query, setQuery] = useState('');
   const [selectedMatch, setSelectedMatch] = useState<MatchRecord | null>(null);
+  const hasLoaded = useRef(false);
 
   useEffect(() => {
     onConversationStateChange?.(!!selectedMatch);
   }, [selectedMatch, onConversationStateChange]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoading(true);
-        const { data } = await getMatches() as any; // Destructure the { data } wrapper from updated endpoint! Wait, I changed the endpoint to return { data }? Let's check api/types. 
-        // Let's just use `getMatches` directly assuming it handles `data`. Wait, getMatches returns api.get() which unwraps Axios `data` if we use interceptors? 
-        // Wait, getMatches type is MatchRecord[], but the backend was returning `{ data, next_cursor }`.
-        // Let's fix that in a bit if needed.
-        const matchesArray = Array.isArray(data) ? data : (data?.data || data || []);
-        
-        // Sort matches by last_message_at descending, or matched_at if no messages
-        const sorted = matchesArray.sort((a: MatchRecord, b: MatchRecord) => {
-          const timeA = new Date(a.last_message_at || a.matched_at).getTime();
-          const timeB = new Date(b.last_message_at || b.matched_at).getTime();
-          return timeB - timeA;
-        });
-        if (!cancelled) setMatches(sorted);
-      } catch (e: any) {
-        if (!cancelled) setError(e.message ?? 'Failed to load chats');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedMatch]);
+  // Put the tab bar back if the screen goes away with a chat open.
+  useEffect(() => () => onConversationStateChange?.(false), [onConversationStateChange]);
 
-  // Helper to get the correct person's details
+  const load = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
+    if (mode === 'initial') setLoading(true);
+    if (mode === 'refresh') setRefreshing(true);
+    try {
+      const res = await getMatches() as any;
+      const list: MatchRecord[] = Array.isArray(res) ? res : (res?.data || []);
+      list.sort((a, b) =>
+        new Date(b.last_message_at || b.matched_at).getTime() - new Date(a.last_message_at || a.matched_at).getTime(),
+      );
+      setMatches(list);
+      setError(false);
+      hasLoaded.current = true;
+    } catch (e) {
+      console.warn('Failed to load chats', e);
+      if (mode !== 'silent') setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Refresh quietly when coming back from a conversation so read state and previews update.
+  useEffect(() => {
+    if (selectedMatch) return;
+    load(hasLoaded.current ? 'silent' : 'initial');
+  }, [selectedMatch, load]);
+
+  // Open the chat a notification pointed at, once it is in the loaded list.
+  const reloadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialMatchId || loading) return;
+    const target = matches.find(m => m.match_id === initialMatchId);
+    if (!target && reloadedFor.current !== initialMatchId) {
+      // The match may be newer than the list we have; fetch once more before giving up.
+      reloadedFor.current = initialMatchId;
+      load('silent');
+      return;
+    }
+    if (target) setSelectedMatch(target);
+    onInitialMatchOpened?.();
+  }, [initialMatchId, loading, matches, onInitialMatchOpened, load]);
+
   const getMatchPerson = (m: MatchRecord) => {
     if (role === 'brand') {
-      return { 
-        userId: m.influencer_id,
-        name: m.influencer_name, 
-        avatar: m.influencer_avatar,
-        myAvatar: m.brand_logo
-      };
+      return { userId: m.influencer_id, name: m.influencer_name, avatar: m.influencer_avatar, verified: m.influencer_verified, myAvatar: m.brand_logo };
     }
-    return { 
-      userId: m.brand_id,
-      name: m.brand_name, 
-      avatar: m.brand_logo,
-      myAvatar: m.influencer_avatar
-    };
+    return { userId: m.brand_id, name: m.brand_name, avatar: m.brand_logo, verified: m.brand_verified, myAvatar: m.influencer_avatar };
   };
 
-  const formatTime = (isoString?: string) => {
-    if (!isoString) return '';
-    const date = new Date(isoString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 60) return `${Math.max(1, diffMins)}m`;
-    const diffHrs = Math.floor(diffMins / 60);
-    if (diffHrs < 24) return `${diffHrs}h`;
-    return `${Math.floor(diffHrs / 24)}d`;
-  };
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return matches;
+    return matches.filter((m) => {
+      const person = getMatchPerson(m);
+      return (person.name || '').toLowerCase().includes(q) || (m.last_message || '').toLowerCase().includes(q);
+    });
+    // getMatchPerson only depends on role
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches, query, role]);
 
   const renderItem = ({ item }: { item: MatchRecord }) => {
     const person = getMatchPerson(item);
-    
-    // getMatches returns last_message_sender, last_message_read_at
-    const unread = (item.last_message_sender && !item.last_message_read_at) ? 1 : 0;
+    const name = person.name || 'Unknown';
+    const sentByMe = !!item.last_message_sender && item.last_message_sender === user?.id;
+    // Only messages from the other person can be unread for me.
+    const unread = !!item.last_message_sender && !sentByMe && !item.last_message_read_at;
+    const isNewMatch = !item.last_message;
 
     return (
-      <Pressable style={styles.chatItem} onPress={() => setSelectedMatch(item)}>
-        <Image 
-          source={{ uri: person.avatar ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&q=80' }} 
-          style={styles.avatar} 
-        />
-        
+      <Pressable
+        style={({ pressed }) => [styles.chatItem, pressed && styles.chatItemPressed]}
+        onPress={() => setSelectedMatch(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`${name}${unread ? ', unread message' : ''}`}
+      >
+        <View>
+          <Avatar uri={person.avatar} name={name} size={56} />
+          {isNewMatch && <View style={styles.newMatchRing} pointerEvents="none" />}
+        </View>
+
         <View style={styles.chatDetails}>
-          <Text style={styles.chatName}>{person.name ?? 'Unknown'}</Text>
-          <Text style={styles.chatMessage} numberOfLines={2}>
-            {item.last_message || 'No messages yet...'}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={[styles.chatName, unread && styles.chatNameUnread]} numberOfLines={1}>{name}</Text>
+            {person.verified && <MaterialIcons name="verified" size={15} color={ACCENT} style={{ marginLeft: 4 }} />}
+          </View>
+          {isNewMatch ? (
+            <Text style={styles.newMatchText} numberOfLines={1}>New match. Say hello.</Text>
+          ) : (
+            <Text style={[styles.chatMessage, unread && styles.chatMessageUnread]} numberOfLines={1}>
+              {sentByMe ? `You: ${item.last_message}` : item.last_message}
+            </Text>
+          )}
         </View>
 
         <View style={styles.chatMeta}>
-          <Text style={styles.chatTime}>{formatTime(item.last_message_at || item.matched_at)}</Text>
-          {unread > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}></Text>
-            </View>
-          )}
+          <Text style={[styles.chatTime, unread && { color: ACCENT }]}>
+            {formatListTime(item.last_message_at || item.matched_at)}
+          </Text>
+          {unread && <View style={styles.unreadDot} accessibilityElementsHidden />}
         </View>
       </Pressable>
     );
@@ -133,140 +162,164 @@ export function ChatScreen({ onConversationStateChange }: ChatScreenProps) {
         otherUserId={person.userId}
         chatName={person.name ?? 'Chat'}
         chatAvatar={person.avatar ?? undefined}
-        myAvatar={person.myAvatar ?? undefined}
+        chatVerified={!!person.verified}
+        matchedAt={selectedMatch.matched_at}
         onBack={() => setSelectedMatch(null)}
       />
     );
   }
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <View style={{ flex: 1 }}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Chat</Text>
-        <Pressable>
-          <Ionicons name="notifications" size={24} color="#FFF" />
+  let body: React.ReactNode;
+  if (loading) {
+    body = (
+      <View style={styles.listContent} accessibilityLabel="Loading chats">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <View key={i} style={styles.chatItem}>
+            <View style={[styles.skeleton, { width: 56, height: 56, borderRadius: 28 }]} />
+            <View style={styles.chatDetails}>
+              <View style={[styles.skeleton, { width: '45%', height: 14 }]} />
+              <View style={[styles.skeleton, { width: '75%', height: 12, marginTop: 10 }]} />
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  } else if (error) {
+    body = (
+      <View style={styles.stateBox}>
+        <View style={styles.stateIcon}><Ionicons name="cloud-offline-outline" size={26} color="#BDBDBD" /></View>
+        <Text style={styles.stateTitle}>Couldn't load your chats</Text>
+        <Text style={styles.stateBody}>Check your connection and try again.</Text>
+        <Pressable onPress={() => load('initial')} accessibilityRole="button" style={({ pressed }) => [styles.stateButton, pressed && styles.pressed]}>
+          <Text style={styles.stateButtonText}>Try again</Text>
         </Pressable>
+      </View>
+    );
+  } else if (matches.length === 0) {
+    body = (
+      <View style={styles.stateBox}>
+        <View style={styles.stateIcon}><Ionicons name="chatbubbles-outline" size={26} color={ACCENT} /></View>
+        <Text style={styles.stateTitle}>No conversations yet</Text>
+        <Text style={styles.stateBody}>
+          {role === 'brand' ? 'When you match with a creator, you can chat here.' : 'When you match with a brand, you can chat here.'}
+        </Text>
+      </View>
+    );
+  } else {
+    body = (
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.match_id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor={ACCENT} colors={[ACCENT]} />
+        }
+        ListEmptyComponent={
+          <Text style={styles.noResults}>No chats match "{query.trim()}"</Text>
+        }
+      />
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle} accessibilityRole="header">Chat</Text>
+        <NotificationBell />
       </View>
 
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search"
-          placeholderTextColor="#888"
-          returnKeyType="search"
-          onSubmitEditing={Keyboard.dismiss}
-        />
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={18} color="#8A8A8A" />
+          <TextInput
+            style={[styles.searchInput, webNoOutline]}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search chats"
+            placeholderTextColor="#8A8A8A"
+            returnKeyType="search"
+            onSubmitEditing={Keyboard.dismiss}
+            autoCorrect={false}
+            accessibilityLabel="Search chats"
+          />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+              <Ionicons name="close-circle" size={18} color="#8A8A8A" />
+            </Pressable>
+          )}
+        </View>
       </View>
 
-      {loading ? (
-        <ActivityIndicator size="large" color="#FF6B2B" style={{ marginTop: 40 }} />
-      ) : error ? (
-        <Text style={{ color: '#FF3B30', textAlign: 'center', marginTop: 40 }}>⚠️ {error}</Text>
-      ) : matches.length === 0 ? (
-        <Text style={{ color: '#888', textAlign: 'center', marginTop: 40 }}>No conversations yet. Go swipe!</Text>
-      ) : (
-        <FlatList
-          data={matches}
-          keyExtractor={(item) => item.match_id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-        />
-      )}
-        </View>
-      </TouchableWithoutFeedback>
+      {body}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#121212',
-  },
+  safeArea: { flex: 1, backgroundColor: '#121212' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
     marginTop: 20,
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  headerTitle: {
-    fontSize: 34,
-    fontWeight: 'bold',
-    color: '#FFF',
+  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#FFF', letterSpacing: -0.5 },
+  searchContainer: { paddingHorizontal: 24, marginBottom: 12 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 46,
+    paddingHorizontal: 16,
+    borderRadius: 23,
+    backgroundColor: '#1E1E1E',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  searchContainer: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  searchInput: {
-    backgroundColor: '#D9D9D9',
-    borderRadius: 24,
-    height: 48,
-    paddingHorizontal: 20,
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-  },
-  listContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 100, // Leave space for bottom nav
-  },
+  searchInput: { flex: 1, fontSize: 16, color: '#FFF', paddingVertical: 0 },
+  listContent: { paddingHorizontal: 12, paddingBottom: 100 }, // leaves room for the tab bar
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 16,
   },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 16,
-    backgroundColor: '#333'
+  chatItemPressed: { backgroundColor: 'rgba(255,255,255,0.05)' },
+  newMatchRing: {
+    position: 'absolute', top: -3, left: -3, right: -3, bottom: -3,
+    borderRadius: 31, borderWidth: 2, borderColor: ACCENT,
   },
-  chatDetails: {
-    flex: 1,
-    marginRight: 16,
+  chatDetails: { flex: 1, marginLeft: 14, marginRight: 12 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 3 },
+  chatName: { fontSize: 16, fontWeight: '600', color: '#FFF', flexShrink: 1 },
+  chatNameUnread: { fontWeight: '700' },
+  chatMessage: { fontSize: 14, color: '#9A9A9A', lineHeight: 20 },
+  chatMessageUnread: { color: '#FFF', fontWeight: '500' },
+  newMatchText: { fontSize: 14, color: '#FF8A55', lineHeight: 20, fontWeight: '500' },
+  chatMeta: { alignItems: 'flex-end', gap: 8, minWidth: 36 },
+  chatTime: { fontSize: 12, color: '#8A8A8A', fontVariant: ['tabular-nums'] },
+  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: ACCENT },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.08)', marginLeft: 82, marginRight: 12 },
+  skeleton: { backgroundColor: '#1E1E1E', borderRadius: 7 },
+  noResults: { color: '#8A8A8A', fontSize: 14, textAlign: 'center', marginTop: 40 },
+  stateBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 40 },
+  stateIcon: {
+    width: 60, height: 60, borderRadius: 30, backgroundColor: '#1E1E1E',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
   },
-  chatName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFF',
-    marginBottom: 4,
+  stateTitle: { color: '#FFF', fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  stateBody: { color: '#9A9A9A', fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 6 },
+  stateButton: {
+    marginTop: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 12,
+    paddingVertical: 11, paddingHorizontal: 24,
   },
-  chatMessage: {
-    fontSize: 14,
-    color: '#CCC',
-    lineHeight: 20,
-  },
-  chatMeta: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    height: 50,
-  },
-  chatTime: {
-    fontSize: 12,
-    color: '#CCC',
-  },
-  unreadBadge: {
-    backgroundColor: '#FF6B2B',
-    borderRadius: 6,
-    width: 12,
-    height: 12,
-    marginTop: 6,
-  },
-  unreadText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#FF6B2B',
-    opacity: 0.5,
-  },
+  stateButtonText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  pressed: { opacity: 0.8 },
 });

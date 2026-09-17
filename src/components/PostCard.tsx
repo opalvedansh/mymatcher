@@ -94,7 +94,7 @@ export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }:
 
   const handleShare = async () => {
     try {
-      await Share.share({ message: post.caption || 'Check out this post on Matcherc!' });
+      await Share.share({ message: post.caption || 'Check out this post on Matchr' });
     } catch {}
   };
 

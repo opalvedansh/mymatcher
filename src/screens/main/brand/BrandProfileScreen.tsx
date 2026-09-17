@@ -70,7 +70,7 @@ const MOCK_RATING_AVATARS = [
 
 export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: string, onBack?: () => void }) {
   const { width } = useWindowDimensions();
-  const { signOut, deleteAccount } = useAuth();
+  const { user, signOut, deleteAccount } = useAuth();
   const [profile, setProfile] = useState<BrandProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -182,8 +182,9 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
     return true;
   };
 
-  const coverImage = isValidUrl(profile.logo_url) ? (profile.logo_url as string) : (isValidUrl(profile.cover_url) ? (profile.cover_url as string) : 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&q=80');
-  const logo = isValidUrl(profile.logo_url) ? (profile.logo_url as string) : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&q=80';
+  // No stock-photo fallbacks: until the brand uploads its own images, show placeholders.
+  const coverImage = isValidUrl(profile.logo_url) ? (profile.logo_url as string) : (isValidUrl(profile.cover_url) ? (profile.cover_url as string) : null);
+  const logo = isValidUrl(profile.logo_url) ? (profile.logo_url as string) : null;
   const name = profile.name || 'Your Brand';
   const categoriesStr = (profile.categories || []).join(' · ') || 'Uncategorized';
   const location = profile.location || 'Location not set';
@@ -218,7 +219,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
   const campaignDatesStr = formatCampaignDates(campaignDays);
   
   const vibes = profile.vibes?.length ? profile.vibes : ['Premium', 'Minimal', 'Bold', 'Authentic', 'Genz'];
-  const campaignPhotos = profile.photos?.length ? profile.photos : [coverImage];
+  const campaignPhotos = (profile.photos ?? []).filter(isValidUrl);
   
   const campaignTypes = ['Paid Collaboration', 'Product Review', 'UGC Campaign', 'Brand Ambassador', 'Event Coverage'];
 
@@ -282,6 +283,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
       }
     } catch (err) {
       console.error('Failed to update logo:', err);
+      Alert.alert('Update failed', 'Could not upload your logo. Please try again.');
     }
   };
 
@@ -309,7 +311,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                   target: { type: 'user', id: publicUserId },
                   onBlocked: onBack,
                 })
-              : openAccountMenu({ signOut, deleteAccount })
+              : openAccountMenu({ signOut, deleteAccount, email: user?.email })
           }
           style={{ padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}
         >
@@ -320,7 +322,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
         
         {/* ════ HERO COVER ════ */}
         <View style={s.heroWrapper}>
-          <ImageBackground source={{ uri: coverImage }} resizeMode="cover" style={s.coverBg}>
+          <ImageBackground source={coverImage ? { uri: coverImage } : undefined} resizeMode="cover" style={s.coverBg}>
             <LinearGradient
               start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
               colors={['rgba(17,17,17,0.7)', 'rgba(17,17,17,0)']}
@@ -344,7 +346,13 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
           {/* Circular Logo & Titles overlay */}
           <View style={s.heroContentRow}>
             <TouchableOpacity activeOpacity={0.8} onPress={handleChangeLogo}>
-              <Image source={{ uri: logo }} style={s.brandLogoCircle} />
+              {logo ? (
+                <Image source={{ uri: logo }} style={s.brandLogoCircle} />
+              ) : (
+                <View style={[s.brandLogoCircle, s.logoPlaceholder]}>
+                  <Ionicons name="business-outline" size={40} color="#777" />
+                </View>
+              )}
               {!publicUserId && (
                 <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#FF6B2B', borderRadius: 12, padding: 4 }}>
                   <Ionicons name="camera" size={12} color="#FFF" />
@@ -491,7 +499,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
         <View style={s.rowBetween}>
           <Text style={s.sectionTitleNoMargin}>Brand campaign</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ color: '#666', fontSize: 13 }}>{campaignPhotos.filter(p => p !== coverImage).length}/6</Text>
+            <Text style={{ color: '#666', fontSize: 13 }}>{campaignPhotos.length}/6</Text>
             <TouchableOpacity
               onPress={handleAddCampaignPhoto}
               disabled={uploadingCampaign || (profile?.photos ?? []).length >= 6}
@@ -520,13 +528,21 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
             }}
           >
             {campaignPhotos.map((photoUrl, i) => (
-              <Image 
-                key={i} 
-                source={{ uri: photoUrl }} 
-                style={[s.carouselImg, { width: width - (H * 2) }]} 
-                resizeMode="cover" 
+              <Image
+                key={i}
+                source={{ uri: photoUrl }}
+                style={[s.carouselImg, { width: width - (H * 2) }]}
+                resizeMode="cover"
               />
             ))}
+            {campaignPhotos.length === 0 && (
+              <View style={[s.carouselImg, s.carouselEmpty, { width: width - (H * 2) }]}>
+                <Ionicons name="images-outline" size={40} color="#555" />
+                <Text style={s.carouselEmptyTxt}>
+                  {publicUserId ? 'No campaign photos yet' : 'Add photos of your brand campaigns'}
+                </Text>
+              </View>
+            )}
           </ScrollView>
           
           {campaignPhotos.length > 1 && (
@@ -749,6 +765,7 @@ const s = StyleSheet.create({
     borderColor: BG,
     marginRight: 16,
   },
+  logoPlaceholder: { backgroundColor: '#2A2A2A', justifyContent: 'center', alignItems: 'center' },
   heroTextContainer: { flex: 1, justifyContent: 'center' },
   heroName: { color: '#FCFCFC', fontSize: 26, fontWeight: '800', marginBottom: 2 },
   heroCats: { color: '#CCC', fontSize: 13, marginBottom: 4 },
@@ -817,6 +834,8 @@ const s = StyleSheet.create({
     backgroundColor: '#111',
   },
   carouselImg: { width: '100%', height: '100%' },
+  carouselEmpty: { justifyContent: 'center', alignItems: 'center', gap: 12, backgroundColor: '#1C1C1C' },
+  carouselEmptyTxt: { color: '#777', fontSize: 13 },
   dotsRow: { position: 'absolute', bottom: 16, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
   dot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.4)' },
   dotActive: { backgroundColor: '#FFF' },

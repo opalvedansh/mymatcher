@@ -3,12 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   Image,
   Pressable,
   ScrollView,
-  ActivityIndicator,
-  Alert
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -21,108 +19,153 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import { Ionicons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getFeed, recordSwipe } from '@/api';
 import type { BrandProfile } from '@/api/types';
 import { MatchrLogo } from '@/components/MatchrLogo';
 import { MatchBoomModal } from '@/components/MatchBoomModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { showAlert } from '@/components/ActionSheet';
+import { NotificationBell } from '@/components/NotificationBell';
 
-const { width } = Dimensions.get('window');
+
+const ACCENT = '#FF6B2B';
+const PAGE_SIZE = 20;
 
 type CardItem = {
   id: string;
-  image: string;
+  image: string | null;
   name: string;
+  verified: boolean;
   categories: string;
   location: string;
-  bio: string;
-  budget: string;
   campaignTypes: string[];
-  vibes: string[];
+  stats: { value: string; label: string }[];
 };
+
+const isValidUrl = (url?: string | null): url is string =>
+  !!url && !url.startsWith('blob:') && !url.startsWith('file://');
+
+const formatInr = (amount: number) =>
+  amount >= 100_000
+    ? `₹${+(amount / 100_000).toFixed(1)}L`
+    : amount >= 1000
+      ? `₹${Math.round(amount / 1000)}k`
+      : `₹${amount}`;
+
+function formatBudget(min?: number | null, max?: number | null) {
+  if (min && max) return `${formatInr(min)}-${formatInr(max).slice(1)}`;
+  if (min) return `${formatInr(min)}+`;
+  if (max) return `Up to ${formatInr(max)}`;
+  return null;
+}
+
+// Only real profile data reaches the card; missing fields are hidden, not faked.
+function toCardItem(p: BrandProfile): CardItem {
+  const stats: CardItem['stats'] = [];
+  const budget = formatBudget(p.budget_min, p.budget_max);
+  if (budget) stats.push({ value: budget, label: 'Budget Range' });
+  if (p.vibes?.length) stats.push({ value: p.vibes[0], label: 'Brand Vibe' });
+  if (p.campaign_types?.length) {
+    stats.push({ value: String(p.campaign_types.length), label: p.campaign_types.length === 1 ? 'Campaign Type' : 'Campaign Types' });
+  }
+  const cover = isValidUrl(p.cover_url) ? p.cover_url : null;
+  const logo = isValidUrl(p.logo_url) ? p.logo_url : null;
+
+  return {
+    id: p.user_id,
+    image: cover ?? logo,
+    name: p.name || 'Brand',
+    verified: !!p.verified,
+    categories: (p.categories ?? []).join(', '),
+    location: p.location ?? '',
+    campaignTypes: p.campaign_types ?? [],
+    stats,
+  };
+}
 
 // ─── Card Content ─────────────────────────────────────────────────
 const CardContent = ({ item }: { item: CardItem }) => (
   <View style={card.wrapper}>
     {/* ── Photo Background ── */}
-    <Image source={{ uri: item.image }} style={card.photo} resizeMode="cover" />
+    {item.image ? (
+      <Image source={{ uri: item.image }} style={card.photo} resizeMode="cover" />
+    ) : (
+      <View style={[card.photo, card.photoFallback]}>
+        <Text style={card.fallbackInitial}>{item.name.charAt(0).toUpperCase()}</Text>
+      </View>
+    )}
 
     {/* gradient so brand name reads clearly on top of image */}
     <LinearGradient
-      colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.0)']}
+      colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.0)']}
       style={card.topFade}
+      pointerEvents="none"
     />
     <LinearGradient
-      colors={['rgba(0,0,0,0.0)', 'rgba(14,14,14,0.8)', 'rgba(14,14,14,1)']}
+      colors={['rgba(0,0,0,0.0)', 'rgba(14,14,14,0.85)', 'rgba(14,14,14,1)']}
+      locations={[0, 0.45, 1]}
       style={card.bottomFade}
+      pointerEvents="none"
     />
 
-    {/* Verified badge top-right */}
-    <View style={card.topRight}>
-      <View style={card.verifiedBadge}>
-        <MaterialCommunityIcons name="check-decagram" size={14} color="#1DA1F2" />
-        <Text style={card.verifiedTxt}>Verified Brand</Text>
+    {/* Verified badge top-right, only for brands that passed verification */}
+    {item.verified && (
+      <View style={card.topRight}>
+        <View style={card.verifiedBadge}>
+          <MaterialCommunityIcons name="check-decagram" size={15} color={ACCENT} />
+          <Text style={card.verifiedTxt}>Verified Brand</Text>
+        </View>
       </View>
-    </View>
+    )}
 
     {/* ── Info panel ── */}
     <View style={card.infoPanel}>
-      {/* Name + categories + location */}
-      <Text style={card.infoName}>{item.name}</Text>
-      <Text style={card.infoCats}>{item.categories}</Text>
-      <View style={card.locationRow}>
-        <Ionicons name="location-sharp" size={14} color="#aaa" />
-        <Text style={card.locationTxt}>{item.location}</Text>
-      </View>
+      <Text style={card.infoName} numberOfLines={1}>{item.name}</Text>
+      {!!item.categories && <Text style={card.infoCats} numberOfLines={1}>{item.categories}</Text>}
+      {!!item.location && (
+        <View style={card.locationRow}>
+          <Ionicons name="location-sharp" size={14} color="#AAA" />
+          <Text style={card.locationTxt} numberOfLines={1}>{item.location}</Text>
+        </View>
+      )}
 
       {/* Campaign Types (Tags) */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={card.tagsScroll}
-        contentContainerStyle={card.tagsContent}
-      >
-        <View style={[card.pill, card.pillOrange]}>
-          <Text style={card.pillTxtWhite}>Looking for</Text>
-        </View>
-        {item.campaignTypes.map((t) => (
-          <View key={t} style={card.pill}>
-            <Text style={card.pillTxt}>{t}</Text>
+      {item.campaignTypes.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={card.tagsScroll}
+          contentContainerStyle={card.tagsContent}
+        >
+          <View style={[card.pill, card.pillLabel]}>
+            <Text style={card.pillLabelTxt}>Looking for</Text>
           </View>
-        ))}
-      </ScrollView>
+          {item.campaignTypes.map((t) => (
+            <View key={t} style={card.pill}>
+              <Text style={card.pillTxt}>{t}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
 
-      {/* Stats (Budget, Vibes) */}
-      <View style={card.statsRow}>
-        <View style={card.statCol}>
-          <Text style={card.statVal}>{item.budget}</Text>
-          <Text style={card.statLbl}>Budget Range</Text>
+      {/* Stats (Budget, Vibe, Campaign types) */}
+      {item.stats.length > 0 && (
+        <View style={card.statsRow}>
+          {item.stats.map((stat, i) => (
+            <React.Fragment key={stat.label}>
+              {i > 0 && <View style={card.statDivider} />}
+              <View style={card.statCol}>
+                <Text style={card.statVal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                  {stat.value}
+                </Text>
+                <Text style={card.statLbl} numberOfLines={1}>{stat.label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
         </View>
-        <View style={card.statDivider} />
-        <View style={card.statCol}>
-          <Text style={card.statVal}>{item.vibes.length > 0 ? item.vibes[0] : 'Premium'}</Text>
-          <Text style={card.statLbl}>Brand Vibe</Text>
-        </View>
-        <View style={card.statDivider} />
-        <View style={card.statCol}>
-          <Text style={card.statVal}>Active</Text>
-          <Text style={card.statLbl}>Campaigns</Text>
-        </View>
-      </View>
-
-      {/* Worked with brands (Dummy) */}
-      <View style={card.workedRow}>
-        <Text style={card.workedLbl}>Worked With</Text>
-        <View style={card.logosContainer}>
-           <View style={card.dummyLogo}><Ionicons name="logo-apple" size={16} color="#000" /></View>
-           <View style={card.dummyLogo}><Ionicons name="logo-google" size={16} color="#000" /></View>
-           <View style={card.dummyLogo}><Ionicons name="logo-amazon" size={16} color="#000" /></View>
-           <View style={card.dummyLogo}><Ionicons name="logo-microsoft" size={16} color="#000" /></View>
-           <View style={card.dummyLogo}><Ionicons name="logo-facebook" size={16} color="#000" /></View>
-        </View>
-      </View>
+      )}
     </View>
   </View>
 );
@@ -130,24 +173,31 @@ const CardContent = ({ item }: { item: CardItem }) => (
 // ─── Main Screen ──────────────────────────────────────────────────
 export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewProfile?: (id: string) => void, onNavigateToMessages?: () => void }) {
   const { onboardingData } = useAuth();
+  const { width } = useWindowDimensions();
   const [brands, setBrands] = useState<BrandProfile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [matchData, setMatchData] = useState<{ name: string; avatarUrl: string } | null>(null);
+  const [error, setError] = useState(false);
+  const [matchData, setMatchData] = useState<{ name: string; avatarUrl: string | null } | null>(null);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const nextCursorRef = useRef<{ score: number | null, id: string | null }>({ score: null, id: null });
+  const loadingMoreRef = useRef(false);
+  const busyRef = useRef(false);
 
   // ── Load feed ───────────────────────────────────────────────────
   const loadFeed = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
-      const res = await getFeed(20, 0);
+      setError(false);
+      // No cursor on the first page; the server hands back the next one.
+      const res = await getFeed(PAGE_SIZE);
       setBrands(res.data as BrandProfile[]);
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to load feed');
+      setCurrentIndex(0);
+      nextCursorRef.current = { score: res.next_cursor_score, id: res.next_cursor_id };
+    } catch (e) {
+      console.warn('[API] getFeed failed:', e);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -155,8 +205,26 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
 
   useEffect(() => { loadFeed(); }, [loadFeed]);
 
+  const loadMore = useCallback(async () => {
+    const { score, id } = nextCursorRef.current;
+    if (loadingMoreRef.current || !id) return;
+    loadingMoreRef.current = true;
+    try {
+      const res = await getFeed(PAGE_SIZE, score ?? undefined, id);
+      nextCursorRef.current = { score: res.next_cursor_score, id: res.next_cursor_id };
+      const page = res.data as BrandProfile[];
+      setBrands(prev => {
+        const seen = new Set(prev.map(b => b.user_id));
+        return [...prev, ...page.filter(b => !seen.has(b.user_id))];
+      });
+    } catch {/* the next swipe retries */} finally {
+      loadingMoreRef.current = false;
+    }
+  }, []);
+
   // ── Swipe handler ───────────────────────────────────────────────
   const handleSwipe = useCallback(async (dir: 'left' | 'right') => {
+    busyRef.current = false;
     const profile = brands[currentIndex];
     if (!profile) return;
 
@@ -165,39 +233,22 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
     translateX.value = 0;
     translateY.value = 0;
 
+    // Fetch the next page while a few cards are still left.
+    if (brands.length - (currentIndex + 1) <= 3) loadMore();
+
     try {
-      if (dir === 'right') {
-        const res = await recordSwipe(profile.user_id, 'like');
-        // Wait, recordSwipe returns { data: SwipeResponse }. Need to read it correctly.
-        const responseData = (res as any).data || res;
-        if (responseData.matched) {
-          const rawUrl = profile.cover_url ?? profile.logo_url;
-          const avatarUrl = rawUrl && isValidUrl(rawUrl) 
-            ? rawUrl 
-            : 'https://images.unsplash.com/photo-1611930022073-84af31bf7093?w=800&q=80';
-          setMatchData({ name: profile.name ?? 'This brand', avatarUrl });
-        }
-      } else {
-        await recordSwipe(profile.user_id, 'reject');
+      const res = await recordSwipe(profile.user_id, dir === 'right' ? 'like' : 'reject');
+      const responseData = (res as any).data || res;
+      if (dir === 'right' && responseData.matched) {
+        const rawUrl = profile.logo_url ?? profile.cover_url;
+        setMatchData({ name: profile.name ?? 'This brand', avatarUrl: isValidUrl(rawUrl) ? rawUrl : null });
       }
     } catch (e) {
       console.warn('[API] recordSwipe failed:', e);
       setCurrentIndex(prevIndex);
-      Alert.alert('Action failed', 'Could not record swipe. Restoring card.');
-      return; // Stop preload if failed
+      showAlert('Swipe not saved', 'We brought the card back. Check your connection and try again.');
     }
-
-    // Preload next batch when reaching last 3
-    if (currentIndex >= brands.length - 3) {
-      try {
-        const next = await getFeed(10, brands.length);
-        const nextData = next.data;
-        if (nextData && nextData.length > 0) {
-          setBrands(prev => [...prev, ...(nextData as BrandProfile[])]);
-        }
-      } catch {/* silent */}
-    }
-  }, [brands, currentIndex, translateX, translateY]);
+  }, [brands, currentIndex, translateX, translateY, loadMore]);
 
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
@@ -253,6 +304,9 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
   });
 
   const forceSwipe = (dir: 'left' | 'right') => {
+    // Ignore repeat taps while a card is already flying off.
+    if (busyRef.current) return;
+    busyRef.current = true;
     const x = dir === 'right' ? width + 200 : -width - 200;
     translateX.value = withTiming(x, { duration: 250 }, () => {
       runOnJS(handleSwipe)(dir);
@@ -260,46 +314,28 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
     translateY.value = withTiming(0, { duration: 250 });
   };
 
-  // ── Map API profile to card shape ───────────────────────────────
-  const isValidUrl = (url?: string | null) => {
-    if (!url) return false;
-    if (url.startsWith('blob:') || url.startsWith('file://')) return false;
-    return true;
-  };
-
-  const toCardItem = (p: BrandProfile) => {
-    let img = p.cover_url ?? p.logo_url;
-    if (!isValidUrl(img)) {
-      img = 'https://images.unsplash.com/photo-1611930022073-84af31bf7093?w=800&q=80';
-    }
-    return {
-      id: p.user_id,
-      image: img as string,
-      name: p.name ?? 'Unknown',
-      categories: (p.categories ?? []).join(' · ') || 'Brand',
-    location: p.location ?? '',
-    bio: p.bio ?? 'Clinical Formulations with Integrity.',
-      budget: p.budget_min ? `$${p.budget_min / 1000}k+` : 'Negotiable',
-      campaignTypes: p.campaign_types ?? ['Collab'],
-      vibes: p.vibes ?? [],
-    };
-  };
-
   const renderStack = () => {
     if (loading) {
       return (
-        <View style={ss.empty}>
-          <ActivityIndicator size="large" color="#FF6B2B" />
-          <Text style={[ss.emptyTxt, { fontSize: 15, marginTop: 12 }]}>Finding brands...</Text>
+        <View style={[card.wrapper, card.skeleton]} accessibilityLabel="Finding brands">
+          <View style={card.infoPanel}>
+            <View style={[ss.skeletonLine, { width: '55%', height: 24 }]} />
+            <View style={[ss.skeletonLine, { width: '35%', marginTop: 10 }]} />
+            <View style={[ss.skeletonLine, { width: '70%', height: 36, marginTop: 22, borderRadius: 18 }]} />
+          </View>
         </View>
       );
     }
     if (error) {
       return (
         <View style={ss.empty}>
-          <Text style={[ss.emptyTxt, { color: '#FF3B30' }]}>⚠️ {error}</Text>
-          <Pressable onPress={loadFeed} style={{ marginTop: 16, backgroundColor: '#FF6B2B', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 }}>
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+          <View style={ss.emptyIcon}>
+            <Ionicons name="cloud-offline-outline" size={28} color="#BDBDBD" />
+          </View>
+          <Text style={ss.emptyTxt}>Couldn't load brands</Text>
+          <Text style={ss.emptySub}>Check your connection and try again.</Text>
+          <Pressable onPress={loadFeed} accessibilityRole="button" style={({ pressed }) => [ss.emptyBtn, pressed && ss.pressed]}>
+            <Text style={ss.emptyBtnTxt}>Try again</Text>
           </Pressable>
         </View>
       );
@@ -307,19 +343,23 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
     if (currentIndex >= brands.length) {
       return (
         <View style={ss.empty}>
-          <Text style={ss.emptyTxt}>You've seen all brands 🎉</Text>
-          <Text style={{ color: '#888', marginTop: 8 }}>Check back later for more</Text>
-          <Pressable onPress={loadFeed} style={{ marginTop: 16, backgroundColor: '#FF6B2B', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 }}>
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Refresh</Text>
+          <View style={ss.emptyIcon}>
+            <Ionicons name="checkmark-done" size={28} color={ACCENT} />
+          </View>
+          <Text style={ss.emptyTxt}>You've seen all brands</Text>
+          <Text style={ss.emptySub}>New brands join every day. Check back soon.</Text>
+          <Pressable onPress={loadFeed} accessibilityRole="button" style={({ pressed }) => [ss.emptyBtn, pressed && ss.pressed]}>
+            <Text style={ss.emptyBtnTxt}>Refresh</Text>
           </Pressable>
         </View>
       );
     }
 
-    return [...brands]
-      .map((profile, i) => {
-        if (i < currentIndex) return null;
-        const isTop = i === currentIndex;
+    // Only the top two cards are mounted, so the rest don't load images yet.
+    return brands
+      .slice(currentIndex, currentIndex + 2)
+      .map((profile, offset) => {
+        const isTop = offset === 0;
         const item = toCardItem(profile);
         return (
           <GestureDetector key={profile.user_id} gesture={isTop ? panGesture : Gesture.Pan().enabled(false)}>
@@ -331,15 +371,20 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
                   : { zIndex: 1, transform: [{ scale: 0.97 }], top: 6 },
               ]}
             >
-              <Pressable style={{ flex: 1 }} onPress={() => isTop && onViewProfile && onViewProfile(profile.user_id)}>
+              <Pressable
+                style={{ flex: 1 }}
+                onPress={() => isTop && onViewProfile && onViewProfile(profile.user_id)}
+                accessibilityLabel={item.name}
+                accessibilityHint="Swipe right to like, left to pass"
+              >
                 <CardContent item={item} />
                 {isTop && (
                   <>
-                    <Animated.View style={[ss.stamp, ss.likeStamp, likeOpacityStyle]}>
+                    <Animated.View style={[ss.stamp, ss.likeStamp, likeOpacityStyle]} pointerEvents="none">
                       <Text style={ss.likeStampTxt}>LIKE</Text>
                     </Animated.View>
-                    <Animated.View style={[ss.stamp, ss.nopeStamp, nopeOpacityStyle]}>
-                      <Text style={ss.nopeStampTxt}>NOPE</Text>
+                    <Animated.View style={[ss.stamp, ss.nopeStamp, nopeOpacityStyle]} pointerEvents="none">
+                      <Text style={ss.nopeStampTxt}>PASS</Text>
                     </Animated.View>
                   </>
                 )}
@@ -358,13 +403,11 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
       <View style={ss.header}>
         <View style={ss.logoRow}>
           <View style={{ marginRight: 6 }}>
-            <MatchrLogo size={24} color="#F2602D" />
+            <MatchrLogo size={24} color={ACCENT} />
           </View>
           <Text style={ss.logoWord}>Matchr</Text>
         </View>
-        <Pressable>
-          <Ionicons name="notifications" size={24} color="#fff" />
-        </Pressable>
+        <NotificationBell />
       </View>
 
       {/* ── Title ── */}
@@ -379,11 +422,21 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
 
         {!loading && !error && currentIndex < brands.length && (
           <View style={ss.actionRow} pointerEvents="box-none">
-            <Pressable style={ss.btnPass} onPress={() => forceSwipe('left')}>
-              <FontAwesome name="times" size={18} color="#FF3B30" />
+            <Pressable
+              onPress={() => forceSwipe('left')}
+              accessibilityRole="button"
+              accessibilityLabel="Pass"
+              style={({ pressed }) => [ss.btnPass, pressed && ss.pressed]}
+            >
+              <Ionicons name="close" size={28} color="#111" />
             </Pressable>
-            <Pressable style={ss.btnLike} onPress={() => forceSwipe('right')}>
-              <FontAwesome name="heart" size={15} color="#fff" />
+            <Pressable
+              onPress={() => forceSwipe('right')}
+              accessibilityRole="button"
+              accessibilityLabel="Like"
+              style={({ pressed }) => [ss.btnLike, pressed && ss.pressed]}
+            >
+              <Ionicons name="heart" size={26} color="#FFF" />
             </Pressable>
           </View>
         )}
@@ -416,8 +469,15 @@ const card = StyleSheet.create({
   photo: {
     position: 'absolute',
     top: 0, left: 0, bottom: 0, right: 0,
-    resizeMode: 'cover',
   },
+  photoFallback: {
+    backgroundColor: '#1C1C1C',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 180,
+  },
+  fallbackInitial: { color: '#333', fontSize: 120, fontWeight: '800' },
+  skeleton: { flex: 1, backgroundColor: '#1A1A1A' },
   topFade: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
@@ -429,8 +489,12 @@ const card = StyleSheet.create({
     height: '60%',
   },
   topRight: { position: 'absolute', top: 16, right: 16 },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  verifiedTxt: { color: '#FFF', fontSize: 11, fontWeight: '600' },
+  verifiedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)',
+  },
+  verifiedTxt: { color: '#FFF', fontSize: 12, fontWeight: '600' },
   photoText: {
     position: 'absolute',
     bottom: 0,
@@ -472,8 +536,9 @@ const card = StyleSheet.create({
   },
   infoName: {
     color: '#fff',
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 30,
+    fontWeight: '700',
+    letterSpacing: -0.6,
   },
   infoCats: {
     color: 'rgba(255,255,255,0.8)',
@@ -492,10 +557,10 @@ const card = StyleSheet.create({
   },
   tagsScroll: { marginTop: 16, flexGrow: 0, height: 44 },
   tagsContent: { gap: 10, paddingRight: 16, alignItems: 'center', height: '100%' },
-  pill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
-  pillOrange: { backgroundColor: '#FF6B2B', borderColor: '#FF6B2B', boxShadow: '0px 4px 6px rgba(255,107,43,0.3)', elevation: 4 },
-  pillTxt: { color: '#FFF', fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
-  pillTxtWhite: { color: '#FFF', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  pill: { paddingHorizontal: 15, paddingVertical: 7, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  pillLabel: { backgroundColor: 'rgba(255,107,43,0.16)', borderColor: 'rgba(255,107,43,0.45)' },
+  pillTxt: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  pillLabelTxt: { color: '#FF8A55', fontSize: 13, fontWeight: '700' },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -505,18 +570,14 @@ const card = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.2)',
   },
-  statCol: { alignItems: 'center', flex: 1 },
-  statVal: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  statCol: { alignItems: 'center', flex: 1, paddingHorizontal: 6 },
+  statVal: { color: '#fff', fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
   statLbl: { color: '#aaa', fontSize: 11, marginTop: 3, textAlign: 'center' },
   statDivider: {
     width: StyleSheet.hairlineWidth,
     height: 32,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  workedRow: { marginTop: 16, alignItems: 'flex-start', paddingRight: 80 }, // paddingRight avoids overlapping with right side buttons if any
-  workedLbl: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8 },
-  logosContainer: { flexDirection: 'row', gap: 10 },
-  dummyLogo: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
 });
 
 // ─────────────────────────── screen styles ────────────────────────
@@ -546,7 +607,7 @@ const ss = StyleSheet.create({
     fontWeight: '700',
   },
   subtitle: {
-    color: '#888',
+    color: '#9A9A9A',
     fontSize: 13,
     marginTop: 3,
   },
@@ -574,35 +635,49 @@ const ss = StyleSheet.create({
     zIndex: 100,
   },
   btnPass: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F4F4F4',
     justifyContent: 'center',
     alignItems: 'center',
-    boxShadow: '0px 3px 6px rgba(0,0,0,0.18)',
-    elevation: 5,
+    boxShadow: '0px 6px 14px rgba(0,0,0,0.35)',
+    elevation: 6,
   },
   btnLike: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FF6B2B',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: ACCENT,
     justifyContent: 'center',
     alignItems: 'center',
-    boxShadow: '0px 4px 8px rgba(255,107,43,0.4)',
-    elevation: 7,
+    boxShadow: '0px 6px 14px rgba(0,0,0,0.35)',
+    elevation: 6,
   },
+  pressed: { transform: [{ scale: 0.94 }], opacity: 0.9 },
   empty: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyIcon: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: '#1E1E1E',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 18,
   },
   emptyTxt: {
     color: '#fff',
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '700',
+    textAlign: 'center',
   },
+  emptySub: { color: '#9A9A9A', fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 6 },
+  emptyBtn: {
+    marginTop: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 12,
+    paddingVertical: 11, paddingHorizontal: 24,
+  },
+  emptyBtnTxt: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  skeletonLine: { height: 12, borderRadius: 6, backgroundColor: '#262626' },
   stamp: {
     position: 'absolute',
     top: 40,
@@ -615,33 +690,24 @@ const ss = StyleSheet.create({
   },
   likeStamp: {
     left: 40,
-    borderColor: '#4CAF50',
+    borderColor: ACCENT,
     transform: [{ rotate: '-15deg' }],
   },
   likeStampTxt: {
-    color: '#4CAF50',
+    color: ACCENT,
     fontSize: 28,
     fontWeight: '900',
     letterSpacing: 2,
   },
   nopeStamp: {
     right: 40,
-    borderColor: '#FF3B30',
+    borderColor: '#FFF',
     transform: [{ rotate: '15deg' }],
   },
   nopeStampTxt: {
-    color: '#FF3B30',
+    color: '#FFF',
     fontSize: 28,
     fontWeight: '900',
     letterSpacing: 2,
   },
-  matchOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(255, 107, 43, 0.92)',
-    justifyContent: 'center', alignItems: 'center',
-    zIndex: 999,
-  },
-  matchEmoji: { fontSize: 64, marginBottom: 12 },
-  matchTitle: { color: '#fff', fontSize: 36, fontWeight: '900', letterSpacing: -1 },
-  matchSub: { color: 'rgba(255,255,255,0.85)', fontSize: 17, marginTop: 8, fontWeight: '500' },
 });

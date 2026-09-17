@@ -1,9 +1,11 @@
+const crypto = require('crypto');
 const db = require('../config/db');
 const { invalidateCache } = require('../middleware/cacheMiddleware');
 const logger = require('../config/logger');
 const { isOwnUploadUrl } = require('../utils/storage');
 const sharedCache = require('../utils/sharedCache');
 const feedDeck = require('../services/feedDeck');
+const { prepareReels, persistSyncedThumbnails } = require('../services/reelThumbnails');
 
 // ─── Helper: fetch full profile by userId + role (explicit columns) ──
 async function fetchProfile(userId, role) {
@@ -29,7 +31,7 @@ async function fetchProfile(userId, role) {
          p.age, p.gender, p.platforms, p.photos, p.reels,
          p.followers, p.engagement_rate, p.avg_views,
          p.price_min, p.price_max, p.verified, p.updated_at,
-         p.instagram_handle, p.instagram_synced_at,
+         p.instagram_handle, p.instagram_synced_at, p.worked_with, p.linkedin_reviews,
          u.email, u.role, u.created_at AS member_since
        FROM influencer_profiles p
        JOIN users u ON u.id = p.user_id
@@ -43,6 +45,57 @@ async function fetchProfile(userId, role) {
 // Fields only the owner may see. Exact coordinates would let anyone locate
 // a user's home, and emails would let the whole user base be scraped.
 const PRIVATE_PROFILE_FIELDS = ['email', 'lat', 'lng', 'instagram_synced_at'];
+
+const MAX_LINKEDIN_REVIEWS = 10;
+const LINKEDIN_HOST = /(^|\.)(linkedin\.com|lnkd\.in)$/i;
+
+// Validates the full replacement list of LinkedIn reviews. Returns the cleaned
+// list, or throws an error with status 400 describing the first problem.
+function cleanLinkedinReviews(reviews) {
+  const fail = (message) => Object.assign(new Error(message), { status: 400 });
+  if (!Array.isArray(reviews) || reviews.length > MAX_LINKEDIN_REVIEWS) {
+    throw fail(`linkedin_reviews must be a list of up to ${MAX_LINKEDIN_REVIEWS} reviews`);
+  }
+
+  const str = (v) => (typeof v === 'string' ? v.trim() : '');
+  const ids = new Set();
+
+  return reviews.map((r) => {
+    if (!r || typeof r !== 'object') throw fail('Each review must be an object');
+    const quote = str(r.quote);
+    const reviewerName = str(r.reviewer_name);
+    const reviewerTitle = str(r.reviewer_title);
+    const rawUrl = str(r.linkedin_url);
+
+    if (quote.length < 10 || quote.length > 600) throw fail('Review text must be 10 to 600 characters');
+    if (!reviewerName || reviewerName.length > 80) throw fail('Reviewer name is required (up to 80 characters)');
+    if (reviewerTitle.length > 100) throw fail('Reviewer role must be up to 100 characters');
+
+    let url;
+    try {
+      url = new URL(rawUrl);
+    } catch {
+      throw fail('Each review needs a valid LinkedIn link');
+    }
+    if (url.protocol !== 'https:' || !LINKEDIN_HOST.test(url.hostname)) {
+      throw fail('Review links must point to linkedin.com');
+    }
+
+    let id = str(r.id);
+    if (!/^[\w-]{1,40}$/.test(id) || ids.has(id)) id = crypto.randomUUID();
+    ids.add(id);
+
+    const addedAt = Date.parse(r.added_at);
+    return {
+      id,
+      quote,
+      reviewer_name: reviewerName,
+      reviewer_title: reviewerTitle || null,
+      linkedin_url: url.toString(),
+      added_at: Number.isNaN(addedAt) ? new Date().toISOString() : new Date(addedAt).toISOString(),
+    };
+  });
+}
 
 function toPublicProfile(profile) {
   const publicProfile = { ...profile };
@@ -122,8 +175,56 @@ async function updateMyProfile(req, res, next) {
       const {
         name, avatar_url, cover_url, bio, categories,
         location, lat, lng, age, gender, platforms, photos, reels,
-        price_min, price_max, instagram_handle
+        price_min, price_max, instagram_handle, worked_with, linkedin_reviews
       } = req.body;
+
+      let cleanReviews = null;
+      if (linkedin_reviews !== undefined && linkedin_reviews !== null) {
+        try {
+          cleanReviews = cleanLinkedinReviews(linkedin_reviews);
+        } catch (err) {
+          if (err.status === 400) return res.status(400).json({ error: err.message });
+          throw err;
+        }
+      }
+
+      let cleanPlatforms = null;
+      if (platforms !== undefined && platforms !== null) {
+        if (!Array.isArray(platforms) || platforms.length > 20 ||
+            platforms.some(p => typeof p !== 'string' || !p.trim() || p.length > 30)) {
+          return res.status(400).json({ error: 'platforms must be a list of up to 20 short names' });
+        }
+        cleanPlatforms = [...new Set(platforms.map(p => p.trim().toLowerCase()))];
+      }
+
+      let cleanWorkedWith = null;
+      if (worked_with !== undefined && worked_with !== null) {
+        if (!Array.isArray(worked_with) || worked_with.length > 30 ||
+            worked_with.some(c => typeof c !== 'string' || !c.trim() || c.length > 60)) {
+          return res.status(400).json({ error: 'worked_with must be a list of up to 30 company names' });
+        }
+        const seen = new Set();
+        cleanWorkedWith = worked_with.map(c => c.trim()).filter(c => {
+          const key = c.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
+      let preparedReels;
+      if (reels !== undefined) {
+        const { rows: [current] } = await db.query(
+          'SELECT reels FROM influencer_profiles WHERE user_id = $1',
+          [userId]
+        );
+        try {
+          preparedReels = await prepareReels(reels, current?.reels, userId);
+        } catch (err) {
+          if (err.status === 400) return res.status(400).json({ error: err.message });
+          throw err;
+        }
+      }
 
       await db.query(
         `UPDATE influencer_profiles SET
@@ -142,13 +243,17 @@ async function updateMyProfile(req, res, next) {
           reels           = COALESCE($13, reels),
           price_min       = COALESCE($14, price_min),
           price_max       = COALESCE($15, price_max),
-          instagram_handle = COALESCE($16, instagram_handle)
-        WHERE user_id = $17`,
+          instagram_handle = COALESCE($16, instagram_handle),
+          worked_with     = COALESCE($17, worked_with),
+          linkedin_reviews = COALESCE($18::jsonb, linkedin_reviews)
+        WHERE user_id = $19`,
         [name, avatar_url, cover_url, bio, categories,
-         location, lat, lng, age, gender, platforms, photos,
-         reels !== undefined ? JSON.stringify(reels) : null,
+         location, lat, lng, age, gender, cleanPlatforms, photos,
+         preparedReels !== undefined ? JSON.stringify(preparedReels) : null,
          price_min, price_max,
          instagram_handle,
+         cleanWorkedWith,
+         cleanReviews ? JSON.stringify(cleanReviews) : null,
          userId]
       );
     }
@@ -294,6 +399,8 @@ async function syncInstagram(req, res, next) {
       });
     }
 
+    const reels = await persistSyncedThumbnails(result.reels, userId);
+
     // ── Update the influencer profile ────────────────────────────
     await db.query(
       `UPDATE influencer_profiles SET
@@ -304,7 +411,7 @@ async function syncInstagram(req, res, next) {
         instagram_synced_at = NOW(),
         reels              = $6
       WHERE user_id = $5`,
-      [result.followers, result.engagement_rate, result.avg_views, instagram_handle, userId, JSON.stringify(result.reels)]
+      [result.followers, result.engagement_rate, result.avg_views, instagram_handle, userId, JSON.stringify(reels)]
     );
 
     // Invalidate cached profile

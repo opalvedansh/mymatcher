@@ -16,20 +16,24 @@ import {
   Modal,
   TextInput,
   Linking,
-  Alert
+
+  AccessibilityInfo,
 } from 'react-native';
-import { Ionicons, FontAwesome, MaterialIcons, Feather, MaterialCommunityIcons, FontAwesome6 } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather, MaterialCommunityIcons, FontAwesome6 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
-import { getMyProfile, updateMyProfile, getProfileById, syncInstagram } from '@/api';
+import { getMyProfile, updateMyProfile, getProfileById, syncInstagram, uploadImage } from '@/api';
+import { ApiError } from '@/api/client';
 import { openAccountMenu, openSafetyMenu } from '@/components/safetyMenu';
+import { showAlert } from '@/components/ActionSheet';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/supabase';
 import type { InfluencerProfile } from '@/api/types';
 import { StoryPackageIcon, UgcPackageIcon, BrandPackageIcon, ReelPackageIcon } from '@/components/PackageIcons';
 import { VerificationModal } from './VerificationModal';
+import { LinkedinReviews } from './LinkedinReviews';
+import type { LinkedinReview } from '@/api/types';
 import { TouchableOpacity } from 'react-native';
 
 // ──────────────────────── Line Chart ────────────────────────
@@ -192,8 +196,63 @@ const chartSt = StyleSheet.create({
 
 type Tab = 'overview' | 'engagement' | 'audience';
 
+// Brands offered in the Worked With picker. `icon` is a FontAwesome6 brand
+// glyph; brands without one show their initials on the brand colour.
+const COMPANY_CATALOG: { name: string, icon?: string, bg: string, fg?: string }[] = [
+  { name: 'Nike', bg: '#111111' },
+  { name: 'Adidas', bg: '#000000' },
+  { name: 'Puma', bg: '#1A1A1A' },
+  { name: 'Apple', icon: 'apple', bg: '#000000' },
+  { name: 'Samsung', bg: '#1428A0' },
+  { name: 'Google', icon: 'google', bg: '#4285F4' },
+  { name: 'Amazon', icon: 'amazon', bg: '#FF9900' },
+  { name: 'Microsoft', icon: 'microsoft', bg: '#00A4EF' },
+  { name: 'Meta', icon: 'meta', bg: '#0866FF' },
+  { name: 'Flipkart', bg: '#2874F0' },
+  { name: 'Myntra', bg: '#FF3F6C' },
+  { name: 'Nykaa', bg: '#FC2779' },
+  { name: 'Mamaearth', bg: '#00AEEF' },
+  { name: 'boAt', bg: '#E4002B' },
+  { name: 'Zomato', bg: '#E23744' },
+  { name: 'Swiggy', bg: '#FC8019' },
+  { name: 'Netflix', bg: '#E50914' },
+  { name: 'Spotify', icon: 'spotify', bg: '#1DB954' },
+  { name: 'Coca-Cola', bg: '#F40009' },
+  { name: 'Pepsi', bg: '#004B93' },
+  { name: 'Red Bull', bg: '#DB0A40' },
+  { name: 'Uber', icon: 'uber', bg: '#000000' },
+  { name: 'Airbnb', icon: 'airbnb', bg: '#FF5A5F' },
+  { name: 'Shopify', icon: 'shopify', bg: '#96BF48' },
+  { name: 'PlayStation', icon: 'playstation', bg: '#003791' },
+  { name: 'PayPal', icon: 'paypal', bg: '#003087' },
+  { name: 'Zara', bg: '#000000' },
+  { name: 'H&M', bg: '#E50010' },
+  { name: 'OnePlus', bg: '#EB0028' },
+  { name: 'Sugar Cosmetics', bg: '#000000' },
+];
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Matches a catalog brand when its name appears as a whole word ("Apple India"),
+// so short names like "Meta" don't light up on unrelated companies.
+function findCatalogCompany(company: string) {
+  const lower = company.trim().toLowerCase();
+  return COMPANY_CATALOG.find(c => c.name.toLowerCase() === lower)
+    || COMPANY_CATALOG.find(c => new RegExp(`(^|\\s)${escapeRegExp(c.name.toLowerCase())}(\\s|$)`).test(lower));
+}
+
+function companyLogo(company: string): { bg: string, icon: React.ReactNode } {
+  const known = findCatalogCompany(company);
+  const fg = known?.fg || '#FFF';
+  if (known?.icon) return { bg: known.bg, icon: <FontAwesome6 name={known.icon as any} size={14} color={fg} /> };
+  return {
+    bg: known?.bg || '#FF6B2B',
+    icon: <Text style={{ color: fg, fontSize: 10, fontWeight: '700' }}>{company.trim().substring(0, 2).toUpperCase()}</Text>,
+  };
+}
+
 export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId?: string, onBack?: () => void }) {
-  const { signOut, deleteAccount } = useAuth();
+  const { user, signOut, deleteAccount } = useAuth();
   const { width, height } = useWindowDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -212,12 +271,31 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
   const [isVerificationModalVisible, setIsVerificationModalVisible] = useState(false);
   const [isEditWorkedWithVisible, setIsEditWorkedWithVisible] = useState(false);
   const [newWorkedWith, setNewWorkedWith] = useState('');
+  const [draftWorkedWith, setDraftWorkedWith] = useState<string[]>([]);
+  const [isSavingWorkedWith, setIsSavingWorkedWith] = useState(false);
+  const [isEditPlatformsVisible, setIsEditPlatformsVisible] = useState(false);
+  const [draftPlatforms, setDraftPlatforms] = useState<string[]>([]);
+  const [isSavingPlatforms, setIsSavingPlatforms] = useState(false);
   const [newReelUrl, setNewReelUrl] = useState('');
   // We use activeProfile?.reels, but keep a local state if optimistic UI is desired, 
   // or just depend on activeProfile.reels directly. Let's use activeProfile for consistency.
   const reels = activeProfile?.reels || [];
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => sub.remove();
+  }, []);
+
+  const retryLoad = () => {
+    setError(null);
+    setLoading(true);
+    setReloadKey(k => k + 1);
+  };
 
   useEffect(() => {
     async function loadProfile() {
@@ -262,20 +340,42 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
       }
     }
     loadProfile();
-  }, []);
+  }, [reloadKey]);
 
   if (loading) {
+    // Skeleton in the shape of the loaded page: photo header, avatar, name, stats.
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#FF6B2B" />
+      <View style={styles.container} accessibilityLabel="Loading profile">
+        <View style={{ height: height * 0.7, backgroundColor: '#1A1A1A' }} />
+        <View style={[styles.mainContentContainer, { alignItems: 'center' }]}>
+          <View style={[styles.avatarContainer, { backgroundColor: '#222' }]} />
+          <View style={[styles.skeletonLine, { width: 160, height: 20 }]} />
+          <View style={[styles.skeletonLine, { width: 110 }]} />
+          <View style={[styles.skeletonLine, { width: 220, marginBottom: 32 }]} />
+          <View style={[styles.skeletonLine, { alignSelf: 'stretch', height: 56 }]} />
+        </View>
       </View>
     );
   }
 
   if (error || !activeProfile) {
     return (
-      <View style={styles.center}>
-        <Text style={{ color: 'red' }}>{error || 'No profile found'}</Text>
+      <View style={[styles.center, { paddingHorizontal: 32 }]}>
+        <Ionicons name="cloud-offline-outline" size={32} color="#9A9A9A" />
+        <Text style={styles.errorTitle}>Couldn't load this profile</Text>
+        <Text style={styles.errorBody}>{error || 'No profile found'}</Text>
+        <Pressable
+          onPress={retryLoad}
+          style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.retryButtonText}>Try again</Text>
+        </Pressable>
+        {onBack && (
+          <Pressable onPress={onBack} style={{ marginTop: 16, padding: 8 }} accessibilityRole="button">
+            <Text style={{ color: '#9A9A9A', fontSize: 14 }}>Go back</Text>
+          </Pressable>
+        )}
       </View>
     );
   }
@@ -286,14 +386,15 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
     return true;
   };
 
-  const coverImage = isValidUrl(activeProfile.cover_url) ? (activeProfile.cover_url as string) : 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=800&q=80';
-  const avatarImage = isValidUrl(activeProfile.avatar_url) ? (activeProfile.avatar_url as string) : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80';
-  
+  // No stock-photo fallbacks: until the user uploads their own images, show placeholders.
+  const coverImage = isValidUrl(activeProfile.cover_url) ? (activeProfile.cover_url as string) : null;
+  const avatarImage = isValidUrl(activeProfile.avatar_url) ? (activeProfile.avatar_url as string) : null;
+
   // Combine all photos for the carousel and filter out invalid blob urls
   const validPhotos = activeProfile.photos ? activeProfile.photos.filter(isValidUrl) : [];
-  const photos = validPhotos.length > 0 
-    ? validPhotos 
-    : [avatarImage, coverImage]; // fallback to avatar/cover if no valid array exists
+  const photos = validPhotos.length > 0
+    ? validPhotos
+    : [avatarImage, coverImage].filter((uri): uri is string => !!uri);
 
 
   const handleAddReel = async () => {
@@ -302,7 +403,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
     
     // Create a new reel object from the URL
     const newId = Math.random().toString(36).substring(7);
-    const newReel = { id: newId, url: newReelUrl, views: '0' };
+    const newReel = { id: newId, url: newReelUrl.trim(), views: '0' };
     const updatedReels = [newReel, ...reels];
 
     try {
@@ -310,14 +411,15 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
       setActiveProfile({ ...activeProfile, reels: updatedReels });
       setIsAddReelVisible(false);
       setNewReelUrl('');
-      
-      // Save to backend
-      await updateMyProfile({ reels: updatedReels });
+
+      // The server fetches the thumbnail, so take its copy of the reels.
+      const saved = await updateMyProfile({ reels: updatedReels }) as InfluencerProfile;
+      setActiveProfile(prev => prev ? { ...prev, reels: saved.reels } : prev);
     } catch (err) {
       console.error('Failed to save reel:', err);
       // Revert on failure
       setActiveProfile({ ...activeProfile, reels });
-      Alert.alert('Save failed', 'Could not save reel. Restoring previous state.');
+      showAlert('Save failed', err instanceof ApiError && err.status === 400 ? err.message : 'Could not save reel. Restoring previous state.');
     }
   };
 
@@ -339,40 +441,76 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
       // We don't await this so it happens in the background, which will trigger the polling UI
       syncInstagram(cleanHandle);
     } catch (e: any) {
-      Alert.alert('Update failed', e.message || 'Could not update Instagram handle.');
+      showAlert('Update failed', e.message || 'Could not update Instagram handle.');
     } finally {
       setIsUpdatingInstagram(false);
     }
   };
 
-  const handleAddWorkedWith = async () => {
-    if (!newWorkedWith.trim()) return;
+  const openEditWorkedWith = () => {
+    setDraftWorkedWith(activeProfile?.worked_with || []);
+    setNewWorkedWith('');
+    setIsEditWorkedWithVisible(true);
+  };
+
+  const toggleDraftCompany = (company: string) => {
+    const key = company.toLowerCase();
+    setDraftWorkedWith(prev => prev.some(c => c.toLowerCase() === key)
+      ? prev.filter(c => c.toLowerCase() !== key)
+      : [...prev, company]);
+  };
+
+  const handleAddCustomCompany = () => {
     const added = newWorkedWith.trim();
-    const currentList = activeProfile?.worked_with || [];
-    if (currentList.includes(added)) {
-      setNewWorkedWith('');
-      return;
-    }
-    const newList = [...currentList, added];
+    if (!added) return;
+    // Use the catalog spelling when the typed name is a known brand.
+    const name = COMPANY_CATALOG.find(c => c.name.toLowerCase() === added.toLowerCase())?.name || added;
+    setDraftWorkedWith(prev => prev.some(c => c.toLowerCase() === name.toLowerCase()) ? prev : [...prev, name]);
+    setNewWorkedWith('');
+  };
+
+  const handleSaveWorkedWith = async () => {
+    const previous = activeProfile?.worked_with || [];
     try {
-      setActiveProfile(prev => prev ? { ...prev, worked_with: newList } : prev);
-      await updateMyProfile({ worked_with: newList });
-      setNewWorkedWith('');
+      setIsSavingWorkedWith(true);
+      setActiveProfile(prev => prev ? { ...prev, worked_with: draftWorkedWith } : prev);
+      await updateMyProfile({ worked_with: draftWorkedWith });
+      setIsEditWorkedWithVisible(false);
     } catch (e) {
-      Alert.alert('Error', 'Could not update worked with list');
-      setActiveProfile(prev => prev ? { ...prev, worked_with: currentList } : prev);
+      setActiveProfile(prev => prev ? { ...prev, worked_with: previous } : prev);
+      showAlert('Error', 'Could not update your Worked With list');
+    } finally {
+      setIsSavingWorkedWith(false);
     }
   };
 
-  const handleRemoveWorkedWith = async (company: string) => {
-    const currentList = activeProfile?.worked_with || [];
-    const newList = currentList.filter(c => c !== company);
+  // Throws on failure so the review form can show the error inline.
+  const handleSaveLinkedinReviews = async (next: LinkedinReview[]) => {
+    const saved = await updateMyProfile({ linkedin_reviews: next }) as InfluencerProfile;
+    setActiveProfile(prev => prev ? { ...prev, linkedin_reviews: saved.linkedin_reviews ?? next } : prev);
+  };
+
+  const openEditPlatforms = () => {
+    setDraftPlatforms((activeProfile?.platforms || []).map(p => p.toLowerCase()));
+    setIsEditPlatformsVisible(true);
+  };
+
+  const toggleDraftPlatform = (key: string) => {
+    setDraftPlatforms(prev => prev.includes(key) ? prev.filter(p => p !== key) : [...prev, key]);
+  };
+
+  const handleSavePlatforms = async () => {
+    const previous = activeProfile?.platforms || [];
     try {
-      setActiveProfile(prev => prev ? { ...prev, worked_with: newList } : prev);
-      await updateMyProfile({ worked_with: newList });
+      setIsSavingPlatforms(true);
+      setActiveProfile(prev => prev ? { ...prev, platforms: draftPlatforms } : prev);
+      await updateMyProfile({ platforms: draftPlatforms });
+      setIsEditPlatformsVisible(false);
     } catch (e) {
-      Alert.alert('Error', 'Could not update worked with list');
-      setActiveProfile(prev => prev ? { ...prev, worked_with: currentList } : prev);
+      setActiveProfile(prev => prev ? { ...prev, platforms: previous } : prev);
+      showAlert('Error', 'Could not update your platforms');
+    } finally {
+      setIsSavingPlatforms(false);
     }
   };
 
@@ -386,39 +524,30 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
+      const previousAvatar = activeProfile?.avatar_url;
       try {
         const uri = result.assets[0].uri;
         setActiveProfile(prev => prev ? { ...prev, avatar_url: uri } : prev);
-        
-        const fileExt = uri.split('.').pop() || 'jpeg';
-        const fileName = `${Date.now()}.${fileExt}`;
-        
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        
-        const { data, error } = await supabase.storage
-          .from('avatars')
-          .upload(fileName, blob);
-          
-        if (error) throw error;
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(fileName);
-          
+
+        // Upload through /api/upload: face verification only accepts
+        // photos stored under the user's own uploads folder.
+        const publicUrl = await uploadImage(uri);
         await updateMyProfile({ avatar_url: publicUrl });
+        setActiveProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : prev);
       } catch (e) {
-        Alert.alert('Update failed', 'Could not upload image. Reverted changes.');
+        setActiveProfile(prev => prev ? { ...prev, avatar_url: previousAvatar } : prev);
+        showAlert('Update failed', 'Could not upload image. Reverted changes.');
       }
     }
   };
 
 
 
-  const name = activeProfile.name || 'Your Profile';
-  const niche = (activeProfile.categories || []).join(' · ') || 'Creator';
-  const location = activeProfile.location || 'Location not set';
-  const bio = activeProfile.bio || 'Add a bio to let brands know about you...';
+  // Placeholder prompts are for the owner only; brands viewing the profile see nothing instead.
+  const name = activeProfile.name || (publicUserId ? 'Creator' : 'Your Profile');
+  const niche = (activeProfile.categories || []).join(', ') || 'Creator';
+  const location = activeProfile.location || (publicUserId ? null : 'Add your location');
+  const bio = activeProfile.bio || (publicUserId ? null : 'Add a bio so brands know what you make.');
 
   const followersStr = activeProfile.followers >= 1_000_000 
     ? `${(activeProfile.followers / 1_000_000).toFixed(1)}M` 
@@ -430,44 +559,55 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
 
   const engagementStr = activeProfile.engagement_rate ? `${activeProfile.engagement_rate}%` : '0%';
 
-  const PLATFORMS_DB: Record<string, { bg: string, icon: React.ReactNode }> = {
-    instagram: { bg: '#E1306C', icon: <FontAwesome6 name="instagram" size={16} color="#FFF" /> },
-    youtube: { bg: '#FF0000', icon: <FontAwesome6 name="youtube" size={16} color="#FFF" /> },
-    tiktok: { bg: '#000000', icon: <FontAwesome6 name="tiktok" size={16} color="#FFF" /> },
-    x: { bg: '#000000', icon: <FontAwesome6 name="x-twitter" size={16} color="#FFF" /> },
-    twitter: { bg: '#1DA1F2', icon: <FontAwesome6 name="twitter" size={16} color="#FFF" /> },
-    reddit: { bg: '#FF4500', icon: <FontAwesome6 name="reddit-alien" size={16} color="#FFF" /> },
-    pinterest: { bg: '#E60023', icon: <FontAwesome6 name="pinterest" size={16} color="#FFF" /> },
-    facebook: { bg: '#1877F2', icon: <FontAwesome6 name="facebook-f" size={16} color="#FFF" /> },
-    linkedin: { bg: '#0A66C2', icon: <FontAwesome6 name="linkedin-in" size={16} color="#FFF" /> },
-    snapchat: { bg: '#FFFC00', icon: <FontAwesome6 name="snapchat" size={16} color="#000" /> },
-    threads: { bg: '#000000', icon: <FontAwesome6 name="threads" size={16} color="#FFF" /> },
-    spotify: { bg: '#1DB954', icon: <FontAwesome6 name="spotify" size={16} color="#FFF" /> },
-    twitch: { bg: '#9146FF', icon: <FontAwesome6 name="twitch" size={16} color="#FFF" /> },
-    discord: { bg: '#5865F2', icon: <FontAwesome6 name="discord" size={16} color="#FFF" /> },
-    behance: { bg: '#1769FF', icon: <FontAwesome6 name="behance" size={16} color="#FFF" /> },
-    dribbble: { bg: '#EA4C89', icon: <FontAwesome6 name="dribbble" size={16} color="#FFF" /> },
+  const PLATFORMS_DB: Record<string, { label: string, bg: string, icon: React.ReactNode }> = {
+    instagram: { label: 'Instagram', bg: '#E1306C', icon: <FontAwesome6 name="instagram" size={16} color="#FFF" /> },
+    youtube: { label: 'YouTube', bg: '#FF0000', icon: <FontAwesome6 name="youtube" size={16} color="#FFF" /> },
+    tiktok: { label: 'TikTok', bg: '#000000', icon: <FontAwesome6 name="tiktok" size={16} color="#FFF" /> },
+    x: { label: 'X', bg: '#000000', icon: <FontAwesome6 name="x-twitter" size={16} color="#FFF" /> },
+    twitter: { label: 'Twitter', bg: '#1DA1F2', icon: <FontAwesome6 name="twitter" size={16} color="#FFF" /> },
+    reddit: { label: 'Reddit', bg: '#FF6B2B', icon: <FontAwesome6 name="reddit-alien" size={16} color="#FFF" /> },
+    pinterest: { label: 'Pinterest', bg: '#E60023', icon: <FontAwesome6 name="pinterest" size={16} color="#FFF" /> },
+    facebook: { label: 'Facebook', bg: '#1877F2', icon: <FontAwesome6 name="facebook-f" size={16} color="#FFF" /> },
+    linkedin: { label: 'LinkedIn', bg: '#0A66C2', icon: <FontAwesome6 name="linkedin-in" size={16} color="#FFF" /> },
+    snapchat: { label: 'Snapchat', bg: '#FFFC00', icon: <FontAwesome6 name="snapchat" size={16} color="#000" /> },
+    threads: { label: 'Threads', bg: '#000000', icon: <FontAwesome6 name="threads" size={16} color="#FFF" /> },
+    spotify: { label: 'Spotify', bg: '#1DB954', icon: <FontAwesome6 name="spotify" size={16} color="#FFF" /> },
+    twitch: { label: 'Twitch', bg: '#9146FF', icon: <FontAwesome6 name="twitch" size={16} color="#FFF" /> },
+    discord: { label: 'Discord', bg: '#5865F2', icon: <FontAwesome6 name="discord" size={16} color="#FFF" /> },
+    behance: { label: 'Behance', bg: '#1769FF', icon: <FontAwesome6 name="behance" size={16} color="#FFF" /> },
+    dribbble: { label: 'Dribbble', bg: '#EA4C89', icon: <FontAwesome6 name="dribbble" size={16} color="#FFF" /> },
   };
 
-  const demoPlatforms = activeProfile.platforms?.length > 0 ? activeProfile.platforms : ['reddit', 'pinterest', 'youtube', 'facebook', 'instagram'];
-  const platformsList = demoPlatforms.map(p => {
+  const platformsList = (activeProfile.platforms || []).map(p => {
     const matchedKey = Object.keys(PLATFORMS_DB).find(k => k.toLowerCase() === p.toLowerCase());
     return {
       name: p,
-      ...(matchedKey ? PLATFORMS_DB[matchedKey] : { bg: '#FF6B2B', icon: <FontAwesome6 name="star" size={16} color="#FFF" /> })
+      ...(matchedKey ? PLATFORMS_DB[matchedKey] : { label: p, bg: '#FF6B2B', icon: <FontAwesome6 name="star" size={16} color="#FFF" /> })
     };
   });
+  const workedWith = activeProfile.worked_with || [];
+
+  // Catalog brands first, then any custom companies the user has saved or just added.
+  const companyOptions = [
+    ...COMPANY_CATALOG.map(c => c.name),
+    ...[...workedWith, ...draftWorkedWith].filter((c, i, all) =>
+      !COMPANY_CATALOG.some(k => k.name.toLowerCase() === c.toLowerCase())
+      && all.findIndex(o => o.toLowerCase() === c.toLowerCase()) === i),
+  ];
+
+  // `twitter` stays in PLATFORMS_DB so older profiles still render, but new picks use X.
+  const pickablePlatforms = Object.keys(PLATFORMS_DB).filter(k => k !== 'twitter');
 
   const packages = [
-    { type: 'story', name: 'Story Package', desc: '1 Instagram Story . 24hr visibility', price: '1000' },
-    { type: 'reel', name: 'Reel Package', desc: '1 Reel (30-60 sec) . Edited & tagged', price: '8000' },
-    { type: 'ugc', name: 'UGC Package', desc: '1 UGC Video . Raw + Edited', price: '12000' },
-    { type: 'brand', name: 'Brand Patnership', desc: 'As per your demand + collaboration', price: '20000' },
+    { type: 'story', name: 'Story Package', desc: '1 Instagram Story · 24hr visibility', price: '1000' },
+    { type: 'reel', name: 'Reel Package', desc: '1 Reel (30-60 sec) · Edited & tagged', price: '8000' },
+    { type: 'ugc', name: 'UGC Package', desc: '1 UGC Video · Raw + Edited', price: '12000' },
+    { type: 'brand', name: 'Brand Partnership', desc: 'Custom scope, agreed with the brand', price: '20000' },
   ];
 
   const headerTranslateY = scrollY.interpolate({
     inputRange: [0, height],
-    outputRange: [0, height * 0.5],
+    outputRange: [0, reduceMotion ? 0 : height * 0.5],
     extrapolate: 'clamp',
   });
 
@@ -492,9 +632,11 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                   target: { type: 'user', id: publicUserId },
                   onBlocked: onBack,
                 })
-              : openAccountMenu({ signOut, deleteAccount })
+              : openAccountMenu({ signOut, deleteAccount, email: user?.email })
           }
-          style={{ padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}
+          accessibilityRole="button"
+          hitSlop={8}
+          style={({ pressed }) => [{ width: 40, height: 40, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }, pressed && styles.pressed]}
         >
           <Ionicons name={publicUserId ? 'ellipsis-horizontal' : 'settings-outline'} size={20} color="#FFF" />
         </Pressable>
@@ -523,6 +665,14 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             }}
             style={StyleSheet.absoluteFill}
           >
+            {photos.length === 0 && (
+              <View style={{ width, height: height * 0.7, backgroundColor: '#1A1A1A', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="images-outline" size={36} color="#555" />
+                <Text style={{ color: '#9A9A9A', fontSize: 13, marginTop: 8 }}>
+                  {publicUserId ? 'No photos yet' : 'Tap your avatar below to add a photo'}
+                </Text>
+              </View>
+            )}
             {photos.map((photoUri, idx) => (
               <Image 
                 key={idx}
@@ -539,7 +689,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           />
           {/* Progress Bars */}
           <View style={[styles.progressContainer, { pointerEvents: 'none', position: 'absolute', left: 16, right: 16 }]}>
-            {photos.map((_, i) => (
+            {photos.length > 1 && photos.map((_, i) => (
               <View key={i} style={[styles.progressBar, i <= currentPhotoIndex ? styles.progressBarActive : {}]} />
             ))}
           </View>
@@ -550,10 +700,16 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         
         {/* ── Avatar Image (Overlapping) ── */}
         <Pressable style={styles.avatarContainer} onPress={handlePickImage}>
-          <Image 
-            source={{ uri: avatarImage }} 
-            style={styles.avatar} 
-          />
+          {avatarImage ? (
+            <Image
+              source={{ uri: avatarImage }}
+              style={styles.avatar}
+            />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Ionicons name="person" size={40} color="#777" />
+            </View>
+          )}
           {!publicUserId && (
             <View style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: '#FF6B2B', borderRadius: 14, width: 28, height: 28, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.3, shadowRadius: 3 }}>
               <Ionicons name="camera" size={14} color="#FFF" />
@@ -605,24 +761,28 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
 
           <Text style={styles.niche}>{niche}</Text>
 
-          <View style={styles.locationRow}>
-            <Ionicons name="location-sharp" size={14} color="#FFF" />
-            <Text style={styles.locationText}>{location}</Text>
-          </View>
+          {location && (
+            <View style={styles.locationRow}>
+              <Ionicons name="location-sharp" size={13} color="#9A9A9A" />
+              <Text style={styles.locationText}>{location}</Text>
+            </View>
+          )}
 
-          <Text style={styles.bio}>{bio}</Text>
+          {bio && <Text style={styles.bio}>{bio}</Text>}
         </View>
 
         {/* ── Stats Row ── */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statVal}>{followersStr}</Text>
-            <Text style={styles.statLbl}>followers</Text>
+            <Text style={styles.statLbl}>Followers</Text>
           </View>
+          <View style={styles.statDivider} />
           <View style={styles.statBox}>
             <Text style={styles.statVal}>{engagementStr}</Text>
             <Text style={styles.statLbl}>Engagement</Text>
           </View>
+          <View style={styles.statDivider} />
           <View style={styles.statBox}>
             <Text style={styles.statVal}>{viewsStr}</Text>
             <Text style={styles.statLbl}>Avg Views</Text>
@@ -638,71 +798,76 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         )}
 
         {/* ── Worked With ── */}
-        {(((activeProfile?.worked_with?.length) || 0) > 0 || !publicUserId) && (
+        {(workedWith.length > 0 || !publicUserId) && (
           <View style={styles.sectionCentered}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
               <Text style={[styles.smallSubtitleCentered, { marginBottom: 0 }]}>Worked With</Text>
               {!publicUserId && (
-                <TouchableOpacity onPress={() => setIsEditWorkedWithVisible(true)} style={{ marginLeft: 8 }}>
+                <TouchableOpacity onPress={openEditWorkedWith} style={{ marginLeft: 8 }} accessibilityLabel="Edit worked with">
                   <Ionicons name="pencil" size={14} color="#888" />
                 </TouchableOpacity>
               )}
             </View>
-            <View style={styles.logosContainer}>
-              {activeProfile?.worked_with?.map((company, index) => {
-                const lower = company.toLowerCase();
-                let iconName = null;
-                if (lower.includes('apple')) iconName = 'logo-apple';
-                else if (lower.includes('google')) iconName = 'logo-google';
-                else if (lower.includes('amazon')) iconName = 'logo-amazon';
-                else if (lower.includes('microsoft')) iconName = 'logo-microsoft';
-                else if (lower.includes('facebook')) iconName = 'logo-facebook';
-                else if (lower.includes('instagram')) iconName = 'logo-instagram';
-                else if (lower.includes('twitter') || lower === 'x') iconName = 'logo-twitter';
-                else if (lower.includes('tiktok')) iconName = 'logo-tiktok';
-                else if (lower.includes('youtube')) iconName = 'logo-youtube';
-                
-                return (
-                  <View key={index} style={styles.dummyLogo}>
-                    {iconName ? (
-                      <Ionicons name={iconName as any} size={24} color="#000" />
-                    ) : (
-                      <Text style={{ color: '#000', fontSize: 12, fontWeight: 'bold' }}>{company.substring(0, 2).toUpperCase()}</Text>
-                    )}
-                  </View>
-                );
-              })}
-              {(!activeProfile?.worked_with || activeProfile.worked_with.length === 0) && !publicUserId && (
-                <Text style={{ color: '#888', fontSize: 13, marginTop: 8 }}>Add companies you've worked with</Text>
-              )}
-            </View>
+            {workedWith.length > 0 ? (
+              <View style={styles.platformRow}>
+                {workedWith.map((company) => {
+                  const logo = companyLogo(company);
+                  return (
+                    <View key={company} style={[styles.platformCircle, { backgroundColor: logo.bg }]} accessibilityLabel={company}>
+                      {logo.icon}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <TouchableOpacity onPress={openEditWorkedWith}>
+                <Text style={{ color: '#888', fontSize: 13 }}>Add companies you've worked with</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
         {/* ── Available On ── */}
-        {platformsList.length > 0 && (
+        {(platformsList.length > 0 || !publicUserId) && (
           <View style={styles.sectionCentered}>
-            <Text style={styles.smallSubtitleCentered}>Available on</Text>
-            <View style={styles.platformRow}>
-              {platformsList.map((p) => (
-                <View key={p.name} style={[styles.platformCircle, { backgroundColor: p.bg }]}>
-                  {p.icon}
-                </View>
-              ))}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <Text style={[styles.smallSubtitleCentered, { marginBottom: 0 }]}>Available on</Text>
+              {!publicUserId && (
+                <TouchableOpacity onPress={openEditPlatforms} style={{ marginLeft: 8 }} accessibilityLabel="Edit platforms">
+                  <Ionicons name="pencil" size={14} color="#888" />
+                </TouchableOpacity>
+              )}
             </View>
+            {platformsList.length > 0 ? (
+              <View style={styles.platformRow}>
+                {platformsList.map((p) => (
+                  <View key={p.name} style={[styles.platformCircle, { backgroundColor: p.bg }]} accessibilityLabel={p.label}>
+                    {p.icon}
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <TouchableOpacity onPress={openEditPlatforms}>
+                <Text style={{ color: '#888', fontSize: 13 }}>Add the platforms you create on</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
-        {/* ── Top Reels (Dummy) ── */}
+        {/* ── Top Reels ── */}
+        {(reels.length > 0 || !publicUserId) && (
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.smallSubtitle}>Top Reels</Text>
-            <Text style={styles.seeAllText}>See all</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
              {/* Add Reel Button */}
             {!publicUserId && (
-              <Pressable style={styles.addReelCard} onPress={() => setIsAddReelVisible(true)}>
+              <Pressable
+                style={({ pressed }) => [styles.addReelCard, pressed && styles.pressed]}
+                onPress={() => setIsAddReelVisible(true)}
+                accessibilityRole="button"
+              >
                 <View style={styles.addReelIconBg}>
                   <Ionicons name="add" size={32} color="#888" />
                 </View>
@@ -740,6 +905,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
              ))}
           </ScrollView>
         </View>
+        )}
 
         {/* ── Tabs ── */}
         <View style={styles.tabRow}>
@@ -778,7 +944,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             </View>
 
             <View style={{ marginTop: 24, marginBottom: 24 }}>
-              <Text style={styles.bigSectionTitle}>What affecting their views</Text>
+              <Text style={styles.bigSectionTitle}>What affects their views</Text>
               <Text style={styles.sectionSubtitle}>Rates are listed in order of importance to reach</Text>
               <View style={styles.ratesList}>
                 {[
@@ -936,7 +1102,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 </View>
                 <Text style={styles.premiumTitle}>Unlock Analytics</Text>
                 <Text style={styles.premiumSubtitle}>
-                  Activate Matcherc Premium to see advanced insights and analytics for this profile.
+                  Activate Matchr Premium to see advanced insights and analytics for this profile.
                 </Text>
                 <Pressable style={styles.premiumBtn}>
                   <Text style={styles.premiumBtnText}>Activate Premium</Text>
@@ -948,12 +1114,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
 
         {/* ── Rates (Packages) ── */}
         <View style={[styles.section, { paddingTop: 20 }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <Text style={styles.packagesTitle}>Packages</Text>
-            <View style={styles.inrPill}>
-              <Text style={styles.inrText}>INR</Text>
-            </View>
-          </View>
+          <Text style={[styles.packagesTitle, { marginBottom: 20 }]}>Packages</Text>
           <View style={styles.packagesContainer}>
             {packages.map((pkg, idx) => (
               <View key={idx} style={styles.packageCard}>
@@ -975,7 +1136,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                   <Text style={styles.packageName}>{pkg.name}</Text>
                   <Text style={styles.packageDesc}>{pkg.desc}</Text>
                 </View>
-                <Text style={styles.packagePriceLabel}>{pkg.price}</Text>
+                <Text style={styles.packagePriceLabel}>₹{pkg.price.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</Text>
               </View>
             ))}
 
@@ -997,37 +1158,19 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           </View>
         </View>
 
-        {/* ── Testimonial ── */}
-        <View style={styles.testimonialCard}>
-          <View style={styles.linkedinRow}>
-            <Text style={styles.linkedinText}>Linked</Text>
-            <View style={styles.linkedinIconBg}>
-              <FontAwesome name="linkedin" size={14} color="#FFF" style={{padding: 2, paddingHorizontal: 4}} />
-            </View>
-          </View>
-          
-          <Text style={styles.testimonialQuote}>
-            It works really wonders in the hybrid culture. No echo and seamless integration with the current workflow. Love this application.
-          </Text>
-          
-          <View style={styles.reviewerRow}>
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=150&q=80' }} style={styles.reviewerAvatar} />
-            <View style={styles.reviewerInfo}>
-              <Text style={styles.reviewerName}>Beth Wilson</Text>
-              <Text style={styles.reviewerTitle}>Product Manager at LinkedIn</Text>
-            </View>
-            <View style={styles.reviewerStars}>
-              <FontAwesome name="star" size={16} color="#FF4500" />
-              <FontAwesome name="star" size={16} color="#FF4500" />
-              <FontAwesome name="star" size={16} color="#FF4500" />
-              <FontAwesome name="star" size={16} color="#FF4500" />
-              <FontAwesome name="star" size={16} color="#CCC" />
-            </View>
-          </View>
-        </View>
+        {/* ── LinkedIn Reviews ── */}
+        <LinkedinReviews
+          reviews={activeProfile.linkedin_reviews || []}
+          editable={!publicUserId}
+          ownerName={activeProfile.name || ''}
+          onSave={handleSaveLinkedinReviews}
+        />
 
         {/* ── Chat Button ── */}
-        <Pressable style={styles.chatButton}>
+        <Pressable
+          style={({ pressed }) => [styles.chatButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
           <Text style={styles.chatButtonText}>Chat</Text>
         </Pressable>
 
@@ -1058,8 +1201,8 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
             />
-            <Pressable 
-              style={[styles.modalButton, isUpdatingInstagram && { opacity: 0.5 }]} 
+            <Pressable
+              style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, isUpdatingInstagram && { opacity: 0.5 }]}
               onPress={() => { Keyboard.dismiss(); handleUpdateInstagram(); }}
               disabled={isUpdatingInstagram}
             >
@@ -1097,7 +1240,11 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
             />
-            <Pressable style={styles.modalButton} onPress={() => { Keyboard.dismiss(); handleAddReel(); }}>
+            <Pressable
+              style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, !newReelUrl.trim() && { opacity: 0.5 }]}
+              onPress={() => { Keyboard.dismiss(); handleAddReel(); }}
+              disabled={!newReelUrl.trim()}
+            >
               <Text style={styles.modalButtonText}>Add Reel</Text>
             </Pressable>
           </View>
@@ -1114,38 +1261,104 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 <Ionicons name="close" size={24} color="#FFF" />
               </Pressable>
             </View>
-            <Text style={styles.modalSubtitle}>Add companies or brands you have collaborated with.</Text>
-            
-            <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+            <Text style={styles.modalSubtitle}>Select the brands you have collaborated with.</Text>
+
+            <View style={{ maxHeight: 280, width: '100%', marginBottom: 16 }}>
+              <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: 8 }]}>
+                {companyOptions.map((company) => {
+                  const selected = draftWorkedWith.some(c => c.toLowerCase() === company.toLowerCase());
+                  const logo = companyLogo(company);
+                  return (
+                    <Pressable
+                      key={company}
+                      onPress={() => toggleDraftCompany(company)}
+                      style={[styles.platformChip, selected && styles.platformChipSelected]}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                    >
+                      <View style={[styles.platformChipIcon, { backgroundColor: logo.bg }]}>
+                        {logo.icon}
+                      </View>
+                      <Text style={styles.platformChipText}>{company}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <View style={{ flexDirection: 'row', marginBottom: 16 }}>
               <TextInput
                 style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                placeholder="e.g. Apple, Nike"
+                placeholder="Another company"
                 placeholderTextColor="#666"
                 value={newWorkedWith}
                 onChangeText={setNewWorkedWith}
+                maxLength={60}
                 returnKeyType="done"
-                onSubmitEditing={() => { Keyboard.dismiss(); handleAddWorkedWith(); }}
+                onSubmitEditing={() => { Keyboard.dismiss(); handleAddCustomCompany(); }}
               />
-              <Pressable style={[styles.modalButton, { paddingHorizontal: 16, marginLeft: 10, alignSelf: 'stretch', justifyContent: 'center' }]} onPress={handleAddWorkedWith}>
+              <Pressable style={[styles.modalButton, { paddingHorizontal: 16, marginLeft: 10, marginBottom: 0, alignSelf: 'stretch', justifyContent: 'center', backgroundColor: '#222' }]} onPress={handleAddCustomCompany}>
                 <Text style={styles.modalButtonText}>Add</Text>
               </Pressable>
             </View>
 
-            <View style={{ maxHeight: 200, width: '100%' }}>
-              <Animated.ScrollView>
-                {activeProfile?.worked_with?.map((company, index) => (
-                  <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#222', padding: 12, borderRadius: 8, marginBottom: 8 }}>
-                    <Text style={{ color: '#FFF' }}>{company}</Text>
-                    <Pressable onPress={() => handleRemoveWorkedWith(company)} style={{ padding: 4 }}>
-                      <Ionicons name="trash-outline" size={18} color="#FF6B2B" />
-                    </Pressable>
-                  </View>
-                ))}
-                {(!activeProfile?.worked_with || activeProfile.worked_with.length === 0) && (
-                  <Text style={{ color: '#888', textAlign: 'center', marginVertical: 10 }}>No companies added yet.</Text>
-                )}
-              </Animated.ScrollView>
+            <Pressable
+              style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, isSavingWorkedWith && { opacity: 0.6 }]}
+              onPress={handleSaveWorkedWith}
+              disabled={isSavingWorkedWith}
+            >
+              {isSavingWorkedWith
+                ? <ActivityIndicator color="#FFF" />
+                : <Text style={styles.modalButtonText}>Save</Text>}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Edit Platforms Modal ── */}
+      <Modal visible={isEditPlatformsVisible} transparent animationType="slide" onRequestClose={() => setIsEditPlatformsVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Available On</Text>
+              <Pressable onPress={() => setIsEditPlatformsVisible(false)}>
+                <Ionicons name="close" size={24} color="#FFF" />
+              </Pressable>
             </View>
+            <Text style={styles.modalSubtitle}>Select the platforms where brands can work with you.</Text>
+
+            <View style={{ maxHeight: 320, width: '100%', marginBottom: 20 }}>
+              <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: 8 }]}>
+                {pickablePlatforms.map((key) => {
+                  const selected = draftPlatforms.includes(key);
+                  const platform = PLATFORMS_DB[key];
+                  return (
+                    <Pressable
+                      key={key}
+                      onPress={() => toggleDraftPlatform(key)}
+                      style={[styles.platformChip, selected && styles.platformChipSelected]}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                    >
+                      <View style={[styles.platformChipIcon, { backgroundColor: platform.bg }]}>
+                        {platform.icon}
+                      </View>
+                      <Text style={styles.platformChipText}>{platform.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, isSavingPlatforms && { opacity: 0.6 }]}
+              onPress={handleSavePlatforms}
+              disabled={isSavingPlatforms}
+            >
+              {isSavingPlatforms
+                ? <ActivityIndicator color="#FFF" />
+                : <Text style={styles.modalButtonText}>Save</Text>}
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -1159,7 +1372,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             setActiveProfile({ ...activeProfile, verified: true });
             setIsVerificationModalVisible(false);
           } catch (e: any) {
-            Alert.alert("Error", e.message || "Failed to verify profile.");
+            showAlert("Error", e.message || "Failed to verify profile.");
           }
         }}
       />
@@ -1224,6 +1437,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  avatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   infoSection: {
     alignItems: 'center',
     marginBottom: 24,
@@ -1276,40 +1493,45 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 12,
-    color: '#888',
+    color: '#9A9A9A',
   },
   bio: {
-    fontSize: 12,
-    color: '#888',
-    lineHeight: 18,
+    fontSize: 13,
+    color: '#B5B5B5',
+    lineHeight: 19,
     marginTop: 16,
     textAlign: 'center',
     paddingHorizontal: 10,
   },
   statsRow: {
     flexDirection: 'row',
-    marginBottom: 24,
-    justifyContent: 'center',
-    gap: 8,
+    alignItems: 'center',
+    marginBottom: 32,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   statBox: {
     alignItems: 'center',
     flex: 1,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 8,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   statVal: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#FFF',
+    letterSpacing: -0.3,
     marginBottom: 2,
+    fontVariant: ['tabular-nums'],
   },
   statLbl: {
-    fontSize: 10,
-    color: '#888',
+    fontSize: 11,
+    color: '#9A9A9A',
   },
   section: {
     marginBottom: 28,
@@ -1330,33 +1552,43 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   smallSubtitleCentered: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#888',
-    marginBottom: 12,
-  },
-  seeAllText: {
-    fontSize: 12,
-    color: '#FF6B2B',
+    fontSize: 14,
     fontWeight: '600',
-  },
-  logosContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  dummyLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: '#FFF',
+    marginBottom: 12,
   },
   platformRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 12,
+  },
+  platformChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingLeft: 8,
+    paddingRight: 12,
+    borderRadius: 20,
+    backgroundColor: '#222',
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  platformChipSelected: {
+    borderColor: '#FF6B2B',
+    backgroundColor: 'rgba(255,107,43,0.12)',
+  },
+  platformChipIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  platformChipText: {
+    color: '#FFF',
+    fontSize: 13,
   },
   platformCircle: {
     width: 36,
@@ -1368,7 +1600,7 @@ const styles = StyleSheet.create({
   dummyReel: {
     width: 100,
     height: 150,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#333',
     overflow: 'hidden',
   },
@@ -1405,15 +1637,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   tabPillActive: {
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: '#FFF',
+    backgroundColor: '#FFF',
   },
   tabPillText: {
-    color: '#888',
+    color: '#9A9A9A',
     fontSize: 12,
     fontWeight: '500',
   },
   tabPillTextActive: {
-    color: '#FFF',
+    color: '#111111',
+    fontWeight: '600',
   },
   tabContent: {
     flex: 1,
@@ -1474,18 +1708,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFF',
   },
-  inrPill: {
-    borderWidth: 1,
-    borderColor: '#444',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-  },
-  inrText: {
-    color: '#CCC',
-    fontSize: 12,
-    fontWeight: '500',
-  },
   packagesContainer: {
     gap: 12,
   },
@@ -1528,92 +1750,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   packageName: {
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#FFF',
     marginBottom: 4,
   },
   packageDesc: {
     fontSize: 12,
-    color: '#555',
+    color: '#8A8A8A',
   },
   packagePriceLabel: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FF4500',
+    color: '#FF6B2B',
   },
   requestQuoteBtn: {
-    backgroundColor: '#FF4500',
+    backgroundColor: '#FF6B2B',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   requestQuoteText: {
     color: '#FFF',
     fontSize: 12,
     fontWeight: '600',
   },
-  testimonialCard: {
-    backgroundColor: '#050505',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    padding: 24,
-    marginTop: 10,
-    marginBottom: 40,
-  },
-  linkedinRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  linkedinText: {
-    color: '#0a66c2',
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  linkedinIconBg: {
-    backgroundColor: '#0a66c2',
-    borderRadius: 4,
-    marginLeft: 2,
-    marginTop: 2,
-  },
-  testimonialQuote: {
-    color: '#E0E0E0',
-    fontSize: 15,
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  reviewerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  reviewerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
-  },
-  reviewerInfo: {
-    flex: 1,
-  },
-  reviewerName: {
-    color: '#FF4500',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  reviewerTitle: {
-    color: '#AAA',
-    fontSize: 12,
-  },
-  reviewerStars: {
-    flexDirection: 'row',
-    gap: 4,
-  },
   chatButton: {
-    backgroundColor: '#F25C26',
+    backgroundColor: '#FF6B2B',
     borderRadius: 12,
     paddingVertical: 16,
     width: '60%',
@@ -1629,7 +1792,7 @@ const styles = StyleSheet.create({
   addReelCard: {
     width: 100,
     height: 150,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
     borderStyle: 'dashed',
@@ -1703,6 +1866,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.85 },
+  skeletonLine: { height: 12, borderRadius: 6, backgroundColor: '#1E1E1E', marginBottom: 12 },
+  errorTitle: { color: '#FFF', fontSize: 17, fontWeight: '600', marginTop: 16, marginBottom: 6, textAlign: 'center' },
+  errorBody: { color: '#9A9A9A', fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 24 },
+  retryButton: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 28 },
+  retryButtonText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
   premiumBanner: { alignItems: 'center', paddingHorizontal: 32 },
   heartCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   premiumTitle: { color: '#FFF', fontSize: 20, fontWeight: '700', marginBottom: 10 },
