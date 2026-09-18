@@ -7,11 +7,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 
 import { colors } from '@/theme/colors';
+import { DismissKeyboard } from '@/components/DismissKeyboard';
 
 export function BioInputScreen({
   onBack,
@@ -28,7 +28,7 @@ export function BioInputScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <DismissKeyboard>
         <View style={styles.container}>
         {/* Header */}
         <Pressable onPress={onBack} style={styles.backButton}>
@@ -73,7 +73,7 @@ export function BioInputScreen({
           </Pressable>
         </View>
       </View>
-      </TouchableWithoutFeedback>
+      </DismissKeyboard>
     </SafeAreaView>
   );
 }

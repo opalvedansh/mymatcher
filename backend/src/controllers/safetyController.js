@@ -1,10 +1,8 @@
 const db = require('../config/db');
 const logger = require('../config/logger');
-const { getSupabaseAdmin } = require('../config/supabaseAdmin');
-const { UPLOAD_BUCKET } = require('../utils/storage');
 const realtime = require('../realtime');
-const { endSessions } = require('../utils/sessions');
 const feedDeck = require('../services/feedDeck');
+const { hardDeleteUser } = require('../services/userDeletion');
 
 // ─── POST /api/blocks ────────────────────────────────────────────
 async function blockUser(req, res, next) {
@@ -103,46 +101,15 @@ async function createReport(req, res, next) {
   }
 }
 
-async function removeUserUploads(admin, userId) {
-  const folder = `uploads/${userId}`;
-  const bucket = admin.storage.from(UPLOAD_BUCKET);
-  // Bounded: each pass removes up to 100 files; 1,000 passes is far beyond
-  // any real account and stops a bad listing from looping forever.
-  for (let pass = 0; pass < 1000; pass++) {
-    const { data, error } = await bucket.list(folder, { limit: 100 });
-    if (error) throw error;
-    // Folder placeholders have no id and can't be removed.
-    const files = data.filter((entry) => entry.id);
-    if (!files.length) return;
-    const { error: removeError } = await bucket.remove(files.map((f) => `${folder}/${f.name}`));
-    if (removeError) throw removeError;
-  }
-}
-
 // ─── DELETE /api/account ─────────────────────────────────────────
 /**
  * Permanently deletes the caller's account (App Store Guideline 5.1.1(v)).
- * Order matters: files and rows go first, the auth identity last. If the
- * auth deletion fails the client can simply retry, because this route does
- * not require the users row to still exist.
+ * The pipeline lives in services/userDeletion so the admin hard delete runs
+ * exactly the same steps in exactly the same order.
  */
 async function deleteAccount(req, res, next) {
-  const userId = req.user.id;
   try {
-    const admin = getSupabaseAdmin();
-
-    await removeUserUploads(admin, userId);
-
-    // Cascades to profiles, swipes, matches, messages, posts, likes,
-    // stories, story views and blocks. Reports keep a NULL reporter.
-    await db.query('DELETE FROM users WHERE id = $1', [userId]);
-
-    const { error } = await admin.auth.admin.deleteUser(userId);
-    if (error && error.status !== 404) throw error;
-
-    await endSessions([userId]);
-
-    logger.warn({ userId }, 'Account deleted by user');
+    await hardDeleteUser(req.user.id);
     res.json({ deleted: true });
   } catch (err) {
     next(err);

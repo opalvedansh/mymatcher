@@ -7,12 +7,12 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { Ionicons, AntDesign } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { getMapAutocomplete, getMapGeocode } from '@/api';
+import { DismissKeyboard } from '@/components/DismissKeyboard';
 
 
 
@@ -112,7 +112,7 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
   const isReady = (!!selected || query.trim().length > 0) && !resolving;
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+    <DismissKeyboard>
       <View style={styles.container}>
       {/* Back Button */}
       {onBack && (
@@ -215,7 +215,7 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
         </Text>
       </Pressable>
       </View>
-    </TouchableWithoutFeedback>
+    </DismissKeyboard>
   );
 }
 

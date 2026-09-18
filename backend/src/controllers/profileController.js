@@ -15,7 +15,12 @@ async function fetchProfile(userId, role) {
          p.user_id, p.name, p.logo_url, p.cover_url, p.bio,
          p.categories, p.location, p.lat, p.lng,
          p.budget_min, p.budget_max, p.campaign_days,
+         p.deliverable_reels, p.deliverable_stories, p.deliverable_posts,
+         p.payment_mode, p.payment_days,
          p.campaign_types, p.vibes, p.website, p.photos, p.platforms, p.verified, p.updated_at,
+         p.verification_status, p.verification_business_name, p.verification_note,
+         (SELECT ROUND(AVG(score)::numeric, 1) FROM brand_ratings r WHERE r.brand_id = p.user_id) AS rating_avg,
+         (SELECT COUNT(*)::int          FROM brand_ratings r WHERE r.brand_id = p.user_id) AS rating_count,
          u.email, u.role, u.created_at AS member_since
        FROM brand_profiles p
        JOIN users u ON u.id = p.user_id
@@ -44,7 +49,13 @@ async function fetchProfile(userId, role) {
 
 // Fields only the owner may see. Exact coordinates would let anyone locate
 // a user's home, and emails would let the whole user base be scraped.
-const PRIVATE_PROFILE_FIELDS = ['email', 'lat', 'lng', 'instagram_synced_at'];
+// `verification_status` and `verification_note` are the owner's business with
+// Matchr: a visitor sees the `verified` flag, not that a review is pending or
+// why one was refused. The registration number is never selected at all.
+const PRIVATE_PROFILE_FIELDS = [
+  'email', 'lat', 'lng', 'instagram_synced_at',
+  'verification_status', 'verification_note',
+];
 
 const MAX_LINKEDIN_REVIEWS = 10;
 const LINKEDIN_HOST = /(^|\.)(linkedin\.com|lnkd\.in)$/i;
@@ -142,30 +153,38 @@ async function updateMyProfile(req, res, next) {
       // `verified` is deliberately not accepted: only face verification sets it.
       const {
         name, logo_url, cover_url, bio, categories,
-        location, lat, lng, budget_min, budget_max, campaign_days, campaign_types, vibes, website, photos, platforms
+        location, lat, lng, budget_min, budget_max, campaign_days, campaign_types, vibes, website, photos, platforms,
+        deliverable_reels, deliverable_stories, deliverable_posts, payment_mode, payment_days
       } = req.body;
 
       await db.query(
         `UPDATE brand_profiles SET
-          name           = COALESCE($1,  name),
-          logo_url       = COALESCE($2,  logo_url),
-          cover_url      = COALESCE($3,  cover_url),
-          bio            = COALESCE($4,  bio),
-          categories     = COALESCE($5,  categories),
-          location       = COALESCE($6,  location),
-          lat            = COALESCE($7,  lat),
-          lng            = COALESCE($8,  lng),
-          budget_min     = COALESCE($9,  budget_min),
-          budget_max     = COALESCE($10, budget_max),
-          campaign_days  = COALESCE($11, campaign_days),
-          campaign_types = COALESCE($12, campaign_types),
-          vibes          = COALESCE($13, vibes),
-          website        = COALESCE($14, website),
-          photos         = COALESCE($15, photos),
-          platforms      = COALESCE($16, platforms)
-        WHERE user_id = $17`,
+          name                = COALESCE($1,  name),
+          logo_url            = COALESCE($2,  logo_url),
+          cover_url           = COALESCE($3,  cover_url),
+          bio                 = COALESCE($4,  bio),
+          categories          = COALESCE($5,  categories),
+          location            = COALESCE($6,  location),
+          lat                 = COALESCE($7,  lat),
+          lng                 = COALESCE($8,  lng),
+          budget_min          = COALESCE($9,  budget_min),
+          budget_max          = COALESCE($10, budget_max),
+          campaign_days       = COALESCE($11, campaign_days),
+          campaign_types      = COALESCE($12, campaign_types),
+          vibes               = COALESCE($13, vibes),
+          website             = COALESCE($14, website),
+          photos              = COALESCE($15, photos),
+          platforms           = COALESCE($16, platforms),
+          deliverable_reels   = COALESCE($17, deliverable_reels),
+          deliverable_stories = COALESCE($18, deliverable_stories),
+          deliverable_posts   = COALESCE($19, deliverable_posts),
+          -- '' clears the mode; COALESCE alone could never unset it.
+          payment_mode        = CASE WHEN $20 = '' THEN NULL ELSE COALESCE($20, payment_mode) END,
+          payment_days        = COALESCE($21, payment_days)
+        WHERE user_id = $22`,
         [name, logo_url, cover_url, bio, categories,
          location, lat, lng, budget_min, budget_max, campaign_days, campaign_types, vibes, website, photos, platforms,
+         deliverable_reels, deliverable_stories, deliverable_posts, payment_mode, payment_days,
          userId]
       );
     } else {
@@ -278,9 +297,11 @@ async function getProfileById(req, res, next) {
     // (We now rely entirely on the Redis cache middleware at the route level)
     // which wraps this entire controller action.
 
-    // Look up role first
+    // Look up role first. A banned or soft-deleted account is a 404 here, not
+    // a profile: the feed already excludes them, and a direct link or a stale
+    // match row must not be a way back in to the profile they lost.
     const { rows: [user] } = await db.query(
-      'SELECT id, role FROM users WHERE id = $1',
+      'SELECT id, role FROM users WHERE id = $1 AND banned = false AND deleted_at IS NULL',
       [userId]
     );
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -289,6 +310,112 @@ async function getProfileById(req, res, next) {
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
 
     res.json(toPublicProfile(profile));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── GET /api/profiles/me/responsiveness ─────────────────────────
+//
+// How quickly this user answers the people they match with. Measured per
+// conversation: the first message from the other side, and the first reply
+// after it. A conversation the other side never opened is not counted, and
+// one they opened but the user never answered counts against the rate.
+//
+// Under MIN_RESPONSIVENESS_SAMPLE conversations the numbers say more about
+// luck than habit, so the API reports the sample and no figures.
+const MIN_RESPONSIVENESS_SAMPLE = 3;
+
+async function getMyResponsiveness(req, res, next) {
+  try {
+    const { id: userId, role } = req.user;
+    const column = role === 'brand' ? 'm.brand_id' : 'm.influencer_id';
+
+    const { rows: [row] } = await db.query(
+      `WITH opened AS (
+         SELECT m.id AS match_id,
+                MIN(msg.created_at) AS first_incoming
+         FROM matches m
+         JOIN messages msg ON msg.match_id = m.id AND msg.sender_id <> $1
+         WHERE ${column} = $1
+         GROUP BY m.id
+       ), answered AS (
+         SELECT o.match_id,
+                MIN(msg.created_at) - o.first_incoming AS reply_delay
+         FROM opened o
+         JOIN messages msg
+           ON msg.match_id = o.match_id
+          AND msg.sender_id = $1
+          AND msg.created_at > o.first_incoming
+         GROUP BY o.match_id, o.first_incoming
+       )
+       SELECT
+         (SELECT COUNT(*) FROM opened)   AS conversations,
+         (SELECT COUNT(*) FROM answered) AS replied,
+         (SELECT EXTRACT(EPOCH FROM percentile_cont(0.5)
+                   WITHIN GROUP (ORDER BY reply_delay))
+            FROM answered)               AS median_reply_seconds`,
+      [userId]
+    );
+
+    const conversations = Number(row?.conversations ?? 0);
+    const replied = Number(row?.replied ?? 0);
+    const enough = conversations >= MIN_RESPONSIVENESS_SAMPLE;
+    const medianSeconds = row?.median_reply_seconds == null ? null : Math.round(Number(row.median_reply_seconds));
+
+    res.json({
+      conversations,
+      replied,
+      min_sample: MIN_RESPONSIVENESS_SAMPLE,
+      response_rate: enough ? Math.round((replied / conversations) * 100) : null,
+      median_reply_seconds: enough ? medianSeconds : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── POST /api/profiles/me/verification ──────────────────────────
+//
+// A brand asks to be verified as a business. Nothing here sets `verified`:
+// an admin does that after checking the details (adminController.reviewVerification).
+async function requestVerification(req, res, next) {
+  try {
+    const { id: userId, role } = req.user;
+    if (role !== 'brand') return res.status(403).json({ error: 'Only brands can request business verification' });
+
+    const businessName = String(req.body.business_name || '').trim();
+    const regNumber = String(req.body.reg_number || '').trim();
+
+    const { rows: [current] } = await db.query(
+      'SELECT verification_status FROM brand_profiles WHERE user_id = $1',
+      [userId]
+    );
+    if (!current) return res.status(404).json({ error: 'Profile not found' });
+    if (current.verification_status === 'approved') {
+      return res.status(409).json({ error: 'This brand is already verified' });
+    }
+    if (current.verification_status === 'pending') {
+      return res.status(409).json({ error: 'A verification request is already under review' });
+    }
+
+    const { rows: [updated] } = await db.query(
+      `UPDATE brand_profiles SET
+         verification_status        = 'pending',
+         verification_business_name = $1,
+         verification_reg_number    = $2,
+         verification_submitted_at  = NOW(),
+         verification_reviewed_at   = NULL,
+         verification_note          = NULL,
+         updated_at                 = NOW()
+       WHERE user_id = $3
+       RETURNING verification_status, verification_business_name, verification_submitted_at`,
+      [businessName, regNumber, userId]
+    );
+
+    await invalidateCache(`cache:/api/profiles/${userId}`);
+    logger.info({ userId }, 'Business verification requested');
+    res.json(updated);
   } catch (err) {
     next(err);
   }
@@ -464,4 +591,4 @@ async function searchInstagram(req, res, next) {
   }
 }
 
-module.exports = { getMyProfile, updateMyProfile, getProfileById, verifyFace, syncInstagram, searchInstagram };
+module.exports = { getMyProfile, updateMyProfile, getProfileById, getMyResponsiveness, requestVerification, verifyFace, syncInstagram, searchInstagram };

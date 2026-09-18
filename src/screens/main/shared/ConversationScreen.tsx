@@ -18,6 +18,7 @@ import { socketService } from '@/api/socket';
 import { useAuth } from '@/contexts/AuthContext';
 import type { ChatMessage } from '@/api/types';
 import { Avatar } from '@/components/ChatAvatar';
+import { RateBrandSheet } from '@/components/RateBrandSheet';
 
 const ACCENT = '#FF6B2B';
 const MAX_MESSAGE_LENGTH = 2000; // matches backend/src/socket.js
@@ -93,7 +94,10 @@ function buildRows(messages: ChatMessage[], myId?: string): Row[] {
 }
 
 export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar, chatVerified, matchedAt, onBack }: Props) {
-  const { user } = useAuth();
+  const { user, onboardingData } = useAuth();
+  // Only creators rate brands, and only the person they are talking to.
+  const canRateThisChat = onboardingData?.role === 'Influencer';
+  const [rateVisible, setRateVisible] = useState(false);
 
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -338,6 +342,17 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
             {matchedAt && <Text style={styles.headerSub}>{matchedLabel(matchedAt)}</Text>}
           </View>
         </View>
+        {canRateThisChat && (
+          <Pressable
+            style={styles.headerButton}
+            accessibilityRole="button"
+            accessibilityLabel={`Rate ${chatName}`}
+            hitSlop={6}
+            onPress={() => setRateVisible(true)}
+          >
+            <Ionicons name="star-outline" size={21} color="#FFF" />
+          </Pressable>
+        )}
         <Pressable
           style={styles.headerButton}
           accessibilityRole="button"
@@ -355,6 +370,15 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
           <Ionicons name="ellipsis-horizontal" size={22} color="#FFF" />
         </Pressable>
       </View>
+
+      {canRateThisChat && (
+        <RateBrandSheet
+          visible={rateVisible}
+          brandId={otherUserId}
+          brandName={chatName}
+          onClose={() => setRateVisible(false)}
+        />
+      )}
 
       <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {body}

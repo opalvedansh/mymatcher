@@ -31,19 +31,24 @@ import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
 
 const { width } = Dimensions.get('window');
+const ACCENT = '#FF6B2B';
+const PAGE_SIZE = 20;
+
+/** 40000 → 40K. Never rounds a real number up into a bigger one. */
+const compact = (n: number) =>
+  n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M`
+  : n >= 1000 ? `${Math.floor(n / 1000)}K`
+  : String(n);
 
 type CardItem = {
   id: string;
-  image: string;
+  image: string | null;
   name: string;
-  handle: string;
+  verified: boolean;
   niche: string;
   location: string;
-  followers: string;
-  engagement: string;
-  reach: string;
-  platforms: string[];
   contentTypes: string[];
+  stats: { value: string; label: string }[];
   workedWith: string[];
 };
 
@@ -51,81 +56,99 @@ type CardItem = {
 const CardContent = ({ item }: { item: CardItem }) => (
   <View style={card.wrapper}>
     {/* ── Photo Background ── */}
-    <Image source={{ uri: item.image }} style={card.photo} />
+    {item.image ? (
+      <Image source={{ uri: item.image }} style={card.photo} resizeMode="cover" />
+    ) : (
+      <View style={[card.photo, card.photoFallback]}>
+        <Text style={card.fallbackInitial}>{item.name.charAt(0).toUpperCase()}</Text>
+      </View>
+    )}
 
     <LinearGradient
       colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.0)']}
       style={card.topFade}
+      pointerEvents="none"
     />
     <LinearGradient
       colors={['rgba(0,0,0,0.0)', 'rgba(14,14,14,0.8)', 'rgba(14,14,14,1)']}
       style={card.bottomFade}
+      pointerEvents="none"
     />
 
-    {/* Verified badge + platform tags top-right */}
-    <View style={card.topRight}>
-      <View style={card.verifiedBadge}>
-        <MaterialCommunityIcons name="check-decagram" size={14} color="#1DA1F2" />
-        <Text style={card.verifiedTxt}>Verified</Text>
+    {/* Only creators who passed verification carry the badge */}
+    {item.verified && (
+      <View style={card.topRight}>
+        <View style={card.verifiedBadge}>
+          <MaterialCommunityIcons name="check-decagram" size={15} color={ACCENT} />
+          <Text style={card.verifiedTxt}>Verified</Text>
+        </View>
       </View>
-    </View>
+    )}
 
     {/* ── Info panel ── */}
     <View style={card.infoPanel}>
       {/* Name + niche + location */}
-      <Text style={card.infoName}>{item.name}</Text>
-      <Text style={card.infoCats}>{item.niche}</Text>
-      <View style={card.locationRow}>
-        <Ionicons name="location-sharp" size={14} color="#aaa" />
-        <Text style={card.locationTxt}>{item.location}</Text>
-      </View>
+      <Text style={card.infoName} numberOfLines={1}>{item.name}</Text>
+      {!!item.niche && <Text style={card.infoCats} numberOfLines={1}>{item.niche}</Text>}
+      {!!item.location && (
+        <View style={card.locationRow}>
+          <Ionicons name="location-sharp" size={14} color="#aaa" />
+          <Text style={card.locationTxt} numberOfLines={1}>{item.location}</Text>
+        </View>
+      )}
 
       {/* Content types */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={card.tagsScroll}
-        contentContainerStyle={card.tagsContent}
-      >
-        <View style={[card.pill, card.pillOrange]}>
-          <Text style={card.pillTxtWhite}>Creates</Text>
-        </View>
-        {item.contentTypes.map((t) => (
-          <View key={t} style={card.pill}>
-            <Text style={card.pillTxt}>{t}</Text>
+      {item.contentTypes.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={card.tagsScroll}
+          contentContainerStyle={card.tagsContent}
+        >
+          <View style={[card.pill, card.pillLabel]}>
+            <Text style={card.pillLabelTxt}>Creates</Text>
           </View>
-        ))}
-      </ScrollView>
+          {item.contentTypes.map((t) => (
+            <View key={t} style={card.pill}>
+              <Text style={card.pillTxt}>{t}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
 
-      {/* Stats */}
-      <View style={card.statsRow}>
-        <View style={card.statCol}>
-          <Text style={card.statVal}>{item.followers}</Text>
-          <Text style={card.statLbl}>Followers</Text>
+      {/* Stats — only the ones this creator actually has */}
+      {item.stats.length > 0 && (
+        <View style={card.statsRow}>
+          {item.stats.map((stat, i) => (
+            <React.Fragment key={stat.label}>
+              {i > 0 && <View style={card.statDivider} />}
+              <View style={card.statCol}>
+                <Text style={card.statVal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                  {stat.value}
+                </Text>
+                <Text style={card.statLbl} numberOfLines={1}>{stat.label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
         </View>
-        <View style={card.statDivider} />
-        <View style={card.statCol}>
-          <Text style={card.statVal}>{item.engagement}</Text>
-          <Text style={card.statLbl}>Engagement</Text>
-        </View>
-        <View style={card.statDivider} />
-        <View style={card.statCol}>
-          <Text style={card.statVal}>{item.reach}</Text>
-          <Text style={card.statLbl}>Monthly Reach</Text>
-        </View>
-      </View>
+      )}
 
-      {/* Worked with brands (Dummy) */}
-      <View style={card.workedRow}>
-        <Text style={card.workedLbl}>Worked With</Text>
-        <View style={card.logosContainer}>
-           <View style={card.dummyLogo}><Ionicons name="logo-apple" size={16} color="#000" /></View>
-           <View style={card.dummyLogo}><Ionicons name="logo-google" size={16} color="#000" /></View>
-           <View style={card.dummyLogo}><Ionicons name="logo-amazon" size={16} color="#000" /></View>
-           <View style={card.dummyLogo}><Ionicons name="logo-microsoft" size={16} color="#000" /></View>
-           <View style={card.dummyLogo}><Ionicons name="logo-facebook" size={16} color="#000" /></View>
+      {/* Brands the creator listed on their own profile */}
+      {item.workedWith.length > 0 && (
+        <View style={card.workedRow}>
+          <Text style={card.workedLbl}>Worked with</Text>
+          <View style={card.logosContainer}>
+            {item.workedWith.slice(0, 3).map((brandName) => (
+              <View key={brandName} style={card.workedChip}>
+                <Text style={card.workedChipTxt} numberOfLines={1}>{brandName}</Text>
+              </View>
+            ))}
+            {item.workedWith.length > 3 && (
+              <Text style={card.workedMore}>+{item.workedWith.length - 3}</Text>
+            )}
+          </View>
         </View>
-      </View>
+      )}
     </View>
   </View>
 );
@@ -137,17 +160,23 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [matchData, setMatchData] = useState<{ name: string; avatarUrl: string } | null>(null);
+  const [matchData, setMatchData] = useState<{ name: string; avatarUrl: string | null } | null>(null);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  // The feed pages by relevance score + id, not by offset.
+  const nextCursorRef = useRef<{ score: number | null; id: string | null }>({ score: null, id: null });
+  const loadingMoreRef = useRef(false);
 
   // ── Load feed ───────────────────────────────────────────────────
   const loadFeed = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await getFeed(20, 0);
+      // No cursor on the first page; the server hands back the next one.
+      const res = await getFeed(PAGE_SIZE);
       setInfluencers(res.data as InfluencerProfile[]);
+      setCurrentIndex(0);
+      nextCursorRef.current = { score: res.next_cursor_score, id: res.next_cursor_id };
     } catch (e: any) {
       setError(e.message ?? 'Failed to load influencers');
     } finally {
@@ -156,6 +185,23 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
   }, []);
 
   useEffect(() => { loadFeed(); }, [loadFeed]);
+
+  const loadMore = useCallback(async () => {
+    const { score, id } = nextCursorRef.current;
+    if (loadingMoreRef.current || !id) return;
+    loadingMoreRef.current = true;
+    try {
+      const res = await getFeed(PAGE_SIZE, score ?? undefined, id);
+      nextCursorRef.current = { score: res.next_cursor_score, id: res.next_cursor_id };
+      const page = res.data as InfluencerProfile[];
+      setInfluencers(prev => {
+        const seen = new Set(prev.map(p => p.user_id));
+        return [...prev, ...page.filter(p => !seen.has(p.user_id))];
+      });
+    } catch {/* the next swipe retries */} finally {
+      loadingMoreRef.current = false;
+    }
+  }, []);
 
   // ── Swipe handler ───────────────────────────────────────────────
   const handleSwipe = useCallback(async (dir: 'left' | 'right') => {
@@ -171,10 +217,10 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
       if (dir === 'right') {
         const res = await recordSwipe(profile.user_id, 'like');
         if (res.matched) {
-          const avatarUrl = profile.avatar_url && isValidUrl(profile.avatar_url) 
-            ? profile.avatar_url 
-            : 'https://images.unsplash.com/photo-1611930022073-84af31bf7093?w=800&q=80';
-          setMatchData({ name: profile.name ?? 'This influencer', avatarUrl });
+          setMatchData({
+            name: profile.name ?? 'This creator',
+            avatarUrl: isValidUrl(profile.avatar_url) ? (profile.avatar_url as string) : null,
+          });
         }
       } else {
         await recordSwipe(profile.user_id, 'reject');
@@ -186,16 +232,9 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
       return; // Do not preload next if failed
     }
 
-    // Preload next batch when reaching last 3
-    if (currentIndex >= influencers.length - 3) {
-      try {
-        const next = await getFeed(10, influencers.length);
-        if (next.data.length) {
-          setInfluencers(prev => [...prev, ...(next.data as InfluencerProfile[])]);
-        }
-      } catch {/* silent */}
-    }
-  }, [influencers, currentIndex, translateX, translateY]);
+    // Preload the next page as the stack runs low
+    if (currentIndex >= influencers.length - 3) await loadMore();
+  }, [influencers, currentIndex, translateX, translateY, loadMore]);
 
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
@@ -265,29 +304,30 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
     return true;
   };
 
-  const toCardItem = (p: InfluencerProfile) => {
-    let img = p.avatar_url;
-    if (!isValidUrl(img)) {
-      img = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&q=80';
+  // Only real profile data reaches the card; missing figures are left out
+  // rather than shown as a zero, which reads as a measurement, not a blank.
+  //
+  // Audience figures appear only when they came from an Instagram sync. A
+  // number typed straight into the database is not a measurement, and a brand
+  // deciding who to pay should never be shown one as if it were.
+  const toCardItem = (p: InfluencerProfile): CardItem => {
+    const stats: CardItem['stats'] = [];
+    if (p.stats_verified) {
+      if (p.followers > 0) stats.push({ value: compact(p.followers), label: 'Followers' });
+      if (p.engagement_rate > 0) stats.push({ value: `${Number(p.engagement_rate).toFixed(1)}%`, label: 'Engagement' });
+      if (p.avg_views > 0) stats.push({ value: compact(p.avg_views), label: 'Avg views' });
     }
 
     return {
       id: p.user_id,
-      image: img as string,
-      name: p.name ?? 'Unknown',
-      handle: `@${(p.name ?? 'user').toLowerCase().replace(/\s+/g, '')}`,
-    niche: (p.categories ?? []).join(' · ') || 'Content Creator',
-    location: p.location ?? '',
-    followers: p.followers >= 1_000_000
-      ? `${(p.followers / 1_000_000).toFixed(1)}M`
-      : p.followers >= 1000 ? `${(p.followers / 1000).toFixed(0)}K` : String(p.followers),
-    engagement: `${p.engagement_rate}%`,
-    reach: p.avg_views >= 1_000_000
-      ? `${(p.avg_views / 1_000_000).toFixed(1)}M+`
-      : p.avg_views >= 1000 ? `${(p.avg_views / 1000).toFixed(0)}K+` : String(p.avg_views),
-    platforms: p.platforms ?? [],
+      image: isValidUrl(p.avatar_url) ? (p.avatar_url as string) : null,
+      name: p.name || 'Creator',
+      verified: !!p.verified,
+      niche: (p.categories ?? []).join(' · '),
+      location: p.location ?? '',
       contentTypes: p.categories ?? [],
-      workedWith: [] as string[],
+      stats,
+      workedWith: p.worked_with ?? [],
     };
   };
 
@@ -296,14 +336,14 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
       return (
         <View style={ss.empty}>
           <ActivityIndicator size="large" color="#FF6B2B" />
-          <Text style={[ss.emptyTxt, { fontSize: 15, marginTop: 12 }]}>Finding influencers...</Text>
+          <Text style={[ss.emptyTxt, { fontSize: 15, marginTop: 12 }]}>Finding creators</Text>
         </View>
       );
     }
     if (error) {
       return (
         <View style={ss.empty}>
-          <Text style={[ss.emptyTxt, { color: '#FF3B30' }]}>⚠️ {error}</Text>
+          <Text style={[ss.emptyTxt, { color: '#FF6B6B' }]}>{error}</Text>
           <Pressable onPress={loadFeed} style={{ marginTop: 16, backgroundColor: '#FF6B2B', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 }}>
             <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
           </Pressable>
@@ -313,8 +353,8 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
     if (currentIndex >= influencers.length) {
       return (
         <View style={ss.empty}>
-          <Text style={ss.emptyTxt}>You've seen all influencers 🎉</Text>
-          <Text style={{ color: '#888', marginTop: 8 }}>Check back later for more</Text>
+          <Text style={ss.emptyTxt}>That is everyone for now</Text>
+          <Text style={{ color: '#8A8A8A', marginTop: 8 }}>New creators appear as they join.</Text>
           <Pressable onPress={loadFeed} style={{ marginTop: 16, backgroundColor: '#FF6B2B', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 }}>
             <Text style={{ color: '#fff', fontWeight: '700' }}>Refresh</Text>
           </Pressable>
@@ -412,16 +452,13 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
 const card = StyleSheet.create({
   wrapper: { flex: 1, borderRadius: 22, overflow: 'hidden', backgroundColor: '#0e0e0e', justifyContent: 'flex-end' },
   photo: { position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, resizeMode: 'cover' },
+  photoFallback: { backgroundColor: '#1C1C1C', alignItems: 'center', justifyContent: 'center' },
+  fallbackInitial: { color: '#4A4A4A', fontSize: 96, fontWeight: '800' },
   topFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 160 },
   bottomFade: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%' },
   topRight: { position: 'absolute', top: 16, right: 16 },
   verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   verifiedTxt: { color: '#FFF', fontSize: 11, fontWeight: '600' },
-  photoText: { position: 'absolute', bottom: 0, left: 0, paddingHorizontal: 22, paddingBottom: 20 },
-  handle: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '400', letterSpacing: 0.3 },
-  hugeName: { color: '#fff', fontSize: 38, fontWeight: '800', marginTop: -2, letterSpacing: -0.5 },
-  rule: { width: 56, height: 2, backgroundColor: '#FF6B2B', marginVertical: 10 },
-  niche: { color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 19, fontWeight: '400' },
   // info panel
   infoPanel: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 130, backgroundColor: 'transparent' },
   infoName: { color: '#fff', fontSize: 28, fontWeight: '800' },
@@ -431,18 +468,26 @@ const card = StyleSheet.create({
   tagsScroll: { marginTop: 16, flexGrow: 0, height: 44 },
   tagsContent: { gap: 10, paddingRight: 16, alignItems: 'center', height: '100%' },
   pill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
-  pillOrange: { backgroundColor: '#FF6B2B', borderColor: '#FF6B2B', boxShadow: '0px 4px 6px rgba(255,107,43,0.3)', elevation: 4 },
+  // A caption for the row that follows, not a chip you can choose.
+  pillLabel: { backgroundColor: 'transparent', borderColor: 'transparent', paddingLeft: 0, paddingRight: 4 },
   pillTxt: { color: '#FFF', fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
-  pillTxtWhite: { color: '#FFF', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  pillLabelTxt: { color: '#9A9A9A', fontSize: 12, fontWeight: '600' },
   statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.2)' },
   statCol: { alignItems: 'center', flex: 1 },
   statVal: { color: '#fff', fontSize: 20, fontWeight: '800' },
   statLbl: { color: '#aaa', fontSize: 11, marginTop: 3, textAlign: 'center' },
   statDivider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: 'rgba(255,255,255,0.2)' },
   workedRow: { marginTop: 16, alignItems: 'flex-start', paddingRight: 80 },
-  workedLbl: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8 },
-  logosContainer: { flexDirection: 'row', gap: 10 },
-  dummyLogo: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
+  workedLbl: { color: '#9A9A9A', fontSize: 12, fontWeight: '600', marginBottom: 8 },
+  logosContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  workedChip: {
+    maxWidth: 130,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.14)',
+  },
+  workedChipTxt: { color: '#E6E6E6', fontSize: 12, fontWeight: '500' },
+  workedMore: { color: '#9A9A9A', fontSize: 12, fontWeight: '600' },
 });
 
 // ─── Screen styles (identical to influencer SwipeScreen) ──────────

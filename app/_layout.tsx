@@ -98,6 +98,7 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="story-camera" options={{ presentation: 'fullScreenModal', headerShown: false }} />
             <Stack.Screen name="notifications" options={{ headerShown: false, animation: 'slide_from_right' }} />
+            <Stack.Screen name="profile/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
           </Stack>
           <ActionSheetHost />
           <PushResponseHandler />

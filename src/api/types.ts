@@ -11,6 +11,9 @@ export interface ApiUser {
   created_at: string;
 }
 
+export type PaymentMode = 'bank_transfer' | 'upi' | 'cheque' | 'paypal';
+export type VerificationStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
 // ── Profile types ─────────────────────────────────────────────────
 
 export interface BrandProfile {
@@ -26,6 +29,20 @@ export interface BrandProfile {
   budget_min: number;
   budget_max: number;
   campaign_days?: number;
+  /** What the brand asks for per collaboration. 0 means they have not said. */
+  deliverable_reels?: number;
+  deliverable_stories?: number;
+  deliverable_posts?: number;
+  /** Terms the brand states itself. Matchr does not hold or guarantee payment. */
+  payment_mode?: PaymentMode | null;
+  payment_days?: number;
+  /** Averages come from creators who matched with the brand; null until rated. */
+  rating_avg?: string | number | null;
+  rating_count?: number;
+  /** Owner-only: a visitor sees `verified` and nothing about the review. */
+  verification_status?: VerificationStatus;
+  verification_business_name?: string | null;
+  verification_note?: string | null;
   campaign_types: string[];
   vibes: string[];
   photos?: string[];
@@ -70,6 +87,12 @@ export interface InfluencerProfile {
   price_min: number;
   price_max: number;
   verified: boolean;
+  /**
+   * True when the follower figures came from an Instagram sync. Absent on a
+   * profile fetch; the feed sets it, and swipe cards only show numbers when
+   * it is true, so hand-entered figures cannot pass as measurements.
+   */
+  stats_verified?: boolean;
   worked_with?: string[];
   linkedin_reviews?: LinkedinReview[];
   email: string;
@@ -150,6 +173,52 @@ export interface MatchRecord {
   last_message_read_at?: string;
 }
 
+/** GET /api/matches returns a page, not a bare list. */
+export interface MatchListResponse {
+  data: MatchRecord[];
+  next_cursor: string | null;
+}
+
+/** GET /api/matches/stats. Postgres sends COUNT(*) as a string, so coerce with Number(). */
+export interface MatchStats {
+  total_active: string | number;
+  total_archived: string | number;
+  avg_relevance_score: number | null;
+  top_relevance_score: number | null;
+  top_categories: { category: string; count: string | number }[];
+}
+
+/**
+ * GET /api/profiles/me/responsiveness — how fast you answer the people you
+ * match with, measured from your chat history. The rates are null until
+ * `conversations` reaches `min_sample`.
+ */
+export interface Responsiveness {
+  conversations: number;
+  replied: number;
+  min_sample: number;
+  response_rate: number | null;
+  median_reply_seconds: number | null;
+}
+
+/** GET/PUT /api/ratings/:brandId */
+export interface BrandRating {
+  count: number;
+  average: number | null;
+  recommend_count?: number;
+  /** The signed-in creator's own score, if they have left one. */
+  my_score: number | null;
+  /** True only for a creator who has matched with this brand. */
+  can_rate: boolean;
+}
+
+/** POST /api/profiles/me/verification */
+export interface VerificationRequestResult {
+  verification_status: VerificationStatus;
+  verification_business_name: string | null;
+  verification_submitted_at: string;
+}
+
 // ── Chat ──────────────────────────────────────────────────────────
 
 export interface ChatMessage {
@@ -180,6 +249,12 @@ export interface BrandProfileUpdate {
   budget_min?: number;
   budget_max?: number;
   campaign_days?: number;
+  deliverable_reels?: number;
+  deliverable_stories?: number;
+  deliverable_posts?: number;
+  /** '' clears the stated mode. */
+  payment_mode?: PaymentMode | '';
+  payment_days?: number;
   campaign_types?: string[];
   vibes?: string[];
   photos?: string[];

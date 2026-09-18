@@ -112,4 +112,29 @@ async function enqueueFeedWarm(userId, role) {
   }, 2000).unref();
 }
 
-module.exports = { pushQueue, enqueueFeedWarm, startWorkers, stopWorkers };
+/**
+ * Job counts per queue, for the admin system page.
+ *
+ * Reports { configured: false } rather than throwing when Redis is absent, so
+ * a health view still renders in dev and in test where queues never exist.
+ * A queue that fails to answer reports its own error instead of failing the
+ * whole page: a health endpoint that dies when something is unhealthy is
+ * useless exactly when you need it.
+ */
+async function getQueueStats() {
+  if (!hasRedis) return { configured: false, queues: [] };
+
+  const entries = [['PushNotifications', pushQueue], ['FeedDecks', feedQueue]].filter(([, q]) => q);
+  const queues = await Promise.all(entries.map(async ([name, queue]) => {
+    try {
+      const counts = await queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
+      return { name, ok: true, ...counts };
+    } catch (err) {
+      return { name, ok: false, error: err.message };
+    }
+  }));
+
+  return { configured: true, queues };
+}
+
+module.exports = { pushQueue, enqueueFeedWarm, startWorkers, stopWorkers, getQueueStats, hasRedis };

@@ -19,6 +19,10 @@ const { startWorkers, stopWorkers } = require('./config/queue');
 const { healthBody, onShutdown, closeDatabase, closeRedis } = require('./lifecycle');
 const compression  = require('compression');
 const shrinkRay    = require('shrink-ray-current');
+const path         = require('path');
+const maintenanceMode = require('./middleware/maintenanceMode');
+const { syncBootstrapAdmins } = require('./services/adminBootstrap');
+const { mountAdminPanel, adminPanelSecurityHeaders } = require('./adminPanel');
 // ─── Sentry (activates only when DSN is set) ─────────────────────
 if (process.env.SENTRY_DSN) {
   Sentry.init({
@@ -45,12 +49,15 @@ const adminRoutes   = require('./routes/admin');
 const storiesRoutes = require('./routes/stories');
 const mapsRoutes    = require('./routes/maps');
 const notificationRoutes = require('./routes/notifications');
+const ratingRoutes = require('./routes/ratings');
 const postsRoutes   = require('./routes/posts');
 const safetyRoutes  = require('./routes/safety');
 
 const app  = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
+
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 // ─── Allowed origins ─────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
@@ -105,20 +112,25 @@ const swipeLimiter = rateLimit({
 });
 
 // ─── Global middleware ───────────────────────────────────────────
-app.use(helmet());
+// The admin panel is served from this same origin at /admin, so it needs no
+// CORS entry at all. helmet's default CSP is replaced for that path only; the
+// API's own responses are JSON and keep the stricter default.
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(adminPanelSecurityHeaders);
 app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (native mobile apps, curl, etc.)
     if (!origin) return cb(null, true);
 
-    // Allow all localhost and 127.0.0.1 origins on any port (for Expo Web, Vite, dev)
-    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    // Localhost on any port, and the ALLOWED_ORIGINS='*' escape hatch, are
+    // development conveniences. In production they mean any website can call
+    // this API with the visitor's token attached, so both are dev-only.
+    if (!IS_PROD && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
       return cb(null, true);
     }
 
-    if (ALLOWED_ORIGINS.includes(origin) || process.env.ALLOWED_ORIGINS === '*') {
-      return cb(null, true);
-    }
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    if (!IS_PROD && process.env.ALLOWED_ORIGINS === '*') return cb(null, true);
 
     return cb(null, false);
   },
@@ -152,6 +164,14 @@ app.use(globalLimiter);
 // ─── Health check ────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json(healthBody('api')));
 
+// ─── Admin panel (static SPA, same origin) ───────────────────────
+mountAdminPanel(app);
+
+// ─── Maintenance mode ────────────────────────────────────────────
+// After the limiter and the health check, before the API routes. Exempts
+// /health, /api/admin (or the panel could not turn it off) and /api/auth.
+app.use(maintenanceMode);
+
 // ─── API Routes ──────────────────────────────────────────────────
 app.use('/api/auth',     authLimiter,  authRoutes);
 app.use('/api/profiles', profileRoutes);
@@ -165,10 +185,16 @@ app.use('/api/stories',  storiesRoutes);
 app.use('/api/maps',     mapsRoutes);
 app.use('/api/posts',    postsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/ratings', ratingRoutes);
 app.use('/api',          safetyRoutes);
 
 // ─── API Documentation ───────────────────────────────────────────
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Public Swagger enumerates every route, parameter and response shape — free
+// reconnaissance. Off in production unless explicitly enabled; admins get the
+// same spec from GET /api/admin/openapi.json.
+if (!IS_PROD || process.env.ENABLE_API_DOCS === 'true') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+}
 
 // ─── 404 handler ─────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));
@@ -197,6 +223,24 @@ server.listen(PORT, () => {
   console.log(`   Database    : ${process.env.DATABASE_URL?.split('@')[1] || 'not configured'}`);
   console.log(`   WebSockets  : ${SOCKETS_ENABLED ? 'Attached' : 'Disabled (separate chat service)'}`);
   console.log(`   Workers     : ${WORKERS_ENABLED ? 'In process' : 'Disabled (separate worker service)'}\n`);
+
+  if (IS_PROD && process.env.ALLOWED_ORIGINS === '*') {
+    logger.error('ALLOWED_ORIGINS is "*" in production — the CORS allowlist is disabled. Set real origins.');
+  }
+
+  // Startup work that touches the database. Skipped under test, where
+  // db.query is a mock with a positional queue that a background call would
+  // consume at an unpredictable moment.
+  if (process.env.NODE_ENV !== 'test') {
+    // Seeds admin_users from ADMIN_USER_IDS so the deploy that introduces
+    // DB-backed roles does not lock out whoever was an admin before it.
+    // Caught, never awaited: a DB blip must not stop the server coming up.
+    syncBootstrapAdmins().catch((err) =>
+      logger.error({ err: err.message }, 'Admin bootstrap sync failed'));
+
+    // Polls the maintenance flag so the middleware can read it synchronously.
+    maintenanceMode.start();
+  }
 });
 
 // ─── Graceful Shutdown ───────────────────────────────────────────

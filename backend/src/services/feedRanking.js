@@ -88,6 +88,11 @@ function influencerSql(idFilter) {
        ip.name, ip.avatar_url, ip.cover_url, ip.bio, ip.categories,
        ip.location, ip.lat, ip.lng, ip.age, ip.gender, ip.platforms,
        ip.followers, ip.engagement_rate, ip.avg_views, ip.price_min, ip.price_max, ip.verified,
+       -- Brands the creator listed themselves; the card shows these instead of stock logos.
+       ip.worked_with,
+       -- Only an Instagram sync writes follower figures. Without one, whatever
+       -- sits in those columns was put there by hand and is not a measurement.
+       (ip.instagram_synced_at IS NOT NULL) AS stats_verified,
 
        CASE
          WHEN $7::numeric IS NOT NULL AND $8::numeric IS NOT NULL AND ip.location_geog IS NOT NULL
@@ -107,6 +112,10 @@ function influencerSql(idFilter) {
      JOIN influencer_profiles ip ON ip.user_id = u.id
      WHERE u.role = 'influencer'
        AND u.id <> $1
+       -- Without these a banned or deleted account keeps being dealt into
+       -- everyone else's deck: endSessions only drops their own connections.
+       AND u.banned = false
+       AND u.deleted_at IS NULL
        ${idFilter}
        AND NOT EXISTS (
          SELECT 1 FROM swipes s WHERE s.swiper_id = $1 AND s.swiped_id = u.id
@@ -157,7 +166,7 @@ function influencerSql(idFilter) {
    )
    SELECT id, user_id, role, created_at, name, avatar_url, cover_url, bio, categories,
           location, age, gender, platforms, followers, engagement_rate, avg_views,
-          price_min, price_max, verified, ${PUBLIC_DISTANCE}, relevance_score
+          price_min, price_max, verified, worked_with, stats_verified, ${PUBLIC_DISTANCE}, relevance_score
    FROM Scored
    WHERE ${AFTER_CURSOR}
    ${ORDER}
@@ -171,6 +180,10 @@ function brandSql(idFilter) {
        bp.name, bp.logo_url, bp.cover_url, bp.bio, bp.categories,
        bp.location, bp.lat, bp.lng, bp.budget_min, bp.budget_max,
        bp.campaign_types, bp.vibes, bp.website, bp.verified,
+       bp.deliverable_reels, bp.deliverable_stories, bp.deliverable_posts,
+       -- What creators who matched this brand scored it, for the swipe card.
+       (SELECT ROUND(AVG(score)::numeric, 1) FROM brand_ratings r WHERE r.brand_id = bp.user_id) AS rating_avg,
+       (SELECT COUNT(*)::int          FROM brand_ratings r WHERE r.brand_id = bp.user_id) AS rating_count,
 
        CASE
          WHEN $7::numeric IS NOT NULL AND $8::numeric IS NOT NULL AND bp.location_geog IS NOT NULL
@@ -190,6 +203,8 @@ function brandSql(idFilter) {
      JOIN brand_profiles bp ON bp.user_id = u.id
      WHERE u.role = 'brand'
        AND u.id <> $1
+       AND u.banned = false
+       AND u.deleted_at IS NULL
        ${idFilter}
        AND NOT EXISTS (
          SELECT 1 FROM swipes s WHERE s.swiper_id = $1 AND s.swiped_id = u.id
@@ -240,6 +255,7 @@ function brandSql(idFilter) {
    )
    SELECT id, user_id, role, created_at, name, logo_url, cover_url, bio, categories,
           location, budget_min, budget_max, campaign_types, vibes, website, verified,
+          deliverable_reels, deliverable_stories, deliverable_posts, rating_avg, rating_count,
           ${PUBLIC_DISTANCE}, relevance_score
    FROM Scored
    WHERE ${AFTER_CURSOR}

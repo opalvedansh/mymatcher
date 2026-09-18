@@ -5,7 +5,7 @@ const { param, body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
 const { cache } = require('../middleware/cacheMiddleware');
-const { getMyProfile, updateMyProfile, getProfileById, verifyFace, syncInstagram, searchInstagram } = require('../controllers/profileController');
+const { getMyProfile, updateMyProfile, getProfileById, getMyResponsiveness, requestVerification, verifyFace, syncInstagram, searchInstagram } = require('../controllers/profileController');
 const { requireRole } = require('../middleware/auth');
 const { isBlockedBetween } = require('../utils/blocks');
 const { redisStore, limiterDefaults } = require('../config/rateLimitStore');
@@ -25,15 +25,33 @@ async function hideIfBlocked(req, res, next) {
 const profileRules = [
   body('name').optional().isString().trim(),
   body('bio').optional().isString().trim(),
-  body('budget_min').optional().isNumeric().toInt(),
-  body('budget_max').optional().isNumeric().toInt(),
+  body('budget_min').optional().isInt({ min: 0, max: 100000000 }).toInt(),
+  body('budget_max').optional().isInt({ min: 0, max: 100000000 }).toInt(),
+  body('campaign_days').optional().isInt({ min: 0, max: 365 }).toInt(),
+  body('deliverable_reels').optional().isInt({ min: 0, max: 99 }).toInt(),
+  body('deliverable_stories').optional().isInt({ min: 0, max: 99 }).toInt(),
+  body('deliverable_posts').optional().isInt({ min: 0, max: 99 }).toInt(),
+  // '' clears the mode; anything else has to be one the profile can render.
+  body('payment_mode').optional().isIn(['', 'bank_transfer', 'upi', 'cheque', 'paypal']),
+  body('payment_days').optional().isInt({ min: 0, max: 90 }).toInt(),
   body('price_min').optional().isNumeric().toInt(),
   body('price_max').optional().isNumeric().toInt(),
   body('lat').optional().isFloat().toFloat(),
   body('lng').optional().isFloat().toFloat(),
   body('categories').optional().isArray(),
   body('categories.*').optional().isString().trim(),
+  body('campaign_types').optional().isArray({ max: 20 }),
+  body('campaign_types.*').optional().isString().trim().isLength({ min: 1, max: 40 }),
+  body('vibes').optional().isArray({ max: 20 }),
+  body('vibes.*').optional().isString().trim().isLength({ min: 1, max: 40 }),
   body('reels').optional().isArray(),
+];
+
+const verificationRules = [
+  body('business_name').isString().trim().isLength({ min: 2, max: 120 })
+    .withMessage('Registered business name is required'),
+  body('reg_number').isString().trim().isLength({ min: 4, max: 40 })
+    .withMessage('A GST or company registration number is required'),
 ];
 
 const userIdRules = [
@@ -80,6 +98,9 @@ router.get('/search-instagram', instagramSearchLimiter, searchInstagram);
  *         description: My profile data
  */
 router.get ('/me',          getMyProfile);
+// Declared before '/:userId' so 'me' is not read as a user id.
+router.get ('/me/responsiveness', getMyResponsiveness);
+router.post('/me/verification',  verificationRules, validate, requestVerification);
 router.put ('/me',          profileRules, validate, updateMyProfile);
 router.post('/verify-face', faceVerifyLimiter, faceBodyParser, verifyFace);
 router.post('/sync-instagram', requireRole('influencer'), instagramSyncLimiter, syncInstagram);

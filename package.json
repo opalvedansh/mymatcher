@@ -43,6 +43,11 @@
   },
   "scripts": {
     "start": "concurrently \"expo start\" \"npm run dev --prefix backend\"",
+    "admin": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix admin\"",
+    "admin:install": "npm install --prefix admin",
+    "admin:build": "npm run build --prefix admin && rm -rf backend/public/admin && mkdir -p backend/public && cp -r admin/dist backend/public/admin",
+    "admin:serve": "npm run admin:build && npm run dev --prefix backend",
+    "migrate": "node backend/migrate.js",
     "android": "concurrently \"expo start --android\" \"npm run dev --prefix backend\"",
     "ios": "concurrently \"expo start --ios\" \"npm run dev --prefix backend\"",
     "web": "concurrently \"expo start --web\" \"npm run dev --prefix backend\"",

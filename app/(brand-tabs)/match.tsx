@@ -5,11 +5,9 @@ export default function MatchRoute() {
   const router = useRouter();
 
   return (
-    <BrandSwipeScreen 
-      onViewProfile={(id) => {
-        console.log('View influencer profile requested for id:', id);
-        // We will build profile viewing routes later
-      }}
+    <BrandSwipeScreen
+      // The deck stays mounted underneath, so coming back keeps your place.
+      onViewProfile={(id) => router.push(`/profile/${encodeURIComponent(id)}?role=influencer`)}
       onNavigateToMessages={() => {
         router.replace('/(brand-tabs)/messages');
       }}

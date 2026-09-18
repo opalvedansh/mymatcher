@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,25 @@ import {
   Pressable,
   Image,
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   SafeAreaView,
-  TouchableOpacity,
-  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import api from '@/api/client';
 import { uploadImage } from '@/api';
+import { showAlert } from '@/components/ActionSheet';
+
+const ACCENT = '#FF6B2B';
+const MAX_CAPTION = 500;
+
+// The card draws its own focus border, so drop the browser's outline.
+const webNoOutline = Platform.select({ web: { outlineStyle: 'none' } as any, default: undefined });
 
 // ─── Aspect Ratio Options ────────────────────────────────────────────────────
 const ASPECTS = [
@@ -36,71 +40,49 @@ export default function CreatePostScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [captionFocused, setCaptionFocused] = useState(false);
   const [selectedAspect, setSelectedAspect] = useState(1); // Default 4:5
-  const captionRef = useRef<TextInput>(null);
-  const uploadProgress = useRef(new Animated.Value(0)).current;
+
+  const aspectRatio = ASPECTS[selectedAspect].ratio[0] / ASPECTS[selectedAspect].ratio[1];
+  const canPost = !!imageUri && !isUploading;
 
   const pickImage = async (fromCamera = false) => {
-    if (fromCamera) {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please allow camera access.');
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: ASPECTS[selectedAspect].ratio,
-        quality: 0.85,
-      });
-      if (!result.canceled && result.assets.length > 0) setImageUri(result.assets[0].uri);
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please allow photo library access.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: ASPECTS[selectedAspect].ratio,
-        quality: 0.85,
-      });
-      if (!result.canceled && result.assets.length > 0) setImageUri(result.assets[0].uri);
+    const permission = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      showAlert(
+        fromCamera ? 'Camera access needed' : 'Photo access needed',
+        `Allow ${fromCamera ? 'camera' : 'photo library'} access in your settings to add a photo.`,
+      );
+      return;
     }
+
+    const options = {
+      allowsEditing: true,
+      aspect: ASPECTS[selectedAspect].ratio,
+      quality: 0.85,
+    };
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync(options)
+      : await ImagePicker.launchImageLibraryAsync({ ...options, mediaTypes: ImagePicker.MediaTypeOptions.Images });
+
+    if (!result.canceled && result.assets.length > 0) setImageUri(result.assets[0].uri);
   };
 
   const handlePost = async () => {
-    if (!imageUri) {
-      Alert.alert('No image', 'Please select a photo first.');
-      return;
-    }
+    if (!imageUri || isUploading) return;
     try {
       setIsUploading(true);
-
-      // Animate progress bar
-      Animated.timing(uploadProgress, {
-        toValue: 1,
-        duration: 2000,
-        useNativeDriver: false,
-      }).start();
-
       const publicUrl = await uploadImage(imageUri);
       await api.post('/api/posts', { image_url: publicUrl, caption: caption.trim() || null });
-
       router.back();
     } catch (err: any) {
-      Alert.alert('Failed to post', err?.message || 'Something went wrong. Try again.');
-      uploadProgress.setValue(0);
+      showAlert('Post not shared', err?.message || 'Something went wrong. Please try again.');
     } finally {
       setIsUploading(false);
     }
   };
-
-  const [aspectRatio, numerator, denominator] = [
-    ASPECTS[selectedAspect].ratio[0] / ASPECTS[selectedAspect].ratio[1],
-    ASPECTS[selectedAspect].ratio[0],
-    ASPECTS[selectedAspect].ratio[1],
-  ];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -111,140 +93,167 @@ export default function CreatePostScreen() {
       >
         {/* ── Header ─────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.headerIconBtn} hitSlop={12}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.headerIconBtn, pressed && styles.pressed]}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            disabled={isUploading}
+          >
             <Ionicons name="arrow-back" size={22} color="#FFF" />
           </Pressable>
 
-          <Text style={styles.headerTitle}>New Post</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">New post</Text>
 
           <Pressable
-            style={[styles.shareBtn, (!imageUri || isUploading) && styles.shareBtnDisabled]}
+            style={({ pressed }) => [styles.shareBtn, !canPost && styles.shareBtnDisabled, pressed && styles.pressed]}
             onPress={() => { Keyboard.dismiss(); handlePost(); }}
-            disabled={!imageUri || isUploading}
+            disabled={!canPost}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canPost }}
           >
             {isUploading ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
               <>
-                <Ionicons name="send" size={14} color="#FFF" />
-                <Text style={styles.shareBtnText}>Share</Text>
+                <ActivityIndicator size="small" color="#FFF" />
+                <Text style={styles.shareBtnText}>Posting</Text>
               </>
+            ) : (
+              <Text style={[styles.shareBtnText, !canPost && styles.shareBtnTextDisabled]}>Share</Text>
             )}
           </Pressable>
         </View>
 
-        {/* Upload progress bar */}
-        {isUploading && (
-          <Animated.View style={[styles.progressBar, {
-            width: uploadProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-          }]} />
-        )}
-
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={styles.scrollContent}
         >
-          {/* ── Image Area ─────────────────────────────────────────── */}
-          <View style={styles.imageSection}>
-            {/* Aspect ratio selector */}
-            <View style={styles.aspectRow}>
-              {ASPECTS.map((a, i) => (
-                <Pressable
-                  key={a.label}
-                  style={[styles.aspectChip, selectedAspect === i && styles.aspectChipActive]}
-                  onPress={() => setSelectedAspect(i)}
-                >
-                  <Text style={[styles.aspectChipText, selectedAspect === i && styles.aspectChipTextActive]}>
-                    {a.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Image preview / picker */}
+          <View style={styles.content}>
+            {/* ── Image ──────────────────────────────────────────── */}
             {imageUri ? (
               <View style={[styles.previewContainer, { aspectRatio }]}>
                 <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
 
-                {/* Dark overlay on bottom */}
                 <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.55)']}
-                  style={[StyleSheet.absoluteFill, { top: '50%' }]}
+                  colors={['transparent', 'rgba(0,0,0,0.6)']}
+                  style={[StyleSheet.absoluteFill, { top: '55%' }]}
                   pointerEvents="none"
                 />
 
-                {/* Bottom action chips */}
+                <Pressable
+                  style={({ pressed }) => [styles.removeBtn, pressed && styles.pressed]}
+                  onPress={() => setImageUri(null)}
+                  disabled={isUploading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove photo"
+                  hitSlop={8}
+                >
+                  <Ionicons name="close" size={18} color="#FFF" />
+                </Pressable>
+
                 <View style={styles.previewActions}>
-                  <TouchableOpacity style={styles.previewActionBtn} onPress={() => pickImage(false)}>
-                    <Ionicons name="images-outline" size={18} color="#FFF" />
-                    <Text style={styles.previewActionText}>Gallery</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.previewActionBtn} onPress={() => pickImage(true)}>
-                    <Ionicons name="camera-outline" size={18} color="#FFF" />
-                    <Text style={styles.previewActionText}>Camera</Text>
-                  </TouchableOpacity>
+                  <Pressable
+                    style={({ pressed }) => [styles.previewActionBtn, pressed && styles.pressed]}
+                    onPress={() => pickImage(false)}
+                    disabled={isUploading}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="images-outline" size={17} color="#FFF" />
+                    <Text style={styles.previewActionText}>Replace photo</Text>
+                  </Pressable>
                 </View>
+
+                {isUploading && (
+                  <View style={styles.uploadingOverlay}>
+                    <ActivityIndicator color="#FFF" />
+                    <Text style={styles.uploadingText}>Posting your photo</Text>
+                  </View>
+                )}
               </View>
             ) : (
-              /* Empty picker */
-              <View style={[styles.emptyPicker, { aspectRatio }]}>
-                <LinearGradient
-                  colors={['#161616', '#1E1E1E']}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={styles.emptyPickerInner}>
-                  <View style={styles.uploadIconRing}>
-                    <Ionicons name="add" size={32} color="#FF6B2B" />
-                  </View>
-                  <Text style={styles.emptyPickerTitle}>Add a photo</Text>
-                  <Text style={styles.emptyPickerSub}>Tap to choose from your library</Text>
-
-                  <View style={styles.emptyPickerBtns}>
-                    <TouchableOpacity style={styles.emptyPickerBtn} onPress={() => pickImage(false)} activeOpacity={0.8}>
-                      <Ionicons name="images-outline" size={20} color="#FFF" />
-                      <Text style={styles.emptyPickerBtnText}>Gallery</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.emptyPickerBtn, styles.emptyPickerBtnOutline]} onPress={() => pickImage(true)} activeOpacity={0.8}>
-                      <Ionicons name="camera-outline" size={20} color="#FF6B2B" />
-                      <Text style={[styles.emptyPickerBtnText, { color: '#FF6B2B' }]}>Camera</Text>
-                    </TouchableOpacity>
-                  </View>
+              <>
+                {/* Shape is chosen before picking, because the crop happens in the picker. */}
+                <View style={styles.aspectRow}>
+                  {ASPECTS.map((a, i) => (
+                    <Pressable
+                      key={a.label}
+                      style={({ pressed }) => [styles.aspectChip, selectedAspect === i && styles.aspectChipActive, pressed && styles.pressed]}
+                      onPress={() => setSelectedAspect(i)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: selectedAspect === i }}
+                      accessibilityLabel={`Crop ${a.label}`}
+                    >
+                      <Text style={[styles.aspectChipText, selectedAspect === i && styles.aspectChipTextActive]}>
+                        {a.label}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
-              </View>
+
+                <Pressable
+                  style={({ pressed }) => [styles.emptyPicker, { aspectRatio }, pressed && styles.emptyPickerPressed]}
+                  onPress={() => pickImage(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a photo from your library"
+                >
+                  <View style={styles.emptyPickerInner}>
+                    <View style={styles.uploadIconRing}>
+                      <Ionicons name="image-outline" size={28} color={ACCENT} />
+                    </View>
+                    <Text style={styles.emptyPickerTitle}>Add a photo</Text>
+                    <Text style={styles.emptyPickerSub}>Tap anywhere to choose from your library</Text>
+
+                    <View style={styles.emptyPickerBtns}>
+                      <Pressable
+                        style={({ pressed }) => [styles.emptyPickerBtn, pressed && styles.pressed]}
+                        onPress={() => pickImage(false)}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="images-outline" size={18} color="#FFF" />
+                        <Text style={styles.emptyPickerBtnText}>Gallery</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [styles.emptyPickerBtn, styles.emptyPickerBtnOutline, pressed && styles.pressed]}
+                        onPress={() => pickImage(true)}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="camera-outline" size={18} color="#FFF" />
+                        <Text style={styles.emptyPickerBtnText}>Camera</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </Pressable>
+              </>
             )}
-          </View>
 
-          {/* ── Caption ─────────────────────────────────────────────── */}
-          <View style={styles.captionCard}>
-            <View style={styles.captionHeader}>
-              <MaterialCommunityIcons name="text" size={16} color="#888" />
+            {/* ── Caption ────────────────────────────────────────── */}
+            <View style={[styles.captionCard, captionFocused && styles.captionCardFocused]}>
               <Text style={styles.captionLabel}>Caption</Text>
+              <TextInput
+                style={[styles.captionInput, webNoOutline]}
+                placeholder="Say what this is, and who it was for."
+                placeholderTextColor="#8A8A8A"
+                value={caption}
+                onChangeText={setCaption}
+                onFocus={() => setCaptionFocused(true)}
+                onBlur={() => setCaptionFocused(false)}
+                multiline
+                maxLength={MAX_CAPTION}
+                textAlignVertical="top"
+                editable={!isUploading}
+                accessibilityLabel="Caption"
+              />
+              <View style={styles.captionFooter}>
+                <Text style={styles.charCount}>{caption.length}/{MAX_CAPTION}</Text>
+              </View>
             </View>
-            <TextInput
-              ref={captionRef}
-              style={styles.captionInput}
-              placeholder="Write something about this post..."
-              placeholderTextColor="#444"
-              value={caption}
-              onChangeText={setCaption}
-              multiline
-              maxLength={500}
-              textAlignVertical="top"
-              returnKeyType="done"
-              blurOnSubmit
-            />
-            <View style={styles.captionFooter}>
-              <Text style={styles.charCount}>{caption.length}/500</Text>
-            </View>
-          </View>
 
-          {/* ── Info banner ─────────────────────────────────────────── */}
-          <View style={styles.infoBanner}>
-            <Ionicons name="sparkles-outline" size={14} color="#FF6B2B" />
-            <Text style={styles.infoText}>
-              Posts appear in the discovery feed and on your profile for brands to find you
-            </Text>
+            {/* ── Info ───────────────────────────────────────────── */}
+            <View style={styles.infoBanner}>
+              <Ionicons name="information-circle-outline" size={15} color="#8A8A8A" />
+              <Text style={styles.infoText}>Your post appears in the feed and on your profile.</Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -254,10 +263,9 @@ export default function CreatePostScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0D0D0D',
-  },
+  container: { flex: 1, backgroundColor: '#0D0D0D' },
+  scrollContent: { paddingBottom: 40 },
+  content: { width: '100%', maxWidth: 520, alignSelf: 'center', paddingHorizontal: 16 },
 
   // Header
   header: {
@@ -266,112 +274,95 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   headerIconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: '#1A1A1A',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
-    color: '#FFF',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
+  headerTitle: { color: '#FFF', fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   shareBtn: {
-    backgroundColor: '#FF4500',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 22,
+    minWidth: 86,
+    height: 40,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: ACCENT,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 8,
   },
   shareBtnDisabled: {
-    opacity: 0.35,
-  },
-  shareBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  // Progress bar
-  progressBar: {
-    height: 2,
-    backgroundColor: '#FF4500',
-    position: 'absolute',
-    top: 68,
-    left: 0,
-    zIndex: 10,
-  },
-
-  // Image section
-  imageSection: {
-    marginHorizontal: 16,
-    marginTop: 12,
-  },
-  aspectRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  aspectChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
+    backgroundColor: '#1A1A1A',
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  aspectChipActive: {
-    backgroundColor: '#FF4500',
-    borderColor: '#FF4500',
-  },
-  aspectChipText: {
-    color: '#777',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  aspectChipTextActive: {
-    color: '#FFF',
-  },
+  shareBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  shareBtnTextDisabled: { color: '#6F6F6F' },
 
-  // Preview
+  // Image
+  aspectRow: { flexDirection: 'row', gap: 8, marginTop: 16, marginBottom: 12 },
+  aspectChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: '#161616',
+  },
+  aspectChipActive: { backgroundColor: '#FFF', borderColor: '#FFF' },
+  aspectChipText: { color: '#9A9A9A', fontSize: 13, fontWeight: '600' },
+  aspectChipTextActive: { color: '#111' },
+
   previewContainer: {
     width: '100%',
+    marginTop: 16,
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: '#1A1A1A',
   },
-  previewActions: {
+  removeBtn: {
     position: 'absolute',
-    bottom: 14,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
+    top: 12,
+    right: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
-    gap: 12,
+    alignItems: 'center',
   },
+  previewActions: { position: 'absolute', bottom: 14, left: 0, right: 0, alignItems: 'center' },
   previewActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
-  previewActionText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '600',
+  previewActionText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0, right: 0, bottom: 0, left: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
   },
+  uploadingText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 
   // Empty picker
   emptyPicker: {
@@ -379,115 +370,66 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.12)',
     borderStyle: 'dashed',
+    backgroundColor: '#131313',
   },
-  emptyPickerInner: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    padding: 24,
-  },
+  emptyPickerPressed: { backgroundColor: '#171717', borderColor: 'rgba(255,107,43,0.5)' },
+  emptyPickerInner: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   uploadIconRing: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: 'rgba(255,107,43,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,107,43,0.25)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,107,43,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
-  },
-  emptyPickerTitle: {
-    color: '#EEE',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  emptyPickerSub: {
-    color: '#555',
-    fontSize: 13,
     marginBottom: 16,
   },
-  emptyPickerBtns: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
-  },
+  emptyPickerTitle: { color: '#FFF', fontSize: 18, fontWeight: '700' },
+  emptyPickerSub: { color: '#9A9A9A', fontSize: 13, marginTop: 6, marginBottom: 22, textAlign: 'center' },
+  emptyPickerBtns: { flexDirection: 'row', gap: 10 },
   emptyPickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    backgroundColor: '#FF4500',
+    backgroundColor: ACCENT,
     paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 22,
   },
   emptyPickerBtnOutline: {
     backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,107,43,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
-  emptyPickerBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
+  emptyPickerBtnText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 
   // Caption card
   captionCard: {
-    marginHorizontal: 16,
     marginTop: 16,
-    backgroundColor: '#161616',
+    backgroundColor: '#131313',
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  captionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
-  },
-  captionLabel: {
-    color: '#888',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  captionInput: {
-    color: '#FFF',
-    fontSize: 15,
-    minHeight: 90,
-    lineHeight: 22,
-  },
+  captionCardFocused: { borderColor: ACCENT, backgroundColor: '#161616' },
+  captionLabel: { color: '#E6E6E6', fontSize: 13, fontWeight: '600', marginBottom: 10 },
+  captionInput: { color: '#FFF', fontSize: 15, minHeight: 90, lineHeight: 22, padding: 0 },
   captionFooter: {
     alignItems: 'flex-end',
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: 'rgba(255,255,255,0.1)',
   },
-  charCount: {
-    color: '#444',
-    fontSize: 12,
-  },
+  charCount: { color: '#8A8A8A', fontSize: 12, fontVariant: ['tabular-nums'] },
 
-  // Info banner
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginHorizontal: 20,
-    marginTop: 16,
-  },
-  infoText: {
-    color: '#555',
-    fontSize: 12,
-    flex: 1,
-    lineHeight: 17,
-  },
+  // Info
+  infoBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingHorizontal: 4 },
+  infoText: { color: '#8A8A8A', fontSize: 12, flex: 1, lineHeight: 17 },
+
+  pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
 });

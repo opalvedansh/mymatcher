@@ -1,4 +1,4 @@
-import { useState, ReactNode, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,150 +8,220 @@ import {
   Image,
   Platform,
   Pressable,
-  Dimensions,
   ScrollView,
+  Share,
+  Animated,
+  AccessibilityInfo,
+  useWindowDimensions,
 } from 'react-native';
-import { AntDesign, Feather, FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { NavHomeIcon, NavProfileIcon, NavHeartIcon, NavMatchIcon, NavMessageIcon } from '@/components/BottomNavIcons';
-import { ChatScreen } from '@/screens/main/shared/ChatScreen';
-import { LikesScreen } from '@/screens/main/shared/LikesScreen';
-import { BrandSwipeScreen } from '@/screens/main/brand/BrandSwipeScreen';
-import { BrandProfileScreen } from '@/screens/main/brand/BrandProfileScreen';
-import { InfluencerProfileScreen } from '@/screens/main/influencer/InfluencerProfileScreen';
-import { useWindowDimensions } from 'react-native';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { getFeedStories, uploadImage, uploadStory } from '@/api';
-import { StoryViewer } from '@/components/StoryViewer';
 
-// ─── Mock Data ───────────────────────────────────────────────────
-const FEED_POSTS = [
-  {
-    id: '1',
-    influencerName: 'Kartik Aryan',
-    influencerAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80',
-    category: 'Fashion & Lifestyle',
-    isVerified: true,
-    isFollowing: false,
-    postImage: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80',
-    brandWatermark: 'NITRO',
-    brandTagline: 'HI-PERFORMANCE INNERWEAR',
-    campaignText: 'Yeh Andar\nKi Baat Hai ✦',
-    likes: '1,139',
-    shares: '128',
-  },
-  {
-    id: '2',
-    influencerName: 'Bhuvan Bam',
-    influencerAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80',
-    category: 'Fashion & Lifestyle',
-    isVerified: true,
-    isFollowing: true,
-    postImage: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=800&q=80',
-    brandWatermark: 'lenskart.com',
-    brandTagline: '',
-    campaignText: 'Lenskart Air',
-    likes: '8,432',
-    shares: '421',
-  },
-  {
-    id: '3',
-    influencerName: 'Prajakta Koli',
-    influencerAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
-    category: 'Lifestyle & Comedy',
-    isVerified: true,
-    isFollowing: false,
-    postImage: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&q=80',
-    brandWatermark: 'SUGAR',
-    brandTagline: 'COSMETICS',
-    campaignText: 'Be Bold,\nBe You ✨',
-    likes: '3,201',
-    shares: '244',
-  },
-];
+import { getFeedStories, uploadImage, uploadStory } from '@/api';
+import api from '@/api/client';
+import { StoryViewer } from '@/components/StoryViewer';
+import { Avatar } from '@/components/ChatAvatar';
+import { showAlert } from '@/components/ActionSheet';
+import { openSafetyMenu } from '@/components/safetyMenu';
+import { useAuth } from '@/contexts/AuthContext';
+import type { Post } from '@/components/PostCard';
+
+const ACCENT = '#FF6B2B';
+const PAGE_SIZE = 20;
+
+function timeAgo(dateStr: string): string {
+  const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
+function fmtCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 10_000) return `${Math.round(n / 1_000)}k`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
 
 // ─── Feed Post Card ───────────────────────────────────────────────
-function PostCard({ item, width }: { item: typeof FEED_POSTS[0], width: number }) {
-  const [following, setFollowing] = useState(item.isFollowing);
+function FeedPostCard({
+  post,
+  width,
+  isOwnPost,
+  reduceMotion,
+  onLikeChange,
+  onAuthorBlocked,
+}: {
+  post: Post;
+  width: number;
+  isOwnPost: boolean;
+  reduceMotion: boolean;
+  onLikeChange: (postId: string, liked: boolean, count: number) => void;
+  onAuthorBlocked: (userId: string) => void;
+}) {
+  const [liking, setLiking] = useState(false);
+  const heartScale = useRef(new Animated.Value(1)).current;
+  const liked = !!post.liked_by_me;
+  const authorName = post.author_name || 'Creator';
+  const category = post.author_categories?.[0];
+
+  const toggleLike = async () => {
+    if (liking) return;
+    const nextLiked = !liked;
+    onLikeChange(post.id, nextLiked, Math.max(0, post.likes_count + (nextLiked ? 1 : -1)));
+    if (!reduceMotion) {
+      Animated.sequence([
+        Animated.spring(heartScale, { toValue: 1.3, useNativeDriver: Platform.OS !== 'web', speed: 40 }),
+        Animated.spring(heartScale, { toValue: 1, useNativeDriver: Platform.OS !== 'web', speed: 40 }),
+      ]).start();
+    }
+    try {
+      setLiking(true);
+      await api.post(`/api/posts/${post.id}/like`, { liked: nextLiked });
+    } catch {
+      onLikeChange(post.id, liked, post.likes_count);
+    } finally {
+      setLiking(false);
+    }
+  };
+
+  const sharePost = () => {
+    Share.share({ message: post.caption || 'Check out this post on Matchr' }).catch(() => {});
+  };
 
   return (
-    <View style={[fc.card, { width: width - 32 }]}>
-      {/* Background image */}
-      <Image source={{ uri: item.postImage }} style={fc.image} resizeMode="cover" />
+    <View style={[fc.card, { width: Math.min(width - 32, 520) }]}>
+      <Image source={{ uri: post.image_url }} style={fc.image} resizeMode="cover" />
 
-      {/* Black shadow at the top of the card — behind header */}
       <LinearGradient
         colors={['rgba(0,0,0,0.75)', 'rgba(0,0,0,0.30)', 'transparent']}
         style={fc.topShadow}
+        pointerEvents="none"
       />
-
-      {/* Dark gradient at the bottom */}
       <LinearGradient
         colors={['transparent', 'rgba(0,0,0,0.85)']}
         style={fc.bottomShadow}
+        pointerEvents="none"
       />
 
-      {/* Header: avatar + name + follow button on one row */}
+      {/* Header: avatar + name + safety menu */}
       <View style={fc.header}>
-        <Image source={{ uri: item.influencerAvatar }} style={fc.avatar} />
+        {post.author_avatar ? (
+          <Image source={{ uri: post.author_avatar }} style={fc.avatar} />
+        ) : (
+          <View style={fc.avatar}><Avatar uri={null} name={authorName} size={38} /></View>
+        )}
         <View style={fc.headerInfo}>
           <View style={fc.nameRow}>
-            <Text style={fc.name}>{item.influencerName}</Text>
-            {item.isVerified && (
-              <MaterialCommunityIcons name="check-decagram" size={15} color="#1DA1F2" style={{ marginLeft: 4 }} />
+            <Text style={fc.name} numberOfLines={1}>{authorName}</Text>
+            {post.author_verified && (
+              <MaterialIcons name="verified" size={15} color={ACCENT} style={{ marginLeft: 4 }} accessibilityLabel="Verified" />
             )}
           </View>
-          <Text style={fc.category}>{item.category}</Text>
-        </View>
-        <Pressable
-          style={[fc.followBtn, following && fc.followingBtn]}
-          onPress={() => setFollowing(f => !f)}
-        >
-          <Text style={[fc.followTxt, following && fc.followingTxt]}>
-            {following ? 'Following' : 'Follow'}
+          <Text style={fc.category} numberOfLines={1}>
+            {category ? `${category}, ${timeAgo(post.created_at)}` : timeAgo(post.created_at)}
           </Text>
-        </Pressable>
+        </View>
+        {!isOwnPost && (
+          <Pressable
+            accessibilityLabel="Report or block"
+            accessibilityRole="button"
+            hitSlop={10}
+            style={({ pressed }) => [fc.moreBtn, pressed && fc.pressed]}
+            onPress={() =>
+              openSafetyMenu({
+                userId: post.user_id,
+                name: authorName,
+                target: { type: 'post', id: post.id },
+                onBlocked: () => onAuthorBlocked(post.user_id),
+              })
+            }
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color="#FFF" />
+          </Pressable>
+        )}
       </View>
 
-      {/* Brand watermark — below the header so it doesn't overlap Follow */}
-      <View style={fc.watermark}>
-        <Text style={fc.watermarkName}>{item.brandWatermark}</Text>
-        {item.brandTagline ? <Text style={fc.watermarkSub}>{item.brandTagline}</Text> : null}
-      </View>
+      {!!post.caption && (
+        <View style={fc.captionBox}>
+          <Text style={fc.captionText} numberOfLines={3}>{post.caption}</Text>
+        </View>
+      )}
 
-      {/* Campaign text bottom-left */}
-      <View style={fc.campaignBox}>
-        <Text style={fc.campaignText}>{item.campaignText}</Text>
-      </View>
+      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.55)']} style={fc.statsFade} pointerEvents="none" />
 
-      {/* Soft fade above the glass bar */}
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.55)']}
-        style={fc.statsFade}
-      />
-
-      {/* Glass stats bar */}
       <BlurView style={fc.glassBar} intensity={40} tint="dark">
-        <View style={fc.stat}>
-          <AntDesign name="heart" size={20} color="#FF3B30" />
-          <Text style={fc.statTxt}>{item.likes}</Text>
-        </View>
-        <View style={fc.stat}>
-          <Feather name="send" size={20} color="#FFF" />
-          <Text style={fc.statTxt}>{item.shares}</Text>
-        </View>
+        <Pressable
+          onPress={toggleLike}
+          accessibilityRole="button"
+          accessibilityLabel={liked ? 'Unlike' : 'Like'}
+          accessibilityState={{ selected: liked }}
+          hitSlop={8}
+          style={({ pressed }) => [fc.stat, pressed && fc.pressed]}
+        >
+          <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={22} color={liked ? '#FF3B30' : '#FFF'} />
+          </Animated.View>
+          <Text style={fc.statTxt}>{fmtCount(post.likes_count)}</Text>
+        </Pressable>
+        <Pressable
+          onPress={sharePost}
+          accessibilityRole="button"
+          accessibilityLabel="Share"
+          hitSlop={8}
+          style={({ pressed }) => [fc.stat, pressed && fc.pressed]}
+        >
+          <Ionicons name="paper-plane-outline" size={22} color="#FFF" />
+          <Text style={fc.statTxt}>Share</Text>
+        </Pressable>
       </BlurView>
     </View>
   );
 }
 
+function PostSkeleton({ width }: { width: number }) {
+  return (
+    <View style={[fc.card, fc.skeletonCard, { width: Math.min(width - 32, 520) }]}>
+      <View style={fc.header}>
+        <View style={[fc.avatar, { backgroundColor: '#262626', borderWidth: 0 }]} />
+        <View style={fc.headerInfo}>
+          <View style={[s.skeletonLine, { width: 120 }]} />
+          <View style={[s.skeletonLine, { width: 80, marginTop: 8 }]} />
+        </View>
+      </View>
+    </View>
+  );
+}
 
 export default function BrandHomeScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const { width } = useWindowDimensions();
+
   const [stories, setStories] = useState<any[]>([]);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedGroupIndex, setSelectedGroupIndex] = useState(0);
-  const { width } = useWindowDimensions();
+
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => sub.remove();
+  }, []);
 
   const fetchStories = async () => {
     try {
@@ -162,12 +232,53 @@ export default function BrandHomeScreen() {
     }
   };
 
+  const fetchPosts = useCallback(async (mode: 'initial' | 'refresh' | 'more') => {
+    const offset = mode === 'more' ? posts.length : 0;
+    if (mode === 'refresh') setRefreshing(true);
+    if (mode === 'more') setLoadingMore(true);
+    try {
+      const res = await api.get(`/api/posts/feed?limit=${PAGE_SIZE}&offset=${offset}`) as any;
+      const page: Post[] = res.data?.posts || res.posts || [];
+      setPosts(prev => {
+        if (mode !== 'more') return page;
+        const seen = new Set(prev.map(p => p.id));
+        return [...prev, ...page.filter(p => !seen.has(p.id))];
+      });
+      setHasMore(page.length === PAGE_SIZE);
+      setError(false);
+    } catch (e) {
+      console.log('Failed to fetch posts', e);
+      if (mode !== 'more') setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+    }
+  }, [posts.length]);
+
   useEffect(() => {
     fetchStories();
+    fetchPosts('initial');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const refresh = () => {
+    fetchStories();
+    fetchPosts('refresh');
+  };
+
+  const retry = () => {
+    setLoading(true);
+    setError(false);
+    fetchPosts('initial');
+  };
+
+  const handleLikeChange = (postId: string, liked: boolean, count: number) => {
+    setPosts(prev => prev.map(p => (p.id === postId ? { ...p, liked_by_me: liked, likes_count: count } : p)));
+  };
+
   const handleAddStory = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.5,
@@ -178,59 +289,137 @@ export default function BrandHomeScreen() {
         fetchStories();
       } catch (err) {
         console.error('Failed to upload story', err);
+        showAlert('Story not posted', 'Something went wrong while uploading. Please try again.');
       }
     }
   };
 
+  const openCreateMenu = (hasStory: boolean) => {
+    showAlert('Create', undefined, [
+      ...(hasStory
+        ? [{
+            text: 'View your story',
+            icon: 'play-circle-outline' as const,
+            onPress: () => {
+              setSelectedGroupIndex(stories.findIndex(s => s.isMe));
+              setViewerVisible(true);
+            },
+          }]
+        : []),
+      { text: 'Add to story', icon: 'add-circle-outline', onPress: handleAddStory },
+      { text: 'Create post', icon: 'images-outline', onPress: () => router.push('/create-post') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const renderStoryItem = (item: any, index: number) => {
+    const hasStory = !!item.items?.length;
+    const avatar = item.avatar || item.logo;
+
     return (
-      <Pressable key={item.id} style={st.storyWrap} onPress={() => {
-        if (item.isMe && (!item.items || item.items.length === 0)) {
-          handleAddStory();
-        } else {
-          setSelectedGroupIndex(index);
-          setViewerVisible(true);
-        }
-      }}>
-        <LinearGradient
-          colors={['#FF6B2B', '#FF3E6C']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={st.ring}
-        >
-          <View style={[st.logoCircle, { backgroundColor: item.bg || '#1E1E1E' }]}>
-            <Image source={{ uri: item.avatar || item.logo }} style={st.logoImg} resizeMode="cover" />
+      <Pressable
+        key={item.id}
+        style={({ pressed }) => [st.storyWrap, pressed && fc.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={item.isMe ? 'Your story, create' : `${item.name}'s story`}
+        onPress={() => {
+          if (item.isMe) {
+            openCreateMenu(hasStory);
+          } else {
+            setSelectedGroupIndex(index);
+            setViewerVisible(true);
+          }
+        }}
+      >
+        {hasStory ? (
+          <LinearGradient colors={[ACCENT, '#FF9A3D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.ring}>
+            <View style={st.logoCircle}>
+              <Avatar uri={avatar} name={item.name || '?'} size={54} />
+            </View>
+          </LinearGradient>
+        ) : (
+          <View style={[st.ring, st.ringEmpty]}>
+            <View style={st.logoCircle}>
+              <Avatar uri={avatar} name={item.name || '?'} size={54} />
+            </View>
           </View>
-        </LinearGradient>
-        {item.isMe && (
-          <Pressable style={st.plusBadge} onPress={handleAddStory}>
-            <AntDesign name="plus" size={10} color="#FFF" />
-          </Pressable>
         )}
-        <Text style={st.storyName} numberOfLines={1}>{item.name}</Text>
+        {item.isMe && (
+          <View style={st.plusBadge} pointerEvents="none">
+            <AntDesign name="plus" size={11} color="#111" />
+          </View>
+        )}
+        <Text style={[st.storyName, item.isMe && { color: '#9A9A9A' }]} numberOfLines={1}>
+          {item.isMe ? 'Your story' : item.name}
+        </Text>
       </Pressable>
     );
   };
 
+  const listHeader = (
+    <View style={s.storiesSection}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.storiesRow}>
+        {stories.map((item, index) => renderStoryItem(item, index))}
+      </ScrollView>
+    </View>
+  );
+
+  const listEmpty = loading ? (
+    // A plain View, not a fragment: the list clones this element with onLayout.
+    <View>
+      <PostSkeleton width={width} />
+      <PostSkeleton width={width} />
+    </View>
+  ) : error ? (
+    <View style={s.emptyState}>
+      <Ionicons name="cloud-offline-outline" size={36} color="#777" />
+      <Text style={s.emptyTitle}>Couldn't load the feed</Text>
+      <Text style={s.emptyBody}>Check your connection and try again.</Text>
+      <Pressable onPress={retry} accessibilityRole="button" style={({ pressed }) => [s.secondaryButton, pressed && fc.pressed]}>
+        <Text style={s.secondaryButtonText}>Try again</Text>
+      </Pressable>
+    </View>
+  ) : (
+    <View style={s.emptyState}>
+      <Ionicons name="images-outline" size={36} color="#777" />
+      <Text style={s.emptyTitle}>No posts yet</Text>
+      <Text style={s.emptyBody}>Posts from creators and brands will show up here.</Text>
+      <Pressable
+        onPress={() => router.push('/create-post')}
+        accessibilityRole="button"
+        style={({ pressed }) => [s.secondaryButton, pressed && fc.pressed]}
+      >
+        <Text style={s.secondaryButtonText}>Create post</Text>
+      </Pressable>
+    </View>
+  );
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#121212' }}>
+    <SafeAreaView style={s.root}>
       <FlatList
-        data={FEED_POSTS}
+        data={loading || error ? [] : posts}
         keyExtractor={i => i.id}
-        renderItem={({ item }) => <PostCard item={item} width={width} />}
+        renderItem={({ item }) => (
+          <FeedPostCard
+            post={item}
+            width={width}
+            isOwnPost={item.user_id === user?.id}
+            reduceMotion={reduceMotion}
+            onLikeChange={handleLikeChange}
+            onAuthorBlocked={(authorId) => setPosts(prev => prev.filter(p => p.user_id !== authorId))}
+          />
+        )}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.feedContent}
-        ListHeaderComponent={() => (
-          <View style={s.storiesSection}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.storiesRow}
-            >
-              {stories.map((item, index) => renderStoryItem(item, index))}
-            </ScrollView>
-          </View>
-        )}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={listEmpty}
+        ListFooterComponent={loadingMore ? <PostSkeleton width={width} /> : null}
+        refreshing={refreshing}
+        onRefresh={refresh}
+        onEndReachedThreshold={0.5}
+        onEndReached={() => {
+          if (!loading && !loadingMore && hasMore && posts.length > 0) fetchPosts('more');
+        }}
       />
 
       <StoryViewer
@@ -247,72 +436,45 @@ export default function BrandHomeScreen() {
 const st = StyleSheet.create({
   storyWrap: { alignItems: 'center', width: 72, marginRight: 14 },
   ring: { width: 72, height: 72, borderRadius: 36, padding: 3, justifyContent: 'center', alignItems: 'center' },
-  logoCircle: { width: '100%', height: '100%', borderRadius: 33, justifyContent: 'center', alignItems: 'center', padding: 10, borderWidth: 3, borderColor: '#121212' },
-  logoImg: { width: '100%', height: '100%' },
-  plusBadge: { position: 'absolute', bottom: 20, right: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: '#FF6B2B', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#121212' },
-  storyName: { color: '#CCC', fontSize: 11, marginTop: 6, textAlign: 'center' },
+  ringEmpty: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)' },
+  logoCircle: {
+    width: '100%', height: '100%', borderRadius: 33, justifyContent: 'center', alignItems: 'center',
+    borderWidth: 3, borderColor: '#121212', overflow: 'hidden', backgroundColor: '#1E1E1E',
+  },
+  plusBadge: {
+    position: 'absolute', top: 50, right: 0, width: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#121212',
+  },
+  storyName: { color: '#E0E0E0', fontSize: 11, marginTop: 6, textAlign: 'center' },
 });
 
 const fc = StyleSheet.create({
   card: { alignSelf: 'center', aspectRatio: 0.78, borderRadius: 28, overflow: 'hidden', backgroundColor: '#1A1A1A', marginBottom: 20 },
+  skeletonCard: { backgroundColor: '#1A1A1A' },
   image: { ...StyleSheet.absoluteFill as any },
-  // Top shadow: dark black fading to transparent — covers the header area
-  topShadow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 160,
-  },
-  // Bottom shadow: transparent to dark — covers campaign text + stats
-  bottomShadow: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 200,
-  },
+  topShadow: { position: 'absolute', top: 0, left: 0, right: 0, height: 160 },
+  bottomShadow: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 200 },
   header: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 10 },
-  avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#FFF' },
+  avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#FFF', overflow: 'hidden' },
   headerInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
-  name: { color: '#FFF', fontSize: 15, fontWeight: '700' },
-  category: { color: 'rgba(255,255,255,0.65)', fontSize: 11, marginTop: 1 },
-  followBtn: { backgroundColor: '#FF6B2B', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
-  followingBtn: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)' },
-  followTxt: { color: '#FFF', fontSize: 12, fontWeight: '700' },
-  followingTxt: { color: 'rgba(255,255,255,0.8)' },
-  // Watermark sits below the header (~80px from top) so it never overlaps the Follow button
-  watermark: { position: 'absolute', top: 84, right: 16, alignItems: 'flex-end' },
-  watermarkName: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
-  watermarkSub: { color: 'rgba(255,255,255,0.75)', fontSize: 8, letterSpacing: 1.5, marginTop: 2, textAlign: 'right' },
-  campaignBox: { position: 'absolute', bottom: 76, left: 20, right: 20 },
-  campaignText: { color: '#FFF', fontSize: 26, fontWeight: '800', lineHeight: 34 },
-  // Fade gradient bridging campaign text to glass bar
-  statsFade: {
-    position: 'absolute',
-    bottom: 62,
-    left: 0,
-    right: 0,
-    height: 60,
+  name: { color: '#FFF', fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  category: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 1 },
+  moreBtn: {
+    width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  // Glass stats bar
+  captionBox: { position: 'absolute', bottom: 78, left: 20, right: 20 },
+  captionText: { color: '#FFF', fontSize: 16, fontWeight: '500', lineHeight: 23 },
+  statsFade: { position: 'absolute', bottom: 62, left: 0, right: 0, height: 60 },
   glassBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 62,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    gap: 28,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.15)',
-    overflow: 'hidden',
+    position: 'absolute', bottom: 0, left: 0, right: 0, height: 62,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, gap: 28,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.15)', overflow: 'hidden',
   },
-  stat: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statTxt: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  stat: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
+  statTxt: { color: '#FFF', fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
 });
 
 const s = StyleSheet.create({
@@ -320,12 +482,13 @@ const s = StyleSheet.create({
   storiesSection: { paddingTop: 16, paddingBottom: 8 },
   storiesRow: { paddingHorizontal: 16 },
   feedContent: { paddingBottom: 90 },
-  nav: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    height: 62, backgroundColor: '#FFF',
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center',
-    paddingBottom: 4,
+  skeletonLine: { height: 10, borderRadius: 5, backgroundColor: '#262626' },
+  emptyState: { alignItems: 'center', paddingVertical: 64, paddingHorizontal: 32 },
+  emptyTitle: { color: '#FFF', fontSize: 17, fontWeight: '600', marginTop: 14 },
+  emptyBody: { color: '#9A9A9A', fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6, marginBottom: 20 },
+  secondaryButton: {
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 12,
+    paddingVertical: 11, paddingHorizontal: 22,
   },
-  navBtn: { width: 42, height: 42, justifyContent: 'center', alignItems: 'center' },
+  secondaryButtonText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
 });

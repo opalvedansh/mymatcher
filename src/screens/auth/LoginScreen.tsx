@@ -11,7 +11,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
   useWindowDimensions,
   Platform,
@@ -19,6 +18,7 @@ import {
 
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { DismissKeyboard } from '@/components/DismissKeyboard';
 
 type AuthMode =
   | 'login'
@@ -203,7 +203,7 @@ function EmailAuthForm({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <DismissKeyboard>
         <View style={styles.emailContainer}>
           <View style={[styles.emailContent, { width: contentWidth }]}>
             {/* Back Button */}
@@ -301,7 +301,7 @@ function EmailAuthForm({
             </Pressable>
           </View>
         </View>
-        </TouchableWithoutFeedback>
+        </DismissKeyboard>
       </ScrollView>
     </SafeAreaView>
   );
@@ -382,7 +382,7 @@ function OtpVerificationForm({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <DismissKeyboard>
           <View style={styles.emailContainer}>
             <View style={[styles.emailContent, { width: contentWidth }]}>
               {/* Back Button */}
@@ -466,7 +466,7 @@ function OtpVerificationForm({
               </Pressable>
             </View>
           </View>
-        </TouchableWithoutFeedback>
+        </DismissKeyboard>
       </ScrollView>
     </SafeAreaView>
   );
@@ -516,7 +516,7 @@ function ForgotPasswordForm({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <DismissKeyboard>
           <View style={styles.emailContainer}>
             <View style={[styles.emailContent, { width: contentWidth }]}>
               {/* Back Button */}
@@ -572,7 +572,7 @@ function ForgotPasswordForm({
               </Pressable>
             </View>
           </View>
-        </TouchableWithoutFeedback>
+        </DismissKeyboard>
       </ScrollView>
     </SafeAreaView>
   );

@@ -7,11 +7,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 
 import { colors } from '@/theme/colors';
+import { DismissKeyboard } from '@/components/DismissKeyboard';
 
 export function DateOfBirthScreen({
   onBack,
@@ -24,7 +24,7 @@ export function DateOfBirthScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <DismissKeyboard>
         <View style={styles.container}>
         {/* Header */}
         <Pressable onPress={onBack} style={styles.backButton}>
@@ -69,7 +69,7 @@ export function DateOfBirthScreen({
           </Pressable>
         </View>
       </View>
-      </TouchableWithoutFeedback>
+      </DismissKeyboard>
     </SafeAreaView>
   );
 }

@@ -382,10 +382,11 @@ export default function InfluencerHomeScreen() {
   );
 
   const listEmpty = loading ? (
-    <>
+    // A plain View, not a fragment: the list clones this element with onLayout.
+    <View>
       <PostSkeleton />
       <PostSkeleton />
-    </>
+    </View>
   ) : error ? (
     <View style={styles.emptyState}>
       <Ionicons name="cloud-offline-outline" size={36} color="#777" />

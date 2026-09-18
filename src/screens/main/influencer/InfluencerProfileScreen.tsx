@@ -24,11 +24,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
-import { getMyProfile, updateMyProfile, getProfileById, syncInstagram, uploadImage } from '@/api';
+import { getMyProfile, updateMyProfile, getProfileById, syncInstagram, uploadImage, recordSwipe } from '@/api';
 import { ApiError } from '@/api/client';
 import { openAccountMenu, openSafetyMenu } from '@/components/safetyMenu';
 import { showAlert } from '@/components/ActionSheet';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { InfluencerProfile } from '@/api/types';
 import { StoryPackageIcon, UgcPackageIcon, BrandPackageIcon, ReelPackageIcon } from '@/components/PackageIcons';
 import { VerificationModal } from './VerificationModal';
@@ -269,6 +271,11 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
   const [editInstagramHandle, setEditInstagramHandle] = useState('');
   const [isUpdatingInstagram, setIsUpdatingInstagram] = useState(false);
   const [isVerificationModalVisible, setIsVerificationModalVisible] = useState(false);
+  // Expressing interest from a public profile is the same act as a right swipe.
+  const [interested, setInterested] = useState(false);
+  const [sendingInterest, setSendingInterest] = useState(false);
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [isEditWorkedWithVisible, setIsEditWorkedWithVisible] = useState(false);
   const [newWorkedWith, setNewWorkedWith] = useState('');
   const [draftWorkedWith, setDraftWorkedWith] = useState<string[]>([]);
@@ -485,6 +492,28 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
   };
 
   // Throws on failure so the review form can show the error inline.
+  const handleInterested = async () => {
+    if (!publicUserId || interested || sendingInterest) return;
+    setSendingInterest(true);
+    try {
+      const res = await recordSwipe(publicUserId, 'like');
+      setInterested(true);
+      if (res.matched) {
+        showAlert('You matched', `You and ${activeProfile?.name || 'this creator'} can talk now.`, [
+          { text: 'Open chat', onPress: () => router.replace('/(brand-tabs)/messages') },
+          { text: 'Later', style: 'cancel' },
+        ]);
+      } else {
+        showAlert('Interest sent', 'If they like you back, you will match and can start talking.');
+      }
+    } catch (err) {
+      console.error('Failed to record interest:', err);
+      showAlert('Could not send that', 'Check your connection and try again.');
+    } finally {
+      setSendingInterest(false);
+    }
+  };
+
   const handleSaveLinkedinReviews = async (next: LinkedinReview[]) => {
     const saved = await updateMyProfile({ linkedin_reviews: next }) as InfluencerProfile;
     setActiveProfile(prev => prev ? { ...prev, linkedin_reviews: saved.linkedin_reviews ?? next } : prev);
@@ -614,14 +643,14 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
   return (
     <View style={styles.container}>
       {onBack && (
-        <View style={{ position: 'absolute', top: 50, left: 16, zIndex: 10 }}>
+        <View style={{ position: 'absolute', top: insets.top + 8, left: 16, zIndex: 10 }}>
           <Pressable onPress={onBack} style={{ width: 40, height: 40, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
             <Ionicons name="arrow-back" size={24} color="#FFF" />
           </Pressable>
         </View>
       )}
 
-      <View style={{ position: 'absolute', top: 50, right: 16, zIndex: 10 }}>
+      <View style={{ position: 'absolute', top: insets.top + 8, right: 16, zIndex: 10 }}>
         <Pressable
           accessibilityLabel={publicUserId ? 'Report or block' : 'Account options'}
           onPress={() =>
@@ -1166,13 +1195,28 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           onSave={handleSaveLinkedinReviews}
         />
 
-        {/* ── Chat Button ── */}
-        <Pressable
-          style={({ pressed }) => [styles.chatButton, pressed && styles.pressed]}
-          accessibilityRole="button"
-        >
-          <Text style={styles.chatButtonText}>Chat</Text>
-        </Pressable>
+        {/* ── Interest button (public profile only) ── */}
+        {!!publicUserId && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.chatButton,
+              interested && styles.chatButtonDone,
+              pressed && !interested && styles.pressed,
+            ]}
+            onPress={handleInterested}
+            disabled={interested || sendingInterest}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: interested || sendingInterest, busy: sendingInterest }}
+          >
+            {sendingInterest ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <Text style={[styles.chatButtonText, interested && styles.chatButtonTextDone]}>
+                {interested ? 'Interest sent' : 'Interested'}
+              </Text>
+            )}
+          </Pressable>
+        )}
 
         {/* ── Bottom Padding ── */}
         <View style={{ height: 40 }} />
@@ -1775,6 +1819,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  chatButtonDone: { backgroundColor: '#1E1E1E', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)' },
+  chatButtonTextDone: { color: '#8A8A8A' },
   chatButton: {
     backgroundColor: '#FF6B2B',
     borderRadius: 12,

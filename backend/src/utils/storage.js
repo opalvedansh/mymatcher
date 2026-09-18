@@ -22,4 +22,17 @@ function isOwnUploadUrl(url, userId) {
   return normalized.startsWith(publicUploadPrefix(userId));
 }
 
-module.exports = { UPLOAD_BUCKET, publicUploadPrefix, isOwnUploadUrl };
+/**
+ * The storage key ("uploads/<uid>/<file>") behind a public upload URL — the
+ * inverse of publicUploadPrefix, for deleting the object when moderation
+ * removes the row that referenced it. Returns null for anything this user did
+ * not upload, so it can never be pointed at another user's folder.
+ */
+function storagePathFromUrl(url, userId) {
+  if (!isOwnUploadUrl(url, userId)) return null;
+  const prefix = publicUploadPrefix(userId);
+  const rest = new URL(url).href.slice(prefix.length).split('?')[0];
+  return rest ? `uploads/${userId}/${decodeURIComponent(rest)}` : null;
+}
+
+module.exports = { UPLOAD_BUCKET, publicUploadPrefix, isOwnUploadUrl, storagePathFromUrl };

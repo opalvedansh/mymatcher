@@ -1,0 +1,83 @@
+/*
+ * Matchr console design tokens.
+ *
+ * Dark only: app.json forces userInterfaceStyle "dark" and the product has no
+ * light theme anywhere, so a light mode here would be a surface nothing else
+ * in the company has.
+ *
+ * The accent is #FF6B2B, not the #F05A28 in src/theme/colors.ts. The token
+ * file says one thing and 71 usages across the app say another; this follows
+ * what a user actually sees. #F2602D stays reserved for the logo mark.
+ *
+ * The accent is an INTERACTION color: primary action, active nav, focus ring.
+ * It is deliberately absent from the chart series so "orange" never means both
+ * "you can click this" and "this is the matches line".
+ */
+:root {
+  /* Surfaces — five near-blacks, never pure #000 (it reads as a hole on OLED) */
+  --bg:         #0a0a0b;
+  --bg-sunken:  #060607;
+  --panel:      #111113;
+  --panel-2:    #17171a;
+  --panel-3:    #1e1e22;
+  --panel-hover: #1a1a1e;
+
+  --line:       rgba(255, 255, 255, 0.07);
+  --line-2:     rgba(255, 255, 255, 0.12);
+  --line-3:     rgba(255, 255, 255, 0.18);
+
+  /* Ink */
+  --fg:         #f2f2f3;
+  --fg-2:       #a7a7ad;
+  --fg-3:       #6e6e76;
+  --fg-4:       #4a4a52;
+
+  /* Brand */
+  --accent:     #ff6b2b;
+  --accent-ink: #0a0a0b;
+  --accent-hover: #ff7d45;
+  --accent-dim: rgba(255, 107, 43, 0.14);
+  --accent-line: rgba(255, 107, 43, 0.45);
+
+  /* Status — reserved, never reused as a series color */
+  --danger:     #f0503a;
+  --danger-dim: rgba(240, 80, 58, 0.13);
+  --warn:       #e0a22b;
+  --warn-dim:   rgba(224, 162, 43, 0.13);
+  --ok:         #3fb56e;
+  --ok-dim:     rgba(63, 181, 110, 0.13);
+  --info:       #5b9bf0;
+  --info-dim:   rgba(91, 155, 240, 0.13);
+
+  /*
+   * Chart series. Validated as a set against --panel with the dataviz
+   * validator: lightness band, chroma floor, adjacent CVD separation,
+   * normal-vision floor and contrast all pass at 5 slots.
+   * Order is fixed and never cycled — a 6th series folds into "Other".
+   */
+  --series-1: #3987e5;  /* blue    */
+  --series-2: #199e70;  /* aqua    */
+  --series-3: #9085e9;  /* violet  */
+  --series-4: #d55181;  /* magenta */
+  --series-5: #c98500;  /* yellow  */
+  --grid:     rgba(255, 255, 255, 0.06);
+
+  /* Radii — tight. A data console is not a card gallery. */
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 10px;
+  --r-pill: 999px;
+
+  /* Type */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Layout */
+  --rail-w: 224px;
+  --topbar-h: 52px;
+  --row-h: 40px;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --shadow-3: 0 24px 64px rgba(0, 0, 0, 0.65);
+}

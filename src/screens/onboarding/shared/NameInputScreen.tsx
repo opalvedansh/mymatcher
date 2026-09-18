@@ -7,13 +7,13 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
   ActivityIndicator,
 } from 'react-native';
 
 import api from '@/api/client';
 import { colors } from '@/theme/colors';
+import { DismissKeyboard } from '@/components/DismissKeyboard';
 
 const fetchInstagramUsers = async (query: string): Promise<string[]> => {
   if (!query || query.length < 3) return [];
@@ -61,7 +61,7 @@ export function NameInputScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <DismissKeyboard>
         <View style={styles.container}>
         {/* Header */}
         <Pressable onPress={onBack} style={styles.backButton}>
@@ -167,7 +167,7 @@ export function NameInputScreen({
           </Pressable>
         </View>
         </View>
-      </TouchableWithoutFeedback>
+      </DismissKeyboard>
     </SafeAreaView>
   );
 }

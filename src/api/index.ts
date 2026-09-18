@@ -14,7 +14,12 @@ import type {
   SwipeResponse,
   SwipeRecord,
   MatchRecord,
+  MatchListResponse,
+  MatchStats,
   ProfileUpdate,
+  Responsiveness,
+  BrandRating,
+  VerificationRequestResult,
   UserRole,
   ChatResponse,
   NotificationsResponse,
@@ -84,6 +89,16 @@ export function updateMyProfile(data: ProfileUpdate) {
   return api.put<AnyProfile>('/api/profiles/me', data);
 }
 
+/** How quickly you reply to matches, worked out from your own chat history. */
+export function getMyResponsiveness() {
+  return api.get<Responsiveness>('/api/profiles/me/responsiveness');
+}
+
+/** Asks an admin to verify this brand as a business. Does not grant the badge. */
+export function requestVerification(business_name: string, reg_number: string) {
+  return api.post<VerificationRequestResult>('/api/profiles/me/verification', { business_name, reg_number });
+}
+
 export function getProfileById(userId: string) {
   return api.get<AnyProfile>(`/api/profiles/${userId}`);
 }
@@ -126,7 +141,12 @@ export function getLikesReceived() {
 // ─── Matches ──────────────────────────────────────────────────────
 
 export function getMatches() {
-  return api.get<MatchRecord[]>('/api/matches');
+  return api.get<MatchListResponse>('/api/matches');
+}
+
+/** Totals across every match, so counts stay right past the 50-row page getMatches returns. */
+export function getMatchStats() {
+  return api.get<MatchStats>('/api/matches/stats');
 }
 
 export function getMatchById(matchId: string) {
@@ -135,6 +155,21 @@ export function getMatchById(matchId: string) {
 
 export function archiveMatch(matchId: string) {
   return api.delete<{ message: string }>(`/api/matches/${matchId}`);
+}
+
+// ─── Brand ratings ────────────────────────────────────────────────
+
+export function getBrandRating(brandId: string) {
+  return api.get<BrandRating>(`/api/ratings/${encodeURIComponent(brandId)}`);
+}
+
+/** Only a creator who matched with the brand may rate it; 1 to 5. */
+export function rateBrand(brandId: string, score: number) {
+  return api.put<BrandRating>(`/api/ratings/${encodeURIComponent(brandId)}`, { score });
+}
+
+export function removeBrandRating(brandId: string) {
+  return api.delete<{ removed: number }>(`/api/ratings/${encodeURIComponent(brandId)}`);
 }
 
 // ─── Chat ─────────────────────────────────────────────────────────

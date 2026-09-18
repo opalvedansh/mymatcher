@@ -49,16 +49,34 @@ const check = (label, ok, extra = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${extra ? '  ' + extra : ''}`);
 };
 
+/** A no-op stand-in for what middleware/adminAudit attaches to every request. */
+const auditStub = () => ({
+  meta: {}, force: false, suppressed: false, rowId: null,
+  set() { return this; }, add() { return this; }, snapshot() { return this; }, skip() { return this; },
+});
+
 function call(handler, req) {
   return new Promise((resolve) => {
     const res = {
       statusCode: 200,
       status(c) { this.statusCode = c; return this; },
       json(body) { resolve({ status: this.statusCode, body }); return this; },
-      setHeader() {},
+      setHeader() {}, set() { return this; }, write() {}, end() { resolve({ status: this.statusCode }); },
     };
-    handler({ query: {}, params: {}, body: {}, headers: {}, ...req }, res, (err) =>
-      resolve({ status: 'next', err }));
+    handler(
+      {
+        query: {},
+        params: {},
+        body: {},
+        headers: {},
+        // requireAdmin and adminAudit normally supply these.
+        admin: { id: 'admin', email: 'admin@matchr.in', role: 'superadmin', permissions: ['*'] },
+        audit: auditStub(),
+        ...req,
+      },
+      res,
+      (err) => resolve({ status: 'next', err })
+    );
   });
 }
 
@@ -112,6 +130,25 @@ async function main() {
 
   r = await call(getFeed, { user: { id: I1, role: 'influencer' } });
   check('influencer feed returns 200 with brands', r.status === 200 && r.body.data[0]?.id === B, r.err?.message || '');
+  check('brand feed rows carry the fields the swipe card shows',
+    'rating_avg' in (r.body.data[0] || {}) && 'rating_count' in r.body.data[0] && 'deliverable_reels' in r.body.data[0],
+    JSON.stringify(Object.keys(r.body.data[0] || {})));
+
+  await pg.exec(`UPDATE influencer_profiles SET worked_with = '{Nykaa,Boat}' WHERE user_id = '${I1}'`);
+  r = await call(getFeed, { user: { id: B, role: 'brand' } });
+  check('creator feed rows carry the brands the creator listed',
+    JSON.stringify(r.body.data[0]?.worked_with) === '["Nykaa","Boat"]', JSON.stringify(r.body.data[0]?.worked_with));
+
+  // Numbers written straight into the table, with no Instagram sync behind them.
+  await pg.exec(`UPDATE influencer_profiles SET followers = 40000, avg_views = 42000 WHERE user_id = '${I1}'`);
+  r = await call(getFeed, { user: { id: B, role: 'brand' } });
+  check('hand-entered audience figures are marked unverified',
+    r.body.data[0]?.stats_verified === false, JSON.stringify({ f: r.body.data[0]?.followers, v: r.body.data[0]?.stats_verified }));
+
+  await pg.exec(`UPDATE influencer_profiles SET instagram_synced_at = NOW() WHERE user_id = '${I1}'`);
+  r = await call(getFeed, { user: { id: B, role: 'brand' } });
+  check('figures from a sync are marked verified', r.body.data[0]?.stats_verified === true, JSON.stringify(r.body.data[0]?.stats_verified));
+  await pg.exec(`UPDATE influencer_profiles SET followers = 0, avg_views = 0, instagram_synced_at = NULL WHERE user_id = '${I1}'`);
 
   // ── Profiles ─────────────────────────────────────────────────
   const profiles = require(`${BACKEND}/src/controllers/profileController`);
@@ -244,6 +281,235 @@ async function main() {
     JSON.stringify({ removed, deletedAuthUsers, disconnected }));
   r = await call(safety.deleteAccount, { user: { id: B } });
   check('retrying account deletion is safe', r.status === 200, r.err?.message || '');
+
+  // ── Reply speed (measured from real messages) ────────────────
+  const B2 = 'brand-2';
+  await pg.exec(`
+    INSERT INTO users (id, email, role) VALUES
+      ('${B2}', 'b2@x.com', 'brand'),
+      ('infl-a', 'a@x.com', 'influencer'), ('infl-b', 'b@x.com', 'influencer'),
+      ('infl-c', 'c@x.com', 'influencer'), ('infl-d', 'd@x.com', 'influencer');
+    INSERT INTO brand_profiles (user_id, name) VALUES ('${B2}', 'Brand Two');
+    INSERT INTO influencer_profiles (user_id, name) VALUES
+      ('infl-a', 'A'), ('infl-b', 'B'), ('infl-c', 'C'), ('infl-d', 'D');
+    INSERT INTO matches (id, brand_id, influencer_id) VALUES
+      ('11111111-1111-1111-1111-111111111111', '${B2}', 'infl-a'),
+      ('22222222-2222-2222-2222-222222222222', '${B2}', 'infl-b'),
+      ('33333333-3333-3333-3333-333333333333', '${B2}', 'infl-c'),
+      ('44444444-4444-4444-4444-444444444444', '${B2}', 'infl-d');
+    INSERT INTO messages (match_id, sender_id, content, created_at) VALUES
+      -- answered in 30 minutes
+      ('11111111-1111-1111-1111-111111111111', 'infl-a', 'hi',    now() - interval '5 hours'),
+      ('11111111-1111-1111-1111-111111111111', '${B2}',  'hello', now() - interval '4 hours 30 minutes'),
+      -- answered in 90 minutes
+      ('22222222-2222-2222-2222-222222222222', 'infl-b', 'hi',    now() - interval '5 hours'),
+      ('22222222-2222-2222-2222-222222222222', '${B2}',  'hello', now() - interval '3 hours 30 minutes'),
+      -- the brand spoke first and never answered what came back
+      ('33333333-3333-3333-3333-333333333333', '${B2}',  'pitch', now() - interval '6 hours'),
+      ('33333333-3333-3333-3333-333333333333', 'infl-c', 'hi',    now() - interval '5 hours'),
+      -- nobody answered the brand: not a conversation the creator started
+      ('44444444-4444-4444-4444-444444444444', '${B2}',  'pitch', now() - interval '6 hours');
+  `);
+
+  r = await call(profiles.getMyResponsiveness, { user: { id: B2, role: 'brand' } });
+  check('reply speed counts only conversations creators started',
+    r.body?.conversations === 3, JSON.stringify(r.body) + (r.err?.message || ''));
+  check('reply speed counts an unanswered conversation against the rate',
+    r.body?.replied === 2 && r.body?.response_rate === 67, JSON.stringify(r.body));
+  check('reply speed takes the median delay, ignoring messages sent before the creator wrote',
+    r.body?.median_reply_seconds === 3600, JSON.stringify(r.body));
+
+  r = await call(profiles.getMyResponsiveness, { user: { id: 'infl-a', role: 'influencer' } });
+  check('reply speed withholds figures below the sample size',
+    r.body?.conversations === 1 && r.body?.response_rate === null && r.body?.median_reply_seconds === null,
+    JSON.stringify(r.body) + (r.err?.message || ''));
+
+  // ── Brand deliverables (migration 026) ───────────────────────
+  r = await call(profiles.updateMyProfile, {
+    user: { id: B2, role: 'brand' },
+    body: { deliverable_reels: 1, deliverable_stories: 2, deliverable_posts: 0 },
+  });
+  check('a brand can save the deliverables it asks for',
+    r.status === 200 && r.body?.deliverable_reels === 1 && r.body?.deliverable_stories === 2 && r.body?.deliverable_posts === 0,
+    JSON.stringify(r.body) + (r.err?.message || ''));
+  let dbErr = null;
+  await pg.query(`UPDATE brand_profiles SET deliverable_reels = 500 WHERE user_id = $1`, [B2]).catch((e) => { dbErr = e; });
+  check('the database refuses an absurd deliverable count', dbErr !== null);
+
+  // ── Ratings, payment terms and verification ──────────────────
+  const ratings = require(`${BACKEND}/src/controllers/ratingController`);
+
+  r = await call(ratings.rateBrand, {
+    user: { id: 'infl-a', role: 'influencer' }, params: { brandId: B2 }, body: { score: 5 },
+  });
+  check('a matched creator can rate a brand', r.status === 200 && r.body?.average === 5, JSON.stringify(r.body) + (r.err?.message || ''));
+
+  r = await call(ratings.rateBrand, {
+    user: { id: 'infl-b', role: 'influencer' }, params: { brandId: B2 }, body: { score: 4 },
+  });
+  check('a second rating moves the average', r.body?.count === 2 && r.body?.average === 4.5, JSON.stringify(r.body));
+
+  r = await call(ratings.rateBrand, {
+    user: { id: 'infl-a', role: 'influencer' }, params: { brandId: B2 }, body: { score: 3 },
+  });
+  check('rating again replaces the first score rather than adding one',
+    r.body?.count === 2 && r.body?.average === 3.5, JSON.stringify(r.body));
+
+  r = await call(ratings.rateBrand, {
+    user: { id: I2, role: 'influencer' }, params: { brandId: B2 }, body: { score: 5 },
+  });
+  check('a creator who never matched the brand cannot rate it', r.status === 403, JSON.stringify(r.body));
+
+  r = await call(profiles.getMyProfile, { user: { id: B2, role: 'brand' } });
+  check('the brand profile carries the real average and count',
+    Number(r.body?.rating_avg) === 3.5 && r.body?.rating_count === 2, JSON.stringify({ a: r.body?.rating_avg, c: r.body?.rating_count }));
+
+  r = await call(ratings.removeMyRating, { user: { id: 'infl-b', role: 'influencer' }, params: { brandId: B2 } });
+  check('a creator can take their rating back', r.body?.removed === 1, JSON.stringify(r.body));
+
+  r = await call(profiles.updateMyProfile, {
+    user: { id: B2, role: 'brand' }, body: { payment_mode: 'upi', payment_days: 14 },
+  });
+  check('a brand can state its payment terms',
+    r.body?.payment_mode === 'upi' && r.body?.payment_days === 14, JSON.stringify(r.body) + (r.err?.message || ''));
+  r = await call(profiles.updateMyProfile, { user: { id: B2, role: 'brand' }, body: { payment_mode: '' } });
+  check('an empty mode clears the terms rather than being ignored', r.body?.payment_mode === null, JSON.stringify(r.body));
+
+  let termsErr = null;
+  await pg.query(`UPDATE brand_profiles SET payment_mode = 'cash-in-hand' WHERE user_id = $1`, [B2]).catch((e) => { termsErr = e; });
+  check('the database refuses a payment mode the profile cannot render', termsErr !== null);
+
+  r = await call(profiles.requestVerification, {
+    user: { id: B2, role: 'brand' }, body: { business_name: 'Brand Two Pvt Ltd', reg_number: '29ABCDE1234F1Z5' },
+  });
+  check('requesting verification queues it for review', r.body?.verification_status === 'pending', JSON.stringify(r.body) + (r.err?.message || ''));
+  const { rows: [pendingBrand] } = await pg.query(`SELECT verified FROM brand_profiles WHERE user_id = $1`, [B2]);
+  check('requesting verification does not grant the badge', pendingBrand.verified === false);
+
+  r = await call(profiles.getProfileById, { user: { id: 'infl-a', role: 'influencer' }, params: { userId: B2 } });
+  check('a visitor cannot see the review status or the registration number',
+    !('verification_status' in r.body) && !('verification_reg_number' in r.body), JSON.stringify(Object.keys(r.body || {})));
+
+  const admin = require(`${BACKEND}/src/controllers/adminController`);
+  r = await call(admin.listVerifications, { user: { id: 'admin' }, query: {} });
+  check('the pending request reaches the admin queue with its details',
+    r.body?.data?.[0]?.user_id === B2 && r.body.data[0].verification_reg_number === '29ABCDE1234F1Z5', JSON.stringify(r.body));
+
+  r = await call(admin.reviewVerification, { user: { id: 'admin' }, params: { userId: B2 }, body: { status: 'approved' } });
+  check('an admin approval sets the badge', r.body?.verified === true && r.body?.verification_status === 'approved', JSON.stringify(r.body) + (r.err?.message || ''));
+
+  // The old handler had `AND verification_status = 'pending'` in its WHERE, so
+  // a mistaken approval could never be revoked. The audit log is the safety
+  // net now, and taking a wrongly granted badge back is exactly the thing an
+  // operator has to be able to do.
+  r = await call(admin.reviewVerification, { user: { id: 'admin' }, params: { userId: B2 }, body: { status: 'rejected' } });
+  check('a mistaken approval can be revoked',
+    r.body?.verified === false && r.body?.verification_status === 'rejected', JSON.stringify(r.body));
+  check('and the review records who did it', r.body?.verification_reviewed_by === 'admin', JSON.stringify(r.body));
+
+  // ── The ban fix ───────────────────────────────────────────────
+  // Before this, feedRanking filtered on role, self, prior swipes and blocks
+  // but never on banned: a banned user kept being dealt into everyone else's
+  // deck and their profile still resolved. endSessions only dropped their own
+  // connections. This is the assertion a mocked-db test cannot make.
+  const ranking = require(`${BACKEND}/src/services/feedRanking`);
+  const profileCtl = require(`${BACKEND}/src/controllers/profileController`);
+
+  const viewerCtx = await ranking.loadContext(B, 'brand');
+  const before = await ranking.scoreCandidates(viewerCtx, { cursor: null, limit: 50 });
+  const visibleBefore = before.some((row) => row.id === I1);
+  check('an active creator is in the brand deck', visibleBefore, `saw ${before.length} candidates`);
+
+  await pg.query(`UPDATE users SET banned = true, banned_at = now() WHERE id = $1`, [I1]);
+  const after = await ranking.scoreCandidates(viewerCtx, { cursor: null, limit: 50 });
+  check('banning removes them from the deck', !after.some((row) => row.id === I1),
+    `still saw ${after.filter((row) => row.id === I1).length}`);
+
+  r = await call(profileCtl.getProfileById, { user: { id: B }, params: { userId: I1 } });
+  check('and their profile stops resolving', r.status === 404, JSON.stringify(r.body));
+
+  await pg.query(`UPDATE users SET banned = false, banned_at = NULL WHERE id = $1`, [I1]);
+  const restored = await ranking.scoreCandidates(viewerCtx, { cursor: null, limit: 50 });
+  check('unbanning puts them back', restored.some((row) => row.id === I1));
+
+  // Soft delete uses the same predicate, so it must hide them too.
+  await pg.query(`UPDATE users SET deleted_at = now() WHERE id = $1`, [I1]);
+  const deleted = await ranking.scoreCandidates(viewerCtx, { cursor: null, limit: 50 });
+  check('a soft-deleted account is hidden as well', !deleted.some((row) => row.id === I1));
+  await pg.query(`UPDATE users SET deleted_at = NULL WHERE id = $1`, [I1]);
+
+  // ── Admin RBAC and audit (migration 028) ──────────────────────
+  await pg.query(
+    `INSERT INTO admin_users (user_id, email, role, created_by) VALUES ($1, $2, 'superadmin', 'test')`,
+    ['admin', 'admin@matchr.in']
+  );
+  const { rows: [roleCheck] } = await pg.query(
+    `SELECT count(*)::int AS n FROM admin_users WHERE user_id = 'admin' AND revoked_at IS NULL`
+  );
+  check('admin_users accepts a valid role', roleCheck.n === 1);
+
+  let rejected = false;
+  try {
+    await pg.query(`INSERT INTO admin_users (user_id, role) VALUES ('x', 'root')`);
+  } catch { rejected = true; }
+  check('admin_users rejects a role outside the CHECK', rejected);
+
+  const auditSvc = require(`${BACKEND}/src/services/adminAudit`);
+  const written = await auditSvc.record({
+    adminId: 'admin', action: 'user.ban', targetType: 'user', targetId: I1,
+    reason: 'integration check', metadata: { before: { banned: false } },
+    ip: auditSvc.clientIp({ ip: '::ffff:10.0.0.1' }),
+  });
+  check('the audit log accepts an IPv4-mapped address and returns its id', Number(written.id) > 0);
+
+  const { rows: [auditRow] } = await pg.query(
+    `SELECT host(ip) AS ip, metadata, status FROM admin_audit_log WHERE id = $1`, [written.id]
+  );
+  check('and stores it unwrapped, with metadata and a null status',
+    auditRow.ip === '10.0.0.1' && auditRow.metadata.before.banned === false && auditRow.status === null,
+    JSON.stringify(auditRow));
+
+  // ── Broadcasts need the widened notifications CHECK ───────────
+  let announceErr = '';
+  const { rows: [liveUser] } = await pg.query(
+    `SELECT id FROM users WHERE deleted_at IS NULL ORDER BY created_at LIMIT 1`
+  );
+  try {
+    await pg.query(
+      `INSERT INTO notifications (user_id, type, title, body) VALUES ($1, 'announcement', 'Hi', 'There')`,
+      [liveUser.id]
+    );
+  } catch (err) { announceErr = err.message; }
+  check("notifications accepts type 'announcement' after 028", !announceErr, announceErr);
+
+  // ── Metrics SQL, against real rows ────────────────────────────
+  const metrics = require(`${BACKEND}/src/services/adminMetrics`);
+  const stats = await metrics.getStats();
+  check('stats are exact and never negative',
+    Number.isInteger(stats.total_users) && Object.values(stats).every((v) => v >= 0), JSON.stringify(stats));
+
+  // A signup at 23:30 UTC belongs to the NEXT day in Asia/Kolkata (+05:30).
+  // Bucketing on created_at::date would put it on the previous one and make
+  // every chart look like it dips overnight.
+  await pg.query(`INSERT INTO users (id, email, role, created_at) VALUES ('tz-user', 'tz@x.com', 'brand', '2026-03-10T23:30:00Z')`);
+  const ts = await metrics.getTimeseries({ from: '2026-03-10', to: '2026-03-12', tz: 'Asia/Kolkata' });
+  const day10 = ts.series.find((d) => d.day === '2026-03-10');
+  const day11 = ts.series.find((d) => d.day === '2026-03-11');
+  check('the time series gap-fills every day in range', ts.series.length === 3, JSON.stringify(ts.series.map((d) => d.day)));
+  check('and buckets a 23:30 UTC signup into the next IST day',
+    day10.signups === 0 && day11.signups === 1, JSON.stringify({ day10, day11 }));
+
+  const funnel = await metrics.getFunnel({ from: '2020-01-01', to: '2030-01-01' });
+  const counts = funnel.stages.map((s) => s.count);
+  // Nested by construction, so this can only fail if a stage stops repeating
+  // the conditions of the one before it.
+  check('the funnel never increases from one stage to the next',
+    counts.every((n, i) => i === 0 || n <= counts[i - 1]),
+    JSON.stringify(funnel.stages.map((s) => [s.key, s.count])));
+  check('profile completeness is reported beside the funnel, not inside it',
+    typeof funnel.profile_complete?.count === 'number'
+      && !funnel.stages.some((s) => s.key === 'profile_complete'),
+    JSON.stringify(funnel.profile_complete));
 
   // ── Onboarding upsert (still an open production question) ─────
   const auth = require(`${BACKEND}/src/controllers/authController`);
