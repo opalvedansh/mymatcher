@@ -3,7 +3,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import {
   FlatList,
-  Image,
   Platform,
   Pressable,
   SafeAreaView,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useSocketStatus } from '@/hooks/useSocketStatus';

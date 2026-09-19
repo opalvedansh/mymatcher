@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  Image,
   ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
@@ -13,6 +12,7 @@ import {
   ScrollView,
   SafeAreaView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -133,7 +133,7 @@ export default function CreatePostScreen() {
             {/* ── Image ──────────────────────────────────────────── */}
             {imageUri ? (
               <View style={[styles.previewContainer, { aspectRatio }]}>
-                <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
 
                 <LinearGradient
                   colors={['transparent', 'rgba(0,0,0,0.6)']}

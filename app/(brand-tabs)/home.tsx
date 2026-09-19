@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Image } from 'expo-image';
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   FlatList,
-  Image,
   Platform,
   Pressable,
   ScrollView,
-  Share,
   Animated,
   AccessibilityInfo,
   useWindowDimensions,
@@ -20,9 +19,11 @@ import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
-import { getFeedStories, uploadImage, uploadStory } from '@/api';
+import { getFeedStories, getPostFeed, uploadImage, uploadStory } from '@/api';
 import api from '@/api/client';
 import { StoryViewer } from '@/components/StoryViewer';
+import CommentsSheet from '@/components/CommentsSheet';
+import { sharePost as sharePostToOS } from '@/utils/postShare';
 import { Avatar } from '@/components/ChatAvatar';
 import { showAlert } from '@/components/ActionSheet';
 import { openSafetyMenu } from '@/components/safetyMenu';
@@ -51,13 +52,19 @@ function fmtCount(n: number): string {
 }
 
 // ─── Feed Post Card ───────────────────────────────────────────────
-function FeedPostCard({
+// Memoised because the feed re-renders on every like, refresh and pagination
+// tick; without this each one re-renders every mounted card, photos included.
+// All six props are referentially stable — the callbacks are useCallback'd in
+// the parent and `post` is replaced only when that row's data actually changes.
+const FeedPostCard = memo(function FeedPostCard({
   post,
   width,
   isOwnPost,
   reduceMotion,
   onLikeChange,
   onAuthorBlocked,
+  onOpenComments,
+  onShared,
 }: {
   post: Post;
   width: number;
@@ -65,6 +72,8 @@ function FeedPostCard({
   reduceMotion: boolean;
   onLikeChange: (postId: string, liked: boolean, count: number) => void;
   onAuthorBlocked: (userId: string) => void;
+  onOpenComments: (post: Post) => void;
+  onShared: (postId: string, sharesCount: number) => void;
 }) {
   const [liking, setLiking] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
@@ -92,13 +101,21 @@ function FeedPostCard({
     }
   };
 
-  const sharePost = () => {
-    Share.share({ message: post.caption || 'Check out this post on Matchr' }).catch(() => {});
+  const sharePost = async () => {
+    const count = await sharePostToOS(post);
+    if (count !== null) onShared(post.id, count);
   };
 
   return (
     <View style={[fc.card, { width: Math.min(width - 32, 520) }]}>
-      <Image source={{ uri: post.image_url }} style={fc.image} resizeMode="cover" />
+      <Image
+        source={{ uri: post.image_url }}
+        style={fc.image}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={150}
+        recyclingKey={post.id}
+      />
 
       <LinearGradient
         colors={['rgba(0,0,0,0.75)', 'rgba(0,0,0,0.30)', 'transparent']}
@@ -114,7 +131,13 @@ function FeedPostCard({
       {/* Header: avatar + name + safety menu */}
       <View style={fc.header}>
         {post.author_avatar ? (
-          <Image source={{ uri: post.author_avatar }} style={fc.avatar} />
+          <Image
+            source={{ uri: post.author_avatar }}
+            style={fc.avatar}
+            cachePolicy="memory-disk"
+            transition={150}
+            recyclingKey={post.user_id}
+          />
         ) : (
           <View style={fc.avatar}><Avatar uri={null} name={authorName} size={38} /></View>
         )}
@@ -169,7 +192,17 @@ function FeedPostCard({
           <Animated.View style={{ transform: [{ scale: heartScale }] }}>
             <Ionicons name={liked ? 'heart' : 'heart-outline'} size={22} color={liked ? '#FF3B30' : '#FFF'} />
           </Animated.View>
-          <Text style={fc.statTxt}>{fmtCount(post.likes_count)}</Text>
+          {post.likes_count > 0 && <Text style={fc.statTxt}>{fmtCount(post.likes_count)}</Text>}
+        </Pressable>
+        <Pressable
+          onPress={() => onOpenComments(post)}
+          accessibilityRole="button"
+          accessibilityLabel={`Comments, ${post.comments_count ?? 0}`}
+          hitSlop={8}
+          style={({ pressed }) => [fc.stat, pressed && fc.pressed]}
+        >
+          <Ionicons name="chatbubble-outline" size={21} color="#FFF" />
+          {!!post.comments_count && <Text style={fc.statTxt}>{fmtCount(post.comments_count)}</Text>}
         </Pressable>
         <Pressable
           onPress={sharePost}
@@ -179,12 +212,12 @@ function FeedPostCard({
           style={({ pressed }) => [fc.stat, pressed && fc.pressed]}
         >
           <Ionicons name="paper-plane-outline" size={22} color="#FFF" />
-          <Text style={fc.statTxt}>Share</Text>
+          {!!post.shares_count && <Text style={fc.statTxt}>{fmtCount(post.shares_count)}</Text>}
         </Pressable>
       </BlurView>
     </View>
   );
-}
+});
 
 function PostSkeleton({ width }: { width: number }) {
   return (
@@ -216,6 +249,9 @@ export default function BrandHomeScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [commentsFor, setCommentsFor] = useState<Post | null>(null);
+  // Ranked-feed cursor. Null means "start over", which also rebuilds ranking.
+  const cursorRef = useRef<string | null>(null);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
@@ -223,9 +259,9 @@ export default function BrandHomeScreen() {
     return () => sub.remove();
   }, []);
 
-  const fetchStories = async () => {
+  const fetchStories = async (force = false) => {
     try {
-      const res = await getFeedStories() as any;
+      const res = await getFeedStories(force) as any;
       setStories(res.data || res);
     } catch (e) {
       console.log('Failed to fetch stories', e);
@@ -233,18 +269,23 @@ export default function BrandHomeScreen() {
   };
 
   const fetchPosts = useCallback(async (mode: 'initial' | 'refresh' | 'more') => {
-    const offset = mode === 'more' ? posts.length : 0;
+    // The feed is ranked, so paging is by cursor, not offset: scores shift as
+    // posts arrive and an offset would repeat and skip rows. Starting over
+    // clears the cursor, which is also what rebuilds the ranking server-side.
+    const cursor = mode === 'more' ? cursorRef.current : null;
+    if (mode === 'more' && !cursor) return;
     if (mode === 'refresh') setRefreshing(true);
     if (mode === 'more') setLoadingMore(true);
     try {
-      const res = await api.get(`/api/posts/feed?limit=${PAGE_SIZE}&offset=${offset}`) as any;
-      const page: Post[] = res.data?.posts || res.posts || [];
+      const res = await getPostFeed(PAGE_SIZE, cursor);
+      const page: Post[] = res.posts || [];
+      cursorRef.current = res.next_cursor ?? null;
       setPosts(prev => {
         if (mode !== 'more') return page;
         const seen = new Set(prev.map(p => p.id));
         return [...prev, ...page.filter(p => !seen.has(p.id))];
       });
-      setHasMore(page.length === PAGE_SIZE);
+      setHasMore(Boolean(res.next_cursor));
       setError(false);
     } catch (e) {
       console.log('Failed to fetch posts', e);
@@ -254,7 +295,7 @@ export default function BrandHomeScreen() {
       setRefreshing(false);
       setLoadingMore(false);
     }
-  }, [posts.length]);
+  }, []);
 
   useEffect(() => {
     fetchStories();
@@ -263,7 +304,8 @@ export default function BrandHomeScreen() {
   }, []);
 
   const refresh = () => {
-    fetchStories();
+    // The user explicitly asked for fresh data, so skip the stories cache.
+    fetchStories(true);
     fetchPosts('refresh');
   };
 
@@ -273,9 +315,48 @@ export default function BrandHomeScreen() {
     fetchPosts('initial');
   };
 
-  const handleLikeChange = (postId: string, liked: boolean, count: number) => {
+  // Stable identities: these are props of the memoised row, so recreating them
+  // each render would defeat the memo and re-render the whole feed on any
+  // state change. Both use the updater form and capture nothing.
+  const handleLikeChange = useCallback((postId: string, liked: boolean, count: number) => {
     setPosts(prev => prev.map(p => (p.id === postId ? { ...p, liked_by_me: liked, likes_count: count } : p)));
-  };
+  }, []);
+
+  const handleAuthorBlocked = useCallback((authorId: string) => {
+    setPosts(prev => prev.filter(p => p.user_id !== authorId));
+  }, []);
+
+  const handleOpenComments = useCallback((post: Post) => setCommentsFor(post), []);
+
+  const handleShared = useCallback((postId: string, sharesCount: number) => {
+    setPosts(prev => prev.map(p => (p.id === postId ? { ...p, shares_count: sharesCount } : p)));
+  }, []);
+
+  const handleCommentCount = useCallback((postId: string, delta: number) => {
+    setPosts(prev =>
+      prev.map(p =>
+        p.id === postId ? { ...p, comments_count: Math.max((p.comments_count ?? 0) + delta, 0) } : p
+      )
+    );
+  }, []);
+
+  const renderPost = useCallback(
+    ({ item }: { item: Post }) => (
+      <FeedPostCard
+        post={item}
+        width={width}
+        isOwnPost={item.user_id === user?.id}
+        reduceMotion={reduceMotion}
+        onLikeChange={handleLikeChange}
+        onAuthorBlocked={handleAuthorBlocked}
+        onOpenComments={handleOpenComments}
+        onShared={handleShared}
+      />
+    ),
+    [width, user?.id, reduceMotion, handleLikeChange, handleAuthorBlocked, handleOpenComments, handleShared],
+  );
+
+  const keyExtractor = useCallback((item: Post) => item.id, []);
 
   const handleAddStory = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -398,17 +479,14 @@ export default function BrandHomeScreen() {
     <SafeAreaView style={s.root}>
       <FlatList
         data={loading || error ? [] : posts}
-        keyExtractor={i => i.id}
-        renderItem={({ item }) => (
-          <FeedPostCard
-            post={item}
-            width={width}
-            isOwnPost={item.user_id === user?.id}
-            reduceMotion={reduceMotion}
-            onLikeChange={handleLikeChange}
-            onAuthorBlocked={(authorId) => setPosts(prev => prev.filter(p => p.user_id !== authorId))}
-          />
-        )}
+        keyExtractor={keyExtractor}
+        renderItem={renderPost}
+        // Feed rows are near-full-screen photos, so the defaults (10 initial,
+        // window of 21 screens) mount far more than can ever be visible.
+        initialNumToRender={3}
+        maxToRenderPerBatch={3}
+        windowSize={5}
+        removeClippedSubviews
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.feedContent}
         ListHeaderComponent={listHeader}
@@ -420,6 +498,19 @@ export default function BrandHomeScreen() {
         onEndReached={() => {
           if (!loading && !loadingMore && hasMore && posts.length > 0) fetchPosts('more');
         }}
+      />
+
+      <CommentsSheet
+        visible={!!commentsFor}
+        postId={commentsFor?.id ?? null}
+        postAuthorId={commentsFor?.user_id ?? null}
+        currentUserId={user?.id ?? null}
+        onCountChange={handleCommentCount}
+        onViewProfile={(userId) => {
+          setCommentsFor(null);
+          router.push(`/profile/${userId}`);
+        }}
+        onClose={() => setCommentsFor(null)}
       />
 
       <StoryViewer

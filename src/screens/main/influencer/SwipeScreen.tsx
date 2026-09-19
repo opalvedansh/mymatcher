@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   Pressable,
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -32,6 +32,8 @@ import { NotificationBell } from '@/components/NotificationBell';
 
 const ACCENT = '#FF6B2B';
 const PAGE_SIZE = 20;
+// How many upcoming card photos to pull into the cache ahead of the user.
+const PREFETCH_AHEAD = 3;
 
 type CardItem = {
   id: string;
@@ -90,7 +92,16 @@ const CardContent = ({ item }: { item: CardItem }) => (
   <View style={card.wrapper}>
     {/* ── Photo Background ── */}
     {item.image ? (
-      <Image source={{ uri: item.image }} style={card.photo} resizeMode="cover" />
+      <Image
+        source={{ uri: item.image }}
+        style={card.photo}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={150}
+        // The deck reuses this component as cards advance; without a recycling
+        // key the next brand briefly shows the previous brand's photo.
+        recyclingKey={item.id}
+      />
     ) : (
       <View style={[card.photo, card.photoFallback]}>
         <Text style={card.fallbackInitial}>{item.name.charAt(0).toUpperCase()}</Text>
@@ -221,6 +232,19 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
       loadingMoreRef.current = false;
     }
   }, []);
+
+  // ── Warm upcoming card photos ───────────────────────────────────
+  // Only the top card is mounted, so without this every swipe reveals a card
+  // whose photo has not started downloading yet. Prefetching the next few keeps
+  // the deck feeling instant; failures are ignored because the <Image> below
+  // still requests the photo normally.
+  useEffect(() => {
+    const urls = brands
+      .slice(currentIndex + 1, currentIndex + 1 + PREFETCH_AHEAD)
+      .map((b) => (isValidUrl(b.cover_url) ? b.cover_url : isValidUrl(b.logo_url) ? b.logo_url : null))
+      .filter((u): u is string => !!u);
+    if (urls.length) Image.prefetch(urls, { cachePolicy: 'memory-disk' }).catch(() => {});
+  }, [brands, currentIndex]);
 
   // ── Swipe handler ───────────────────────────────────────────────
   const handleSwipe = useCallback(async (dir: 'left' | 'right') => {

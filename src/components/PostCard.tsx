@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   Pressable,
   TouchableOpacity,
   Animated,
   Share,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -22,6 +22,9 @@ export interface Post {
   image_url: string;
   caption?: string | null;
   likes_count: number;
+  // Optional: posts returned by older endpoints predate these counters.
+  comments_count?: number;
+  shares_count?: number;
   created_at: string;
   author_name?: string;
   author_avatar?: string;
@@ -116,6 +119,9 @@ export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }:
           <Image
             source={{ uri: post.author_avatar || 'https://picsum.photos/seed/' + post.user_id + '/80/80' }}
             style={styles.avatar}
+            cachePolicy="memory-disk"
+            transition={150}
+            recyclingKey={post.user_id}
           />
         </View>
         <View style={styles.authorInfo}>
@@ -156,7 +162,10 @@ export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }:
         <Image
           source={{ uri: post.image_url }}
           style={styles.postImage}
-          resizeMode="cover"
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={150}
+          recyclingKey={post.id}
         />
         {/* Top gradient for immersion */}
         <LinearGradient

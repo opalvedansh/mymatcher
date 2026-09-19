@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Modal,
-  Image,
   Pressable,
   Dimensions,
   Animated,
@@ -14,6 +13,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { recordStoryView, getStoryViewers } from '@/api';
@@ -219,7 +219,7 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
             <Image
               source={{ uri: currentItem.media_url }}
               style={styles.image}
-              resizeMode="cover"
+              contentFit="cover"
             />
           </Pressable>
 

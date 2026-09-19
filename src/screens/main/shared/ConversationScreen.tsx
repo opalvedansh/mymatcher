@@ -207,7 +207,11 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
     initialScrollDone.current = true;
   };
 
-  const renderRow = ({ item }: { item: Row }) => {
+  // Stable identity matters here: the composer's `inputText` lives in this
+  // component, so a fresh renderRow on each keystroke would re-render every
+  // visible message bubble while the user types. With the identity held
+  // constant, VirtualizedList's cells see unchanged props and bail out.
+  const renderRow = useCallback(({ item }: { item: Row }) => {
     if (item.kind === 'day') {
       return (
         <View style={styles.dayRow}>
@@ -274,7 +278,9 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
         </View>
       </View>
     );
-  };
+  }, [failedIds, lastMineId, chatAvatar, chatName, deliver]);
+
+  const keyExtractor = useCallback((row: Row) => row.key, []);
 
   let body: React.ReactNode;
   if (loading) {
@@ -315,8 +321,13 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
       <FlatList
         ref={flatListRef}
         data={rows}
-        keyExtractor={(row) => row.key}
+        keyExtractor={keyExtractor}
         renderItem={renderRow}
+        // A long thread should not mount every bubble it has ever loaded.
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+        windowSize={11}
+        removeClippedSubviews
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="interactive"

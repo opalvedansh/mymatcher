@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 
 /** Round avatar that falls back to the person's initial when there is no usable photo. */
 export function Avatar({ uri, name, size }: { uri?: string | null; name: string; size: number }) {

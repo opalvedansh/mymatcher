@@ -51,6 +51,7 @@ const mapsRoutes    = require('./routes/maps');
 const notificationRoutes = require('./routes/notifications');
 const ratingRoutes = require('./routes/ratings');
 const postsRoutes   = require('./routes/posts');
+const shareController = require('./controllers/shareController');
 const safetyRoutes  = require('./routes/safety');
 
 const app  = express();
@@ -163,6 +164,15 @@ app.use(globalLimiter);
 
 // ─── Health check ────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json(healthBody('api')));
+
+// ─── Public share pages and app-link association files ───────────
+// Before maintenance mode on purpose: iOS and Android refetch the association
+// files on install and on app update, and a maintenance window that 503s them
+// breaks deep linking for every user who updates during it. The share pages
+// are public link previews and have the same reason to stay up.
+app.get('/p/:postId', shareController.sharePage);
+app.get('/.well-known/apple-app-site-association', shareController.appleAppSiteAssociation);
+app.get('/.well-known/assetlinks.json', shareController.androidAssetLinks);
 
 // ─── Admin panel (static SPA, same origin) ───────────────────────
 mountAdminPanel(app);

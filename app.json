@@ -11,6 +11,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.webnexis.mymatcher1",
       "buildNumber": "5",
+      "associatedDomains": ["applinks:api.mymatchr.in"],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Matchr needs camera access to take profile photos.",
@@ -20,6 +21,20 @@
     },
     "android": {
       "package": "com.webnexis.matchr",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "api.mymatchr.in",
+              "pathPrefix": "/p/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -52,7 +67,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.943950919478-qdt1laap0hufg4f5cdh5vhkv7b75f48h"
         }
-      ]
+      ],
+      "expo-image"
     ]
   }
 }

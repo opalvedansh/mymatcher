@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
   ImageBackground,
   useWindowDimensions,
@@ -18,6 +17,7 @@ import {
   Platform,
   Pressable,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -883,7 +883,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 key={i}
                 source={{ uri: photoUrl }}
                 style={[s.carouselImg, { width: width - (H * 2) }]}
-                resizeMode="cover"
+                contentFit="cover"
               />
             ))}
             {campaignPhotos.length === 0 && (
@@ -1717,6 +1717,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 28,
+    // flexShrink defaults to 0 in React Native (unlike CSS), so without this
+    // the sheet grows to its full content height, ignores modalSheetWrap's
+    // maxHeight and pushes "Save changes" off the bottom of the screen.
+    // Shrinking here is what lets modalScroll absorb the overflow instead.
+    flexShrink: 1,
   },
   grabber: {
     width: 36,

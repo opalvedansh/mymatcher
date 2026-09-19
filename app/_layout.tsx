@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import { pushDataOf, pushSupported } from '@/services/pushNotifications';
 import { notificationHref } from '@/services/notificationRoutes';
 import { refreshUnreadNotifications } from '@/hooks/useUnreadNotifications';
+import { setPendingDeepLink, takePendingDeepLink } from '@/services/pendingDeepLink';
 
 // Owns every auth-driven redirect. This lives in the root layout because it
 // must stay mounted across the sign-in transition — a screen that routes itself
@@ -25,7 +26,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const inOnboarding = group === 'onboarding';
 
     if (!user) {
-      if (!inAuthGroup) router.replace('/auth/login');
+      if (!inAuthGroup) {
+        // A shared post link normally opens with no session. Remember where it
+        // was headed so sign-in can finish the trip instead of dropping them
+        // on the home feed.
+        setPendingDeepLink('/' + segments.join('/'));
+        router.replace('/auth/login');
+      }
       return;
     }
 
@@ -53,7 +60,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const inWrongTabs = group === (isBrand ? '(influencer-tabs)' : '(brand-tabs)');
 
     if (inAuthGroup || inOnboarding || group === undefined || inWrongTabs) {
+      // Home first, so the parked screen has a feed to go back to.
       router.replace(isBrand ? '/(brand-tabs)/home' : '/(influencer-tabs)/home');
+      const pending = takePendingDeepLink();
+      if (pending) router.push(pending as never);
     }
   }, [user, loading, onboardingComplete, onboardingData, userDataError, segments, router]);
 
@@ -99,6 +109,7 @@ export default function RootLayout() {
             <Stack.Screen name="story-camera" options={{ presentation: 'fullScreenModal', headerShown: false }} />
             <Stack.Screen name="notifications" options={{ headerShown: false, animation: 'slide_from_right' }} />
             <Stack.Screen name="profile/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
+            <Stack.Screen name="p/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
           </Stack>
           <ActionSheetHost />
           <PushResponseHandler />

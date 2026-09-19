@@ -5,12 +5,12 @@ import {
   StyleSheet,
   SafeAreaView,
   FlatList,
-  Image,
   Platform,
   Pressable,
   Dimensions,
   ScrollView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { AntDesign, Feather, FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -79,7 +79,14 @@ function PostCard({ item, width }: { item: typeof FEED_POSTS[0], width: number }
   return (
     <View style={[fc.card, { width: width - 32 }]}>
       {/* Background image */}
-      <Image source={{ uri: item.postImage }} style={fc.image} resizeMode="cover" />
+      <Image
+        source={{ uri: item.postImage }}
+        style={fc.image}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={150}
+        recyclingKey={item.id}
+      />
 
       {/* Black shadow at the top of the card — behind header */}
       <LinearGradient
@@ -194,7 +201,7 @@ export function BrandDashboardScreen() {
           style={st.ring}
         >
           <View style={[st.logoCircle, { backgroundColor: item.bg || '#1E1E1E' }]}>
-            <Image source={{ uri: item.avatar || item.logo }} style={st.logoImg} resizeMode="cover" />
+            <Image source={{ uri: item.avatar || item.logo }} style={st.logoImg} contentFit="cover" />
           </View>
         </LinearGradient>
         {item.isMe && (

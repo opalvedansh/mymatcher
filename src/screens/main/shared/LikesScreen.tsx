@@ -5,11 +5,11 @@ import {
   StyleSheet,
   SafeAreaView,
   Pressable,
-  Image,
   ScrollView,
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getMatches, getLikesReceived } from '@/api';

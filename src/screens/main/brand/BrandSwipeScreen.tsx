@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   Dimensions,
-  Image,
   Pressable,
   ScrollView,
   ActivityIndicator,
   Alert
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -33,6 +33,8 @@ import { NotificationBell } from '@/components/NotificationBell';
 const { width } = Dimensions.get('window');
 const ACCENT = '#FF6B2B';
 const PAGE_SIZE = 20;
+// How many upcoming card photos to pull into the cache ahead of the user.
+const PREFETCH_AHEAD = 3;
 
 /** 40000 → 40K. Never rounds a real number up into a bigger one. */
 const compact = (n: number) =>
@@ -57,7 +59,16 @@ const CardContent = ({ item }: { item: CardItem }) => (
   <View style={card.wrapper}>
     {/* ── Photo Background ── */}
     {item.image ? (
-      <Image source={{ uri: item.image }} style={card.photo} resizeMode="cover" />
+      <Image
+        source={{ uri: item.image }}
+        style={card.photo}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={150}
+        // The deck reuses this component as cards advance; without a recycling
+        // key the next creator briefly shows the previous creator's photo.
+        recyclingKey={item.id}
+      />
     ) : (
       <View style={[card.photo, card.photoFallback]}>
         <Text style={card.fallbackInitial}>{item.name.charAt(0).toUpperCase()}</Text>
@@ -303,6 +314,22 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
     if (url.startsWith('blob:') || url.startsWith('file://')) return false;
     return true;
   };
+
+  // ── Warm upcoming card photos ───────────────────────────────────
+  // Only the top card is mounted, so without this every swipe reveals a card
+  // whose photo has not started downloading yet. Prefetching the next few keeps
+  // the deck feeling instant; failures are ignored because the <Image> above
+  // still requests the photo normally.
+  useEffect(() => {
+    const urls = influencers
+      .slice(currentIndex + 1, currentIndex + 1 + PREFETCH_AHEAD)
+      .map((p) => (isValidUrl(p.avatar_url) ? (p.avatar_url as string) : null))
+      .filter((u): u is string => !!u);
+    if (urls.length) Image.prefetch(urls, { cachePolicy: 'memory-disk' }).catch(() => {});
+    // isValidUrl is a pure local helper with no captured state, so it is
+    // deliberately not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [influencers, currentIndex]);
 
   // Only real profile data reaches the card; missing figures are left out
   // rather than shown as a zero, which reads as a measurement, not a blank.

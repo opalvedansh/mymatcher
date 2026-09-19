@@ -11,7 +11,7 @@
     "worker": "node src/worker.js",
     "migrate": "node migrate.js",
     "test": "jest --forceExit --detectOpenHandles --verbose",
-    "test:integration": "node tests/integration/controllers.js && node tests/integration/migrate.mjs && node tests/integration/scale.js"
+    "test:integration": "node tests/integration/controllers.js && node tests/integration/migrate.mjs && node tests/integration/engagement.mjs && node tests/integration/sharepage.mjs && node tests/integration/scale.js"
   },
   "redisMemoryServer": {
     "disablePostinstall": "1"

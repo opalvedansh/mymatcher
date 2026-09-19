@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   Modal,
-  Image,
   ScrollView,
   Pressable,
   SafeAreaView
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 

@@ -24,6 +24,7 @@ import type {
   ChatResponse,
   NotificationsResponse,
 } from './types';
+import type { Post } from '@/components/PostCard';
 
 // ─── Upload ───────────────────────────────────────────────────────
 
@@ -100,7 +101,11 @@ export function requestVerification(business_name: string, reg_number: string) {
 }
 
 export function getProfileById(userId: string) {
-  return api.get<AnyProfile>(`/api/profiles/${userId}`);
+  // Someone else's profile is opened repeatedly while swiping and from chat,
+  // and changes rarely. The server already caches this route for 300s, so a
+  // short client TTL only removes a round-trip that was returning the same
+  // body anyway. Any mutation from this device clears it (see api/client).
+  return api.get<AnyProfile>(`/api/profiles/${userId}`, { ttlMs: 60_000 });
 }
 
 export function syncInstagram(instagram_handle: string) {
@@ -187,8 +192,14 @@ export function uploadStory(media_url: string) {
   return api.post('/api/stories', { media_url });
 }
 
-export function getFeedStories() {
-  return api.get('/api/stories/feed');
+/**
+ * Both home screens fetch this on every mount, and stories only change when
+ * someone posts one. Posting from this device goes through api.post, which
+ * clears the cache, so the author still sees their own story immediately.
+ * Pull-to-refresh passes `force` so the gesture always hits the network.
+ */
+export function getFeedStories(force = false) {
+  return api.get('/api/stories/feed', { ttlMs: 30_000, force });
 }
 
 export function recordStoryView(storyId: string) {
@@ -246,4 +257,75 @@ export function getMapAutocomplete(input: string, types: string = '(cities)') {
 
 export function getMapGeocode(placeId: string) {
   return api.get<any>(`/api/maps/geocode?place_id=${encodeURIComponent(placeId)}`);
+}
+
+// ─── Posts: feed, comments and shares ─────────────────────────────
+
+export interface PostComment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  parent_id: string | null;
+  body: string;
+  likes_count: number;
+  replies_count: number;
+  edited_at: string | null;
+  created_at: string;
+  author_name?: string | null;
+  author_avatar?: string | null;
+  author_verified?: boolean;
+  liked_by_me?: boolean;
+}
+
+/**
+ * One page of the ranked feed. Pass the previous page's `next_cursor` to
+ * continue; omit it to start over, which also rebuilds the ranking and is
+ * what pull-to-refresh should do.
+ */
+export function getPostFeed(limit = 20, cursor?: string | null) {
+  const url = cursor
+    ? `/api/posts/feed?limit=${limit}&cursor=${encodeURIComponent(cursor)}`
+    : `/api/posts/feed?limit=${limit}`;
+  return api.get<{ posts: Post[]; next_cursor: string | null }>(url);
+}
+
+export function getPost(postId: string) {
+  return api.get<{ post: Post }>(`/api/posts/${postId}`);
+}
+
+export function getPostComments(postId: string, limit = 20, before?: string | null) {
+  const url = before
+    ? `/api/posts/${postId}/comments?limit=${limit}&before=${encodeURIComponent(before)}`
+    : `/api/posts/${postId}/comments?limit=${limit}`;
+  return api.get<{ comments: PostComment[]; next_before: string | null }>(url);
+}
+
+export function getCommentReplies(postId: string, commentId: string, limit = 20, after?: string | null) {
+  const url = after
+    ? `/api/posts/${postId}/comments/${commentId}/replies?limit=${limit}&after=${encodeURIComponent(after)}`
+    : `/api/posts/${postId}/comments/${commentId}/replies?limit=${limit}`;
+  return api.get<{ replies: PostComment[]; next_after: string | null }>(url);
+}
+
+export function createPostComment(postId: string, body: string, parentId?: string | null) {
+  return api.post<{ comment: PostComment }>(`/api/posts/${postId}/comments`, {
+    body,
+    parent_id: parentId ?? null,
+  });
+}
+
+export function deletePostComment(postId: string, commentId: string) {
+  return api.delete<{ success: boolean }>(`/api/posts/${postId}/comments/${commentId}`);
+}
+
+export function likePostComment(postId: string, commentId: string, liked: boolean) {
+  return api.post<{ liked: boolean; likes_count: number }>(
+    `/api/posts/${postId}/comments/${commentId}/like`,
+    { liked }
+  );
+}
+
+/** Records that a share sheet was opened. Best effort: never block the share. */
+export function recordPostShare(postId: string, channel: 'app' | 'link' | 'web' = 'app') {
+  return api.post<{ shares_count: number }>(`/api/posts/${postId}/share`, { channel });
 }

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  Image,
   Platform,
   Keyboard,
   Pressable,
@@ -19,6 +18,7 @@ import {
 
   AccessibilityInfo,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons, MaterialIcons, Feather, MaterialCommunityIcons, FontAwesome6 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useWindowDimensions } from 'react-native';
@@ -707,7 +707,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 key={idx}
                 source={{ uri: photoUri }} 
                 style={{ width, height: height * 0.7 }}
-                resizeMode="cover"
+                contentFit="cover"
               />
             ))}
           </ScrollView>
@@ -916,7 +916,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                >
                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }]}>
                    {item.thumbnail_url ? (
-                     <Image source={{ uri: item.thumbnail_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                     <Image source={{ uri: item.thumbnail_url }} style={StyleSheet.absoluteFill} contentFit="cover" />
                    ) : (
                      <View style={{ padding: 8, alignItems: 'center' }}>
                        <Ionicons name="logo-instagram" size={24} color="#888" />

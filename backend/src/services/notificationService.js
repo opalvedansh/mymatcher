@@ -124,8 +124,10 @@ async function sendBulkNotifications(notifications) {
  * message bumps the existing row instead of adding another.
  * Failures are logged, never thrown, so the push still goes out.
  *
- * @param {Array<{ userId: string, type: 'new_match'|'new_like'|'new_message',
- *   actorId?: string|null, matchId?: string|null, title: string, body?: string }>} items
+ * @param {Array<{ userId: string,
+ *   type: 'new_match'|'new_like'|'new_message'|'post_like'|'post_comment'|'comment_reply',
+ *   actorId?: string|null, matchId?: string|null, postId?: string|null,
+ *   commentId?: string|null, title: string, body?: string }>} items
  */
 async function recordNotifications(items) {
   if (!items.length) return;
@@ -133,13 +135,15 @@ async function recordNotifications(items) {
     const others = items.filter(i => i.type !== 'new_message');
     if (others.length) {
       await db.query(
-        `INSERT INTO notifications (user_id, type, actor_id, match_id, title, body)
-         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::uuid[], $5::text[], $6::text[])`,
+        `INSERT INTO notifications (user_id, type, actor_id, match_id, post_id, comment_id, title, body)
+         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::uuid[], $5::uuid[], $6::uuid[], $7::text[], $8::text[])`,
         [
           others.map(i => i.userId),
           others.map(i => i.type),
           others.map(i => i.actorId ?? null),
           others.map(i => i.matchId ?? null),
+          others.map(i => i.postId ?? null),
+          others.map(i => i.commentId ?? null),
           others.map(i => i.title),
           others.map(i => i.body ?? ''),
         ]
@@ -281,6 +285,67 @@ async function sendChatNotification(receiverId, senderId, matchId = null) {
   }
 }
 
+/** Display name for either profile type, or 'Someone' when neither exists. */
+async function displayName(userId) {
+  const { rows } = await db.query(
+    `SELECT name FROM (
+       SELECT name FROM brand_profiles      WHERE user_id = $1
+       UNION
+       SELECT name FROM influencer_profiles WHERE user_id = $1
+     ) AS profiles LIMIT 1`,
+    [userId]
+  );
+  return rows[0]?.name || 'Someone';
+}
+
+/**
+ * Notifies the post author that someone liked their post.
+ * Self-likes are skipped. Never throws: a failed notification must not fail
+ * the like itself.
+ */
+async function sendPostLikeNotification({ postId, postAuthorId, likerId }) {
+  if (!postAuthorId || postAuthorId === likerId) return;
+  try {
+    const name = await displayName(likerId);
+    const title = `${name} liked your post`;
+    await recordNotifications([
+      { userId: postAuthorId, actorId: likerId, type: 'post_like', postId, title, body: '' },
+    ]);
+    await sendBulkNotifications([
+      { userId: postAuthorId, title, body: '', data: { type: 'post_like', postId } },
+    ]);
+  } catch (err) {
+    console.error('[Push] Error sending post like notification:', err);
+  }
+}
+
+/**
+ * Notifies on a new comment: the post author for a top-level comment, the
+ * parent commenter for a reply. A reply does not also ping the post author —
+ * that turns every thread on a popular post into a notification storm.
+ *
+ * The comment body is included: unlike chat, a public comment is not private,
+ * and the preview is what makes the notification worth opening.
+ */
+async function sendCommentNotification({ postId, commentId, commentBody, actorId, recipientId, isReply }) {
+  if (!recipientId || recipientId === actorId) return;
+  try {
+    const name = await displayName(actorId);
+    const title = isReply ? `${name} replied to you` : `${name} commented on your post`;
+    const body = commentBody.length > 120 ? `${commentBody.slice(0, 119)}…` : commentBody;
+    const type = isReply ? 'comment_reply' : 'post_comment';
+
+    await recordNotifications([
+      { userId: recipientId, actorId, type, postId, commentId, title, body },
+    ]);
+    await sendBulkNotifications([
+      { userId: recipientId, title, body, data: { type, postId, commentId } },
+    ]);
+  } catch (err) {
+    console.error('[Push] Error sending comment notification:', err);
+  }
+}
+
 module.exports = {
   recordNotifications,
   sendNotification,
@@ -289,4 +354,6 @@ module.exports = {
   sendMatchNotification,
   sendMatchNotifications,
   sendChatNotification,
+  sendPostLikeNotification,
+  sendCommentNotification,
 };

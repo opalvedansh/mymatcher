@@ -110,7 +110,10 @@ export function ChatScreen({ onConversationStateChange, initialMatchId, onInitia
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matches, query, role]);
 
-  const renderItem = ({ item }: { item: MatchRecord }) => {
+  // Stable identity matters here: the search box's `query` lives in this
+  // component, so a fresh renderItem on each keystroke would re-render every
+  // visible chat row while the user types.
+  const renderItem = useCallback(({ item }: { item: MatchRecord }) => {
     const person = getMatchPerson(item);
     const name = person.name || 'Unknown';
     const sentByMe = !!item.last_message_sender && item.last_message_sender === user?.id;
@@ -152,7 +155,13 @@ export function ChatScreen({ onConversationStateChange, initialMatchId, onInitia
         </View>
       </Pressable>
     );
-  };
+    // getMatchPerson only depends on role, which is already a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, user?.id]);
+
+  const keyExtractor = useCallback((item: MatchRecord) => item.match_id, []);
+
+  const renderSeparator = useCallback(() => <View style={styles.separator} />, []);
 
   if (selectedMatch) {
     const person = getMatchPerson(selectedMatch);
@@ -209,12 +218,12 @@ export function ChatScreen({ onConversationStateChange, initialMatchId, onInitia
     body = (
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.match_id}
+        keyExtractor={keyExtractor}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ItemSeparatorComponent={renderSeparator}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor={ACCENT} colors={[ACCENT]} />
         }
