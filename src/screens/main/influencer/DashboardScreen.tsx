@@ -30,6 +30,7 @@ import { getFeedStories } from '@/api';
 import { StoryViewer } from '@/components/StoryViewer';
 import { PostCard, Post } from '@/components/PostCard';
 import api from '@/api/client';
+import { sz, tabBarClearance } from '@/theme/scale';
 
 
 export function DashboardScreen() {
@@ -118,7 +119,7 @@ export function DashboardScreen() {
               setShowAddMenu(true);
             }}
           >
-            <AntDesign name="plus" size={14} color="#FFF" />
+            <AntDesign name="plus" size={sz(14)} color="#FFF" />
           </Pressable>
         )}
         <Text style={styles.storyName} numberOfLines={1}>
@@ -147,7 +148,7 @@ export function DashboardScreen() {
 
   const ListEmpty = () => (
     <View style={styles.emptyFeed}>
-      <Ionicons name="images-outline" size={48} color="#333" />
+      <Ionicons name="images-outline" size={sz(48)} color="#333" />
       <Text style={styles.emptyFeedTitle}>No posts yet</Text>
       <Text style={styles.emptyFeedSub}>Be the first to share something!</Text>
     </View>
@@ -203,7 +204,7 @@ export function DashboardScreen() {
       {/* Fix 4: Real-time connection status banner */}
       {!isConnected && (
         <View style={styles.reconnectingBanner}>
-          <Ionicons name="wifi-outline" size={14} color="#1a1a1a" style={{ marginRight: 6 }} />
+          <Ionicons name="wifi-outline" size={sz(14)} color="#1a1a1a" style={{ marginRight: sz(6) }} />
           <Text style={styles.reconnectingText}>Reconnecting...</Text>
         </View>
       )}
@@ -212,19 +213,19 @@ export function DashboardScreen() {
       {!isConversationOpen && (
         <View style={styles.bottomNav}>
           <Pressable style={styles.navItem} onPress={() => setActiveTab('match')}>
-            <NavMatchIcon size={24} color={activeTab === 'match' ? '#FF6B2B' : '#555'} />
+            <NavMatchIcon size={sz(24)} color={activeTab === 'match' ? '#FF6B2B' : '#555'} />
           </Pressable>
           <Pressable style={styles.navItem} onPress={() => setActiveTab('home')}>
-            <NavHomeIcon size={24} color={activeTab === 'home' ? '#FF6B2B' : '#555'} />
+            <NavHomeIcon size={sz(24)} color={activeTab === 'home' ? '#FF6B2B' : '#555'} />
           </Pressable>
           <Pressable style={styles.navItem} onPress={() => setActiveTab('likes')}>
-            <NavHeartIcon size={26} color={activeTab === 'likes' ? '#FF6B2B' : '#555'} />
+            <NavHeartIcon size={sz(26)} color={activeTab === 'likes' ? '#FF6B2B' : '#555'} />
           </Pressable>
           <Pressable style={styles.navItem} onPress={() => setActiveTab('messages')}>
-            <NavMessageIcon size={24} color={activeTab === 'messages' ? '#FF6B2B' : '#555'} />
+            <NavMessageIcon size={sz(24)} color={activeTab === 'messages' ? '#FF6B2B' : '#555'} />
           </Pressable>
           <Pressable style={styles.navItem} onPress={() => setActiveTab('profile')}>
-            <NavProfileIcon size={24} color={activeTab === 'profile' ? '#FF6B2B' : '#555'} />
+            <NavProfileIcon size={sz(24)} color={activeTab === 'profile' ? '#FF6B2B' : '#555'} />
           </Pressable>
         </View>
       )}
@@ -257,13 +258,13 @@ export function DashboardScreen() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <Ionicons name="camera" size={24} color="#FFF" />
+                <Ionicons name="camera" size={sz(24)} color="#FFF" />
               </LinearGradient>
               <View style={addMenuStyles.optionText}>
                 <Text style={addMenuStyles.optionTitle}>Add Story</Text>
                 <Text style={addMenuStyles.optionDesc}>Share a photo or video for 24 hours</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#555" />
+              <Ionicons name="chevron-forward" size={sz(18)} color="#555" />
             </TouchableOpacity>
 
             {/* Add Post */}
@@ -274,13 +275,13 @@ export function DashboardScreen() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <Ionicons name="grid" size={22} color="#FFF" />
+                <Ionicons name="grid" size={sz(22)} color="#FFF" />
               </LinearGradient>
               <View style={addMenuStyles.optionText}>
                 <Text style={addMenuStyles.optionTitle}>Add Post</Text>
                 <Text style={addMenuStyles.optionDesc}>Share a permanent post to your profile</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#555" />
+              <Ionicons name="chevron-forward" size={sz(18)} color="#555" />
             </TouchableOpacity>
 
             {/* Cancel */}
@@ -300,21 +301,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#121212', // Dark background exactly like design
   },
   header: {
-    paddingVertical: 16,
+    paddingVertical: sz(16),
   },
   storiesContent: {
-    paddingHorizontal: 16,
-    gap: 16,
+    paddingHorizontal: sz(16),
+    gap: sz(16),
   },
   storyContainer: {
     alignItems: 'center',
-    width: 76,
+    width: sz(76),
   },
   storyRing: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    padding: 3, // Ring thickness
+    width: sz(76),
+    height: sz(76),
+    borderRadius: sz(38),
+    padding: sz(3), // Ring thickness
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -322,24 +323,24 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#121212',
-    borderRadius: 35,
-    padding: 3, // Gap between ring and avatar
+    borderRadius: sz(35),
+    padding: sz(3), // Gap between ring and avatar
     justifyContent: 'center',
     alignItems: 'center',
   },
   storyAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 35,
+    borderRadius: sz(35),
   },
   addStoryButton: {
     position: 'absolute',
-    bottom: 22,
+    bottom: sz(22),
     right: 0,
     backgroundColor: '#000',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: sz(24),
+    height: sz(24),
+    borderRadius: sz(12),
     borderWidth: 2,
     borderColor: '#121212',
     justifyContent: 'center',
@@ -347,43 +348,43 @@ const styles = StyleSheet.create({
   },
   storyName: {
     color: '#FFF',
-    fontSize: 12,
-    marginTop: 8,
+    fontSize: sz(12),
+    marginTop: sz(8),
     fontWeight: '400',
   },
   feedContent: {
-    paddingBottom: 100,
+    paddingBottom: tabBarClearance(100),
   },
   feedDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    marginHorizontal: 16,
+    marginHorizontal: sz(16),
   },
   postSeparator: {
-    height: 8,
+    height: sz(8),
     backgroundColor: '#0A0A0A',
   },
   emptyFeed: {
     alignItems: 'center',
-    paddingTop: 60,
-    gap: 10,
+    paddingTop: sz(60),
+    gap: sz(10),
   },
   emptyFeedTitle: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
-    marginTop: 8,
+    marginTop: sz(8),
   },
   emptyFeedSub: {
     color: '#555',
-    fontSize: 14,
+    fontSize: sz(14),
   },
   postContainer: {
     width: '100%',
     aspectRatio: 0.85,
     backgroundColor: '#222',
-    borderRadius: 32,
-    marginBottom: 24,
+    borderRadius: sz(32),
+    marginBottom: sz(24),
     overflow: 'hidden',
   },
   postImage: {
@@ -397,22 +398,22 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 130,
+    height: sz(130),
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    padding: sz(20),
   },
   postBrandLogo: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: sz(44),
+    height: sz(44),
+    borderRadius: sz(22),
     borderWidth: 2,
     borderColor: '#FFF',
   },
   postBrandInfo: {
-    marginLeft: 12,
+    marginLeft: sz(12),
   },
   postBrandNameRow: {
     flexDirection: 'row',
@@ -420,17 +421,17 @@ const styles = StyleSheet.create({
   },
   postBrandName: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '700',
   },
   postCategory: {
     color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: sz(12),
+    marginTop: sz(2),
   },
   postFooterFade: {
     // kept for legacy reference — removed from JSX
-    position: 'absolute', bottom: 60, left: 0, right: 0, height: 0,
+    position: 'absolute', bottom: sz(60), left: 0, right: 0, height: 0,
   },
   // Tall glass container — blur/tint blend gradually
   glassContainer: {
@@ -438,7 +439,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 110,            // taller = longer blend zone
+    height: sz(110),            // taller = longer blend zone
     justifyContent: 'flex-end',
     overflow: 'hidden',
     ...Platform.select({
@@ -458,9 +459,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 48,
-    paddingBottom: 18,
-    paddingTop: 10,
+    gap: sz(48),
+    paddingBottom: sz(18),
+    paddingTop: sz(10),
     borderTopWidth: 0,      // no hard border — tint gradient handles the edge
   },
   // Legacy
@@ -468,11 +469,11 @@ const styles = StyleSheet.create({
   postStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: sz(8),
   },
   postStatText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
   bottomNav: {
@@ -480,37 +481,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 58,
+    height: sz(58),
     backgroundColor: '#FFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: sz(24),
+    borderTopRightRadius: sz(24),
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingBottom: 4,
-    paddingHorizontal: 12,
+    paddingBottom: sz(4),
+    paddingHorizontal: sz(12),
   },
   navItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 38,
-    height: 38,
+    width: sz(38),
+    height: sz(38),
   },
   reconnectingBanner: {
     position: 'absolute',
-    bottom: 58,  // sits just above the bottom nav bar
+    bottom: tabBarClearance(58),  // sits just above the bottom nav bar
     left: 0,
     right: 0,
     backgroundColor: '#F5C518',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: sz(6),
     zIndex: 100,
   },
   reconnectingText: {
     color: '#1a1a1a',
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '600',
     letterSpacing: 0.3,
   },
@@ -536,40 +537,40 @@ const addMenuStyles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: '#1A1A1A',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    paddingTop: 12,
+    borderTopLeftRadius: sz(28),
+    borderTopRightRadius: sz(28),
+    paddingHorizontal: sz(20),
+    paddingBottom: sz(40),
+    paddingTop: sz(12),
   },
   handle: {
-    width: 40,
-    height: 4,
+    width: sz(40),
+    height: sz(4),
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 2,
+    borderRadius: sz(2),
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: sz(20),
   },
   title: {
     color: '#FFF',
-    fontSize: 20,
+    fontSize: sz(20),
     fontWeight: '700',
-    marginBottom: 20,
+    marginBottom: sz(20),
     letterSpacing: -0.3,
   },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#242424',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    gap: 14,
+    borderRadius: sz(16),
+    padding: sz(16),
+    marginBottom: sz(12),
+    gap: sz(14),
   },
   iconGradient: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
+    width: sz(50),
+    height: sz(50),
+    borderRadius: sz(14),
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -578,25 +579,25 @@ const addMenuStyles = StyleSheet.create({
   },
   optionTitle: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
-    marginBottom: 3,
+    marginBottom: sz(3),
   },
   optionDesc: {
     color: '#888',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: sz(12),
+    lineHeight: sz(16),
   },
   cancel: {
-    marginTop: 4,
-    paddingVertical: 16,
+    marginTop: sz(4),
+    paddingVertical: sz(16),
     alignItems: 'center',
     backgroundColor: '#242424',
-    borderRadius: 16,
+    borderRadius: sz(16),
   },
   cancelText: {
     color: '#FF4500',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
 });

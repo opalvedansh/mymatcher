@@ -22,6 +22,9 @@ import type {
   VerificationRequestResult,
   UserRole,
   ChatResponse,
+  ChatAttachmentKind,
+  ChatUploadTarget,
+  MuteDuration,
   NotificationsResponse,
 } from './types';
 import type { Post } from '@/components/PostCard';
@@ -180,10 +183,28 @@ export function removeBrandRating(brandId: string) {
 // ─── Chat ─────────────────────────────────────────────────────────
 
 export function getMessages(matchId: string, limit = 50, cursor?: string) {
-  const url = cursor 
-    ? `/api/chat/${matchId}/messages?limit=${limit}&cursor=${cursor}`
+  const url = cursor
+    ? `/api/chat/${matchId}/messages?limit=${limit}&cursor=${encodeURIComponent(cursor)}`
     : `/api/chat/${matchId}/messages?limit=${limit}`;
   return api.get<ChatResponse>(url);
+}
+
+/** A one-time signed URL to PUT a chat attachment to, before sending it. */
+export function requestChatUpload(
+  matchId: string,
+  file: { kind: ChatAttachmentKind; mime: string; size: number; name?: string },
+) {
+  return api.post<ChatUploadTarget>(`/api/chat/${matchId}/uploads`, file);
+}
+
+/** "Clear chat": hides everything so far, for me only. */
+export function clearChat(matchId: string) {
+  return api.post<{ cleared_at: string }>(`/api/chat/${matchId}/clear`, {});
+}
+
+/** Mutes push notifications for one conversation; null unmutes. */
+export function muteChat(matchId: string, duration: MuteDuration | null) {
+  return api.put<{ muted_until: string | null }>(`/api/chat/${matchId}/mute`, { duration });
 }
 
 // ─── Stories ──────────────────────────────────────────────────────

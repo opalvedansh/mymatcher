@@ -12,6 +12,7 @@ import {
   type AlertButton,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { sz } from '@/theme/scale';
 
 /** Alert.alert button plus an optional icon; native alerts ignore the icon. */
 export type SheetButton = AlertButton & { icon?: React.ComponentProps<typeof Ionicons>['name'] };
@@ -108,11 +109,11 @@ export function ActionSheetHost() {
                   >
                     {button.icon && (
                       <View style={[styles.iconWrap, destructive && styles.iconWrapDestructive]}>
-                        <Ionicons name={button.icon} size={18} color={tint} />
+                        <Ionicons name={button.icon} size={sz(18)} color={tint} />
                       </View>
                     )}
                     <Text style={[styles.actionText, { color: tint }]}>{button.text}</Text>
-                    {!destructive && <Ionicons name="chevron-forward" size={16} color="#666" />}
+                    {!destructive && <Ionicons name="chevron-forward" size={sz(16)} color="#666" />}
                   </Pressable>
                 );
               })}
@@ -146,41 +147,41 @@ const styles = StyleSheet.create({
   },
   sheet: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: sz(480),
     backgroundColor: '#141414',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: sz(24),
+    borderTopRightRadius: sz(24),
     borderWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: 0,
     borderColor: 'rgba(255,255,255,0.08)',
   },
   sheetBody: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 28,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(10),
+    paddingBottom: sz(28),
   },
   grabber: {
     alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: sz(36),
+    height: sz(4),
+    borderRadius: sz(2),
     backgroundColor: 'rgba(255,255,255,0.18)',
-    marginBottom: 18,
+    marginBottom: sz(18),
   },
-  title: { color: '#FFF', fontSize: 20, fontWeight: '700', letterSpacing: -0.3 },
-  message: { color: '#9A9A9A', fontSize: 13, lineHeight: 19, marginTop: 4 },
+  title: { color: '#FFF', fontSize: sz(20), fontWeight: '700', letterSpacing: -0.3 },
+  message: { color: '#9A9A9A', fontSize: sz(13), lineHeight: sz(19), marginTop: sz(4) },
   actions: {
-    marginTop: 18,
-    borderRadius: 16,
+    marginTop: sz(18),
+    borderRadius: sz(16),
     backgroundColor: '#1C1C1C',
     overflow: 'hidden',
   },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    minHeight: 56,
-    paddingHorizontal: 14,
+    gap: sz(12),
+    minHeight: sz(56),
+    paddingHorizontal: sz(14),
   },
   actionDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -189,22 +190,22 @@ const styles = StyleSheet.create({
   actionHover: { backgroundColor: 'rgba(255,255,255,0.05)' },
   actionPressed: { backgroundColor: 'rgba(255,255,255,0.09)' },
   iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: sz(32),
+    height: sz(32),
+    borderRadius: sz(10),
     backgroundColor: 'rgba(255,255,255,0.07)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   iconWrapDestructive: { backgroundColor: 'rgba(255,90,79,0.12)' },
-  actionText: { flex: 1, fontSize: 16, fontWeight: '500' },
+  actionText: { flex: 1, fontSize: sz(16), fontWeight: '500' },
   cancel: {
-    marginTop: 10,
-    minHeight: 52,
-    borderRadius: 16,
+    marginTop: sz(10),
+    minHeight: sz(52),
+    borderRadius: sz(16),
     backgroundColor: '#1C1C1C',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cancelText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+  cancelText: { color: '#FFF', fontSize: sz(16), fontWeight: '600' },
 });

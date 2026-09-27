@@ -36,8 +36,9 @@ import { MatchrLogo } from '@/components/MatchrLogo';
 import { PremiumIcon, MinimalIcon, BoldIcon, AuthenticIcon, GenzIcon } from '@/components/VibeIcons';
 import { TaskIcon, HeartBubbleIcon, UsersIcon, CashIcon, EventIcon } from '@/components/CampaignIcons';
 import type { BrandProfile, MatchRecord, PaymentMode, Responsiveness } from '@/api/types';
+import { sz } from '@/theme/scale';
 
-const H = 20;
+const H = sz(20);
 const PRIMARY = '#F05A28';
 const BG = '#111111';
 const CARD_BG = '#000000';
@@ -577,13 +578,13 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
   return (
     <SafeAreaView style={s.safe}>
       {onBack && (
-        <View style={{ position: 'absolute', top: insets.top + 8, left: 16, zIndex: 10 }}>
-          <TouchableOpacity onPress={onBack} style={{ width: 40, height: 40, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="arrow-back" size={24} color="#FFF" />
+        <View style={{ position: 'absolute', top: insets.top + sz(8), left: sz(16), zIndex: 10 }}>
+          <TouchableOpacity onPress={onBack} style={{ width: sz(40), height: sz(40), backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: sz(20), justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name="arrow-back" size={sz(24)} color="#FFF" />
           </TouchableOpacity>
         </View>
       )}
-      <View style={{ position: 'absolute', top: insets.top + 8, right: 16, zIndex: 10 }}>
+      <View style={{ position: 'absolute', top: insets.top + sz(8), right: sz(16), zIndex: 10 }}>
         <Pressable
           accessibilityLabel={publicUserId ? 'Report or block' : 'Account options'}
           onPress={() =>
@@ -596,9 +597,9 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 })
               : openAccountMenu({ signOut, deleteAccount, email: user?.email })
           }
-          style={{ padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}
+          style={{ padding: sz(8), backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: sz(20), justifyContent: 'center', alignItems: 'center' }}
         >
-          <Ionicons name={publicUserId ? 'ellipsis-horizontal' : 'settings-outline'} size={20} color="#FFF" />
+          <Ionicons name={publicUserId ? 'ellipsis-horizontal' : 'settings-outline'} size={sz(20)} color="#FFF" />
         </Pressable>
       </View>
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
@@ -613,8 +614,8 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
             />
             {/* Brand Logo Header */}
             <View style={s.headerRow}>
-              <View style={{ marginRight: 10 }}>
-                <MatchrLogo size={32} />
+              <View style={{ marginRight: sz(10) }}>
+                <MatchrLogo size={sz(32)} />
               </View>
               <Text style={s.matchrLabel}>Matchr</Text>
             </View>
@@ -633,12 +634,12 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 <Image source={{ uri: logo }} style={s.brandLogoCircle} />
               ) : (
                 <View style={[s.brandLogoCircle, s.logoPlaceholder]}>
-                  <Ionicons name="business-outline" size={40} color="#777" />
+                  <Ionicons name="business-outline" size={sz(40)} color="#777" />
                 </View>
               )}
               {!publicUserId && (
-                <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#FF6B2B', borderRadius: 12, padding: 4 }}>
-                  <Ionicons name="camera" size={12} color="#FFF" />
+                <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#FF6B2B', borderRadius: sz(12), padding: sz(4) }}>
+                  <Ionicons name="camera" size={sz(12)} color="#FFF" />
                 </View>
               )}
             </TouchableOpacity>
@@ -646,7 +647,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
               <Text style={s.heroName}>{name}</Text>
               <Text style={s.heroCats}>{categoriesStr}</Text>
               <View style={s.locationRow}>
-                <Ionicons name="location-sharp" size={14} color="#FFF" />
+                <Ionicons name="location-sharp" size={sz(14)} color="#FFF" />
                 <Text style={s.locationTxt}>{location}</Text>
               </View>
             </View>
@@ -669,8 +670,8 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                   reddit: 'reddit-alien'
                 };
                 return (
-                  <View key={p} style={[s.tagPill, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                    <FontAwesome6 name={iconMap[p] || p} size={14} color="#FFF" />
+                  <View key={p} style={[s.tagPill, { flexDirection: 'row', alignItems: 'center', gap: sz(6) }]}>
+                    <FontAwesome6 name={iconMap[p] || p} size={sz(14)} color="#FFF" />
                     <Text style={s.tagTxt}>{p.charAt(0).toUpperCase() + p.slice(1)}</Text>
                   </View>
                 );
@@ -683,7 +684,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
         <View style={s.twoCardRow}>
           <TouchableOpacity style={s.miniCard} activeOpacity={0.8} onPress={openEditModal}>
             <View style={s.miniCardHeaderRow}>
-              <Ionicons name="wallet-outline" size={18} color={PRIMARY} />
+              <Ionicons name="wallet-outline" size={sz(18)} color={PRIMARY} />
               <Text style={s.miniCardLabel}>Campaign budget</Text>
             </View>
             <Text style={s.miniCardValue}>{budgetStr}</Text>
@@ -692,7 +693,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
 
           <TouchableOpacity style={s.miniCard} activeOpacity={0.8} onPress={openEditModal}>
             <View style={s.miniCardHeaderRow}>
-              <Ionicons name="calendar-outline" size={18} color={PRIMARY} />
+              <Ionicons name="calendar-outline" size={sz(18)} color={PRIMARY} />
               <Text style={s.miniCardLabel}>Campaign Period</Text>
             </View>
             <Text style={s.miniCardValue}>{campaignDatesStr}</Text>
@@ -719,9 +720,9 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                     style={({ pressed }) => [s.campaignTypeCol, pressed && s.pressedSoft]}
                   >
                     {IconComponent ? (
-                      <IconComponent size={24} color={picked ? PRIMARY : IDLE_ICON} />
+                      <IconComponent size={sz(24)} color={picked ? PRIMARY : IDLE_ICON} />
                     ) : (
-                      <Ionicons name="pricetag-outline" size={24} color={picked ? PRIMARY : IDLE_ICON} />
+                      <Ionicons name="pricetag-outline" size={sz(24)} color={picked ? PRIMARY : IDLE_ICON} />
                     )}
                     {/* Two short lines keep all five in one row on a phone. */}
                     <Text style={[s.campaignTypeTxt, picked && s.campaignTypeTxtPicked]}>
@@ -768,9 +769,9 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                     ]}
                   >
                     {IconComponent ? (
-                      <IconComponent size={22} />
+                      <IconComponent size={sz(22)} />
                     ) : (
-                      <Ionicons name="star-outline" size={22} color={PRIMARY} />
+                      <Ionicons name="star-outline" size={sz(22)} color={PRIMARY} />
                     )}
                     <Text
                       numberOfLines={1}
@@ -805,7 +806,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
             {matchesLoading ? (
               <View style={s.collabRow}>
                 {[0, 1, 2].map((i) => (
-                  <View key={i} style={[s.collabAvatar, s.collabSkeleton, { marginLeft: i === 0 ? 0 : -15 }]} />
+                  <View key={i} style={[s.collabAvatar, s.collabSkeleton, { marginLeft: i === 0 ? 0 : sz(-15) }]} />
                 ))}
               </View>
             ) : matchesFailed ? (
@@ -832,12 +833,12 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 style={({ pressed }) => [s.collabRow, pressed && s.pressedSoft]}
               >
                 {shownMatches.map((m, i) => (
-                  <View key={m.match_id} style={[s.collabAvatarWrap, { marginLeft: i === 0 ? 0 : -15 }]}>
-                    <Avatar uri={m.influencer_avatar} name={m.influencer_name || 'Creator'} size={50} />
+                  <View key={m.match_id} style={[s.collabAvatarWrap, { marginLeft: i === 0 ? 0 : sz(-15) }]}>
+                    <Avatar uri={m.influencer_avatar} name={m.influencer_name || 'Creator'} size={sz(50)} />
                   </View>
                 ))}
                 {extraMatches > 0 && (
-                  <View style={[s.collabMore, { marginLeft: -15 }]}>
+                  <View style={[s.collabMore, { marginLeft: sz(-15) }]}>
                     <Text style={s.collabMoreTxt}>+{extraMatches}</Text>
                   </View>
                 )}
@@ -849,19 +850,19 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
         {/* ════ BRAND CAMPAIGN CAROUSEL ════ */}
         <View style={s.rowBetween}>
           <Text style={s.sectionTitleNoMargin}>Brand campaign</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ color: '#666', fontSize: 13 }}>{campaignPhotos.length}/6</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: sz(8) }}>
+            <Text style={{ color: '#666', fontSize: sz(13) }}>{campaignPhotos.length}/6</Text>
             <TouchableOpacity
               onPress={handleAddCampaignPhoto}
               disabled={uploadingCampaign || (profile?.photos ?? []).length >= 6}
               style={[
-                { padding: 6, borderRadius: 8, borderWidth: 1, borderColor: PRIMARY },
+                { padding: sz(6), borderRadius: sz(8), borderWidth: 1, borderColor: PRIMARY },
                 ((profile?.photos ?? []).length >= 6) && { opacity: 0.4 },
               ]}
             >
               {uploadingCampaign
                 ? <ActivityIndicator size="small" color={PRIMARY} />
-                : <Ionicons name="add" size={20} color={PRIMARY} />
+                : <Ionicons name="add" size={sz(20)} color={PRIMARY} />
               }
             </TouchableOpacity>
           </View>
@@ -888,7 +889,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
             ))}
             {campaignPhotos.length === 0 && (
               <View style={[s.carouselImg, s.carouselEmpty, { width: width - (H * 2) }]}>
-                <Ionicons name="images-outline" size={40} color="#555" />
+                <Ionicons name="images-outline" size={sz(40)} color="#555" />
                 <Text style={s.carouselEmptyTxt}>
                   {publicUserId ? 'No campaign photos yet' : 'Add photos of your brand campaigns'}
                 </Text>
@@ -905,7 +906,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
           )}
           {campaignPhotos.length > 1 && (
             <View style={s.carouselArrow}>
-              <Ionicons name="chevron-forward" size={16} color="#FFF" />
+              <Ionicons name="chevron-forward" size={sz(16)} color="#FFF" />
             </View>
           )}
         </View>
@@ -913,18 +914,18 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
         {/* ════ DELIVERABLES ════ */}
         {deliverables.length > 0 ? (
           <TouchableOpacity
-            style={[s.wideCard, { paddingVertical: 24 }]}
+            style={[s.wideCard, { paddingVertical: sz(24) }]}
             activeOpacity={publicUserId ? 1 : 0.8}
             onPress={publicUserId ? undefined : openEditModal}
             accessibilityRole={publicUserId ? undefined : 'button'}
             accessibilityLabel={publicUserId ? undefined : 'Edit deliverables'}
           >
-            <Text style={[s.cardTitle, { textAlign: 'center', marginBottom: 24 }]}>Deliverables</Text>
+            <Text style={[s.cardTitle, { textAlign: 'center', marginBottom: sz(24) }]}>Deliverables</Text>
             <View style={s.delivRow}>
               {deliverables.map(({ key, count, Icon, one, many }) => (
                 <View key={key} style={s.delivItem}>
                   <View style={s.delivIconWrap}>
-                    <Icon size={28} />
+                    <Icon size={sz(28)} />
                   </View>
                   <Text style={s.delivTxt}>{count} {count === 1 ? one : many}</Text>
                 </View>
@@ -933,7 +934,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
           </TouchableOpacity>
         ) : !publicUserId ? (
           <TouchableOpacity style={s.emptyCard} activeOpacity={0.8} onPress={openEditModal}>
-            <Ionicons name="add-circle-outline" size={20} color={PRIMARY} />
+            <Ionicons name="add-circle-outline" size={sz(20)} color={PRIMARY} />
             <Text style={s.emptyCardTxt}>Add the deliverables you ask for</Text>
           </TouchableOpacity>
         ) : null}
@@ -999,7 +1000,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                     {responsiveness.response_rate != null ? `${responsiveness.response_rate}%` : '--'}
                   </Text>
                 </View>
-                <Ionicons name="flash" size={24} color={PRIMARY} />
+                <Ionicons name="flash" size={sz(24)} color={PRIMARY} />
               </View>
             </View>
             <Text style={s.cardFootnote}>
@@ -1017,7 +1018,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
             {ratingCount > 0 ? (
               <>
                 <View style={s.ratingScoreRow}>
-                  <Ionicons name="star" size={20} color={PRIMARY} />
+                  <Ionicons name="star" size={sz(20)} color={PRIMARY} />
                   <Text style={s.ratingValue}>{ratingAvg?.toFixed(1)}</Text>
                   <Text style={s.ratingTotal}>/5</Text>
                 </View>
@@ -1042,7 +1043,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 {profile.verified ? (
                   <>
                     <View style={s.verifyHeadRow}>
-                      <Ionicons name="shield-checkmark" size={18} color={PRIMARY} />
+                      <Ionicons name="shield-checkmark" size={sz(18)} color={PRIMARY} />
                       <Text style={s.verifyTitle}>Verified business</Text>
                     </View>
                     <Text style={s.verifySub}>
@@ -1052,7 +1053,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 ) : verificationStatus === 'pending' ? (
                   <>
                     <View style={s.verifyHeadRow}>
-                      <Ionicons name="time-outline" size={18} color={MUTED} />
+                      <Ionicons name="time-outline" size={sz(18)} color={MUTED} />
                       <Text style={s.verifyTitle}>Verification pending</Text>
                     </View>
                     <Text style={s.verifySub}>We are checking your details.</Text>
@@ -1060,7 +1061,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 ) : (
                   <>
                     <View style={s.verifyHeadRow}>
-                      <Ionicons name="shield-outline" size={18} color={MUTED} />
+                      <Ionicons name="shield-outline" size={sz(18)} color={MUTED} />
                       <Text style={s.verifyTitle}>Not verified</Text>
                     </View>
                     <Text style={s.verifySub}>
@@ -1084,7 +1085,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
               <View style={s.splitDivider} />
               <View style={s.splitRight}>
                 <View style={s.verifyHeadRow}>
-                  <Ionicons name="lock-closed-outline" size={18} color={MUTED} />
+                  <Ionicons name="lock-closed-outline" size={sz(18)} color={MUTED} />
                   <Text style={s.verifyTitle}>Your privacy</Text>
                 </View>
                 <Text style={s.verifySub}>
@@ -1152,7 +1153,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                     state.pressed && s.pressedSoft,
                   ]}
                 >
-                  <Ionicons name="close" size={20} color="#DDD" />
+                  <Ionicons name="close" size={sz(20)} color="#DDD" />
                 </Pressable>
               </View>
 
@@ -1213,14 +1214,14 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 </View>
                 {showBudgetError ? (
                   <View style={s.helperRow}>
-                    <Ionicons name="alert-circle" size={14} color={DANGER} />
+                    <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
                     <Text style={[s.helperText, s.helperTextInline]}>{budgetError}</Text>
                   </View>
                 ) : (
                   <Text style={s.helperText}>{budgetPreview}</Text>
                 )}
 
-                <Text style={[s.fieldGroupLabel, { marginTop: 24 }]}>Campaign length</Text>
+                <Text style={[s.fieldGroupLabel, { marginTop: sz(24) }]}>Campaign length</Text>
                 <View
                   style={[
                     s.fieldGroup,
@@ -1251,14 +1252,14 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 </View>
                 {daysError ? (
                   <View style={s.helperRow}>
-                    <Ionicons name="alert-circle" size={14} color={DANGER} />
+                    <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
                     <Text style={[s.helperText, s.helperTextInline]}>{daysError}</Text>
                   </View>
                 ) : (
                   <Text style={s.helperText}>{daysPreview}</Text>
                 )}
 
-                <Text style={[s.fieldGroupLabel, { marginTop: 24 }]}>Deliverables</Text>
+                <Text style={[s.fieldGroupLabel, { marginTop: sz(24) }]}>Deliverables</Text>
                 <View
                   style={[
                     s.fieldGroup,
@@ -1298,14 +1299,14 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 </View>
                 {deliverablesError ? (
                   <View style={s.helperRow}>
-                    <Ionicons name="alert-circle" size={14} color={DANGER} />
+                    <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
                     <Text style={[s.helperText, s.helperTextInline]}>{deliverablesError}</Text>
                   </View>
                 ) : (
                   <Text style={s.helperText}>{deliverablesPreview}</Text>
                 )}
 
-                <Text style={[s.fieldGroupLabel, { marginTop: 24 }]}>How you pay</Text>
+                <Text style={[s.fieldGroupLabel, { marginTop: sz(24) }]}>How you pay</Text>
                 <View style={s.modeRow}>
                   {PAYMENT_MODES.map((mode) => {
                     const on = editPaymentMode === mode.value;
@@ -1326,7 +1327,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 <View
                   style={[
                     s.fieldGroup,
-                    { marginTop: 10 },
+                    { marginTop: sz(10) },
                     focusedField === 'payDays' && s.fieldGroupFocused,
                     !!paymentError && s.fieldGroupError,
                   ]}
@@ -1354,7 +1355,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 </View>
                 {paymentError ? (
                   <View style={s.helperRow}>
-                    <Ionicons name="alert-circle" size={14} color={DANGER} />
+                    <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
                     <Text style={[s.helperText, s.helperTextInline]}>{paymentError}</Text>
                   </View>
                 ) : (
@@ -1366,7 +1367,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
 
               {saveError && (
                 <View style={s.saveErrorRow}>
-                  <Ionicons name="cloud-offline-outline" size={16} color={DANGER} />
+                  <Ionicons name="cloud-offline-outline" size={sz(16)} color={DANGER} />
                   <Text style={s.saveErrorText}>{saveError}</Text>
                 </View>
               )}
@@ -1434,7 +1435,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                     state.pressed && s.pressedSoft,
                   ]}
                 >
-                  <Ionicons name="close" size={20} color="#DDD" />
+                  <Ionicons name="close" size={sz(20)} color="#DDD" />
                 </Pressable>
               </View>
 
@@ -1455,7 +1456,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
                 </View>
               </View>
 
-              <Text style={[s.fieldGroupLabel, { marginTop: 20 }]}>GST or company number</Text>
+              <Text style={[s.fieldGroupLabel, { marginTop: sz(20) }]}>GST or company number</Text>
               <View style={[s.fieldGroup, verifyFocused === 'reg' && s.fieldGroupFocused]}>
                 <View style={[s.fieldRow, s.fieldRowText, verifyFocused === 'reg' && s.fieldRowFocused]}>
                   <TextInput
@@ -1480,7 +1481,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
 
               {verifyError && (
                 <View style={s.saveErrorRow}>
-                  <Ionicons name="alert-circle" size={16} color={DANGER} />
+                  <Ionicons name="alert-circle" size={sz(16)} color={DANGER} />
                   <Text style={s.saveErrorText}>{verifyError}</Text>
                 </View>
               )}
@@ -1518,205 +1519,205 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
 const s = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: BG },
   scroll:        { flex: 1, backgroundColor: BG },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: sz(40) },
 
-  heroWrapper: { position: 'relative', marginBottom: 24, height: 460 },
+  heroWrapper: { position: 'relative', marginBottom: sz(24), height: sz(460) },
   coverBg:     { width: '100%', height: '100%' },
 
-  heroGradTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 120 },
-  heroGradBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 200 },
+  heroGradTop: { position: 'absolute', top: 0, left: 0, right: 0, height: sz(120) },
+  heroGradBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: sz(200) },
 
-  headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, marginLeft: H },
-  matchrLabel: { color: '#FFFFFF', fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: sz(16), marginLeft: H },
+  matchrLabel: { color: '#FFFFFF', fontSize: sz(28), fontWeight: '800', letterSpacing: -0.5 },
 
   heroContentRow: {
     position: 'absolute',
-    bottom: -20,
+    bottom: sz(-20),
     left: H,
     right: H,
     flexDirection: 'row',
     alignItems: 'center',
   },
   brandLogoCircle: {
-    width: 104, height: 104,
-    borderRadius: 52,
+    width: sz(104), height: sz(104),
+    borderRadius: sz(52),
     backgroundColor: '#FFF',
     borderWidth: 3,
     borderColor: BG,
-    marginRight: 16,
+    marginRight: sz(16),
   },
   logoPlaceholder: { backgroundColor: '#2A2A2A', justifyContent: 'center', alignItems: 'center' },
   heroTextContainer: { flex: 1, justifyContent: 'center' },
-  heroName: { color: '#FCFCFC', fontSize: 26, fontWeight: '800', marginBottom: 2 },
-  heroCats: { color: '#CCC', fontSize: 13, marginBottom: 4 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationTxt: { color: '#AAA', fontSize: 12, fontWeight: '500' },
+  heroName: { color: '#FCFCFC', fontSize: sz(26), fontWeight: '800', marginBottom: sz(2) },
+  heroCats: { color: '#CCC', fontSize: sz(13), marginBottom: sz(4) },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: sz(4) },
+  locationTxt: { color: '#AAA', fontSize: sz(12), fontWeight: '500' },
 
-  bio: { color: '#E0E0E0', fontSize: 13, lineHeight: 20, marginBottom: 24, marginHorizontal: H, marginTop: 40 },
+  bio: { color: '#E0E0E0', fontSize: sz(13), lineHeight: sz(20), marginBottom: sz(24), marginHorizontal: H, marginTop: sz(40) },
 
-  sectionTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginBottom: 16, marginHorizontal: H },
-  sectionTitleNoMargin: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  sectionTitle: { color: '#FFFFFF', fontSize: sz(16), fontWeight: 'bold', marginBottom: sz(16), marginHorizontal: H },
+  sectionTitleNoMargin: { color: '#FFFFFF', fontSize: sz(16), fontWeight: 'bold' },
 
-  tagsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginHorizontal: H, marginBottom: 24 },
+  tagsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: sz(10), marginHorizontal: H, marginBottom: sz(24) },
   tagPill: {
-    borderColor: '#444', borderWidth: 1, borderRadius: 20,
-    paddingVertical: 8, paddingHorizontal: 16,
+    borderColor: '#444', borderWidth: 1, borderRadius: sz(20),
+    paddingVertical: sz(8), paddingHorizontal: sz(16),
   },
-  tagTxt: { color: '#DDD', fontSize: 12 },
+  tagTxt: { color: '#DDD', fontSize: sz(12) },
 
-  twoCardRow: { flexDirection: 'row', marginHorizontal: H, marginBottom: 16, gap: 12 },
+  twoCardRow: { flexDirection: 'row', marginHorizontal: H, marginBottom: sz(16), gap: sz(12) },
   miniCard: {
     flex: 1,
-    backgroundColor: CARD_BG, borderColor: BORDER, borderRadius: 16, borderWidth: 1,
-    paddingVertical: 18, paddingHorizontal: 16,
+    backgroundColor: CARD_BG, borderColor: BORDER, borderRadius: sz(16), borderWidth: 1,
+    paddingVertical: sz(18), paddingHorizontal: sz(16),
   },
-  miniCardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  miniCardLabel: { color: '#888', fontSize: 11 },
-  miniCardValue: { color: '#FFF', fontSize: 22, fontWeight: '800', marginBottom: 4 },
-  miniCardSub:   { color: '#666', fontSize: 9 },
+  miniCardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: sz(8), marginBottom: sz(8) },
+  miniCardLabel: { color: '#888', fontSize: sz(11) },
+  miniCardValue: { color: '#FFF', fontSize: sz(22), fontWeight: '800', marginBottom: sz(4) },
+  miniCardSub:   { color: '#666', fontSize: sz(9) },
 
   wideCard: {
-    backgroundColor: CARD_BG, borderColor: BORDER, borderRadius: 16, borderWidth: 1,
-    paddingVertical: 20, paddingHorizontal: 20,
-    marginBottom: 16, marginHorizontal: H,
+    backgroundColor: CARD_BG, borderColor: BORDER, borderRadius: sz(16), borderWidth: 1,
+    paddingVertical: sz(20), paddingHorizontal: sz(20),
+    marginBottom: sz(16), marginHorizontal: H,
   },
 
   vibesRow: {
     flexDirection: 'row',
     marginHorizontal: H,
-    marginBottom: 24,
-    gap: 10,
+    marginBottom: sz(24),
+    gap: sz(10),
   },
   vibeWrap: {
     flex: 1,
-    maxWidth: 96,
-    height: 78,
-    borderRadius: 18,
+    maxWidth: sz(96),
+    height: sz(78),
+    borderRadius: sz(18),
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 4,
+    gap: sz(8),
+    paddingHorizontal: sz(4),
   },
   // Unpicked is a real, readable option, not a disabled one: no dimming.
   vibeWrapIdle: { backgroundColor: '#0E0E0E', borderColor: 'rgba(255,255,255,0.10)' },
   vibeWrapPicked: { backgroundColor: 'rgba(240,90,40,0.14)', borderColor: PRIMARY },
-  vibeTxt: { fontSize: 11 },
+  vibeTxt: { fontSize: sz(11) },
   vibeTxtIdle: { color: '#9A9A9A', fontWeight: '500' },
   vibeTxtPicked: { color: '#FFF', fontWeight: '700' },
 
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: H, marginBottom: 16 },
-  viewAll: { color: PRIMARY, fontSize: 12, fontWeight: '600' },
-  collabRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: H, marginBottom: 32, gap: 0 },
-  collabAvatar: { width: 56, height: 56, borderRadius: 28, borderWidth: 3, borderColor: BG },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: H, marginBottom: sz(16) },
+  viewAll: { color: PRIMARY, fontSize: sz(12), fontWeight: '600' },
+  collabRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: H, marginBottom: sz(32), gap: 0 },
+  collabAvatar: { width: sz(56), height: sz(56), borderRadius: sz(28), borderWidth: 3, borderColor: BG },
   // The ring around each avatar, so overlapping faces stay separated.
   collabAvatarWrap: {
-    width: 56, height: 56, borderRadius: 28, borderWidth: 3, borderColor: BG,
+    width: sz(56), height: sz(56), borderRadius: sz(28), borderWidth: 3, borderColor: BG,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
   collabSkeleton: { backgroundColor: '#1E1E1E' },
   collabMore: {
-    width: 56, height: 56, borderRadius: 28, borderWidth: 3, borderColor: BG,
+    width: sz(56), height: sz(56), borderRadius: sz(28), borderWidth: 3, borderColor: BG,
     backgroundColor: '#1C1C1C', justifyContent: 'center', alignItems: 'center',
   },
-  collabMoreTxt: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
-  collabNote: { color: '#8A8A8A', fontSize: 13, lineHeight: 19, flexShrink: 1 },
+  collabMoreTxt: { color: '#FFF', fontSize: sz(14), fontWeight: 'bold' },
+  collabNote: { color: '#8A8A8A', fontSize: sz(13), lineHeight: sz(19), flexShrink: 1 },
   retryBtn: {
-    marginLeft: 12, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16,
+    marginLeft: sz(12), paddingHorizontal: sz(14), paddingVertical: sz(7), borderRadius: sz(16),
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)',
   },
-  retryTxt: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  retryTxt: { color: '#FFF', fontSize: sz(13), fontWeight: '600' },
 
   carouselWrap: {
-    height: 440, marginHorizontal: H, marginBottom: 24,
-    borderRadius: 20, overflow: 'hidden', position: 'relative',
+    height: sz(440), marginHorizontal: H, marginBottom: sz(24),
+    borderRadius: sz(20), overflow: 'hidden', position: 'relative',
     backgroundColor: '#111',
   },
   carouselImg: { width: '100%', height: '100%' },
-  carouselEmpty: { justifyContent: 'center', alignItems: 'center', gap: 12, backgroundColor: '#1C1C1C' },
-  carouselEmptyTxt: { color: '#777', fontSize: 13 },
-  dotsRow: { position: 'absolute', bottom: 16, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
-  dot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.4)' },
+  carouselEmpty: { justifyContent: 'center', alignItems: 'center', gap: sz(12), backgroundColor: '#1C1C1C' },
+  carouselEmptyTxt: { color: '#777', fontSize: sz(13) },
+  dotsRow: { position: 'absolute', bottom: sz(16), left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: sz(6) },
+  dot:       { width: sz(8), height: sz(8), borderRadius: sz(4), backgroundColor: 'rgba(255,255,255,0.4)' },
   dotActive: { backgroundColor: '#FFF' },
-  carouselArrow: { position: 'absolute', right: 12, top: '50%', marginTop: -14 },
+  carouselArrow: { position: 'absolute', right: sz(12), top: '50%', marginTop: sz(-14) },
 
-  cardTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold', marginBottom: 20 },
-  cardFootnote: { color: MUTED, fontSize: 12, lineHeight: 17, marginTop: 16 },
-  sectionHint: { color: MUTED, fontSize: 12, fontWeight: '500' },
+  cardTitle: { color: '#FFFFFF', fontSize: sz(15), fontWeight: 'bold', marginBottom: sz(20) },
+  cardFootnote: { color: MUTED, fontSize: sz(12), lineHeight: sz(17), marginTop: sz(16) },
+  sectionHint: { color: MUTED, fontSize: sz(12), fontWeight: '500' },
 
   emptyCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: CARD_BG, borderColor: BORDER, borderRadius: 16, borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: sz(8),
+    backgroundColor: CARD_BG, borderColor: BORDER, borderRadius: sz(16), borderWidth: 1,
     borderStyle: 'dashed',
-    paddingVertical: 20, marginBottom: 16, marginHorizontal: H,
+    paddingVertical: sz(20), marginBottom: sz(16), marginHorizontal: H,
   },
-  emptyCardTxt: { color: '#BDBDBD', fontSize: 14, fontWeight: '500' },
+  emptyCardTxt: { color: '#BDBDBD', fontSize: sz(14), fontWeight: '500' },
 
   campaignTypesRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  campaignTypeCol: { alignItems: 'center', flex: 1, paddingHorizontal: 2 },
-  campaignTypeTxt: { color: MUTED, fontSize: 9, textAlign: 'center', marginTop: 8, lineHeight: 12 },
+  campaignTypeCol: { alignItems: 'center', flex: 1, paddingHorizontal: sz(2) },
+  campaignTypeTxt: { color: MUTED, fontSize: sz(9), textAlign: 'center', marginTop: sz(8), lineHeight: sz(12) },
   campaignTypeTxtPicked: { color: '#FFF' },
 
   delivRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
   delivItem: { alignItems: 'center', flex: 1 },
-  delivIconWrap: { marginBottom: 12 },
-  delivTxt: { color: '#BDBDBD', fontSize: 13, fontWeight: '500' },
+  delivIconWrap: { marginBottom: sz(12) },
+  delivTxt: { color: '#BDBDBD', fontSize: sz(13), fontWeight: '500' },
 
   splitRow: { flexDirection: 'row', alignItems: 'center' },
-  splitLeft: { flex: 1, paddingRight: 16 },
-  splitRight: { flex: 1, paddingLeft: 16 },
-  splitDivider: { width: 1, height: '80%', minHeight: 40, backgroundColor: '#222' },
-  splitLabel: { color: '#8A8A8A', fontSize: 12, marginBottom: 6, lineHeight: 16 },
-  budgetValue: { color: PRIMARY, fontSize: 22, fontWeight: '800' },
-  responseValue: { color: '#FFF', fontSize: 17, fontWeight: '700' },
+  splitLeft: { flex: 1, paddingRight: sz(16) },
+  splitRight: { flex: 1, paddingLeft: sz(16) },
+  splitDivider: { width: 1, height: '80%', minHeight: sz(40), backgroundColor: '#222' },
+  splitLabel: { color: '#8A8A8A', fontSize: sz(12), marginBottom: sz(6), lineHeight: sz(16) },
+  budgetValue: { color: PRIMARY, fontSize: sz(22), fontWeight: '800' },
+  responseValue: { color: '#FFF', fontSize: sz(17), fontWeight: '700' },
 
-  termsValue: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-  termsSub: { color: MUTED, fontSize: 12, marginTop: 4 },
-  emptyLine: { color: MUTED, fontSize: 13, lineHeight: 19 },
+  termsValue: { color: '#FFF', fontSize: sz(16), fontWeight: '700' },
+  termsSub: { color: MUTED, fontSize: sz(12), marginTop: sz(4) },
+  emptyLine: { color: MUTED, fontSize: sz(13), lineHeight: sz(19) },
 
-  ratingScoreRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: 8 },
-  ratingValue: { color: '#FFF', fontSize: 30, fontWeight: '800', lineHeight: 34 },
-  ratingTotal: { color: MUTED, fontSize: 15, fontWeight: '500', marginBottom: 4 },
+  ratingScoreRow: { flexDirection: 'row', alignItems: 'flex-end', gap: sz(6), marginBottom: sz(8) },
+  ratingValue: { color: '#FFF', fontSize: sz(30), fontWeight: '800', lineHeight: sz(34) },
+  ratingTotal: { color: MUTED, fontSize: sz(15), fontWeight: '500', marginBottom: sz(4) },
 
-  verifyHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 6 },
-  verifyTitle: { color: '#FFF', fontSize: 14, fontWeight: '700' },
-  verifySub: { color: MUTED, fontSize: 12.5, lineHeight: 18 },
+  verifyHeadRow: { flexDirection: 'row', alignItems: 'center', gap: sz(7), marginBottom: sz(6) },
+  verifyTitle: { color: '#FFF', fontSize: sz(14), fontWeight: '700' },
+  verifySub: { color: MUTED, fontSize: sz(12.5), lineHeight: sz(18) },
   verifyBtn: {
-    marginTop: 14,
+    marginTop: sz(14),
     alignSelf: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 18,
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(9),
+    borderRadius: sz(18),
     borderWidth: 1,
     borderColor: PRIMARY,
   },
-  verifyBtnTxt: { color: PRIMARY, fontSize: 13, fontWeight: '700' },
+  verifyBtnTxt: { color: PRIMARY, fontSize: sz(13), fontWeight: '700' },
 
-  modeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  modeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: sz(8) },
   modeChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
+    paddingHorizontal: sz(14),
+    paddingVertical: sz(9),
+    borderRadius: sz(20),
     backgroundColor: '#0C0C0C',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
   },
   modeChipOn: { backgroundColor: 'rgba(240,90,40,0.14)', borderColor: PRIMARY },
-  modeChipTxt: { color: '#9A9A9A', fontSize: 13, fontWeight: '500' },
+  modeChipTxt: { color: '#9A9A9A', fontSize: sz(13), fontWeight: '500' },
   modeChipTxtOn: { color: '#FFF', fontWeight: '700' },
 
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)' },
-  modalSheetWrap: { width: '100%', maxWidth: 520, alignSelf: 'center', maxHeight: '88%' },
+  modalSheetWrap: { width: '100%', maxWidth: sz(520), alignSelf: 'center', maxHeight: '88%' },
   modalContent: {
     backgroundColor: '#141414',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: sz(28),
+    borderTopRightRadius: sz(28),
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 28,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(10),
+    paddingBottom: sz(28),
     // flexShrink defaults to 0 in React Native (unlike CSS), so without this
     // the sheet grows to its full content height, ignores modalSheetWrap's
     // maxHeight and pushes "Save changes" off the bottom of the screen.
@@ -1724,25 +1725,25 @@ const s = StyleSheet.create({
     flexShrink: 1,
   },
   grabber: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: sz(36),
+    height: sz(4),
+    borderRadius: sz(2),
     backgroundColor: 'rgba(255,255,255,0.18)',
     alignSelf: 'center',
-    marginBottom: 18,
+    marginBottom: sz(18),
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 22,
+    gap: sz(12),
+    marginBottom: sz(22),
   },
-  modalTitle: { color: '#FFF', fontSize: 21, fontWeight: '700', letterSpacing: -0.4 },
-  modalSubtitle: { color: MUTED, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  modalTitle: { color: '#FFF', fontSize: sz(21), fontWeight: '700', letterSpacing: -0.4 },
+  modalSubtitle: { color: MUTED, fontSize: sz(13), lineHeight: sz(18), marginTop: sz(4) },
   modalClose: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: sz(34),
+    height: sz(34),
+    borderRadius: sz(17),
     backgroundColor: '#1F1F1F',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1750,10 +1751,10 @@ const s = StyleSheet.create({
   modalCloseFocused: { borderWidth: 1, borderColor: PRIMARY },
   modalScroll: { flexGrow: 0, flexShrink: 1 },
 
-  fieldGroupLabel: { color: '#FFF', fontSize: 14, fontWeight: '600', marginBottom: 10 },
+  fieldGroupLabel: { color: '#FFF', fontSize: sz(14), fontWeight: '600', marginBottom: sz(10) },
   fieldGroup: {
     backgroundColor: '#0C0C0C',
-    borderRadius: 16,
+    borderRadius: sz(16),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     overflow: 'hidden',
@@ -1765,66 +1766,66 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    height: 56,
-    gap: 12,
+    paddingHorizontal: sz(16),
+    height: sz(56),
+    gap: sz(12),
   },
   fieldRowFocused: { backgroundColor: '#151515' },
-  fieldRowLabel: { color: '#CFCFCF', fontSize: 15 },
-  fieldDivider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.1)', marginLeft: 16 },
-  amountWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  currency: { color: MUTED, fontSize: 17 },
+  fieldRowLabel: { color: '#CFCFCF', fontSize: sz(15) },
+  fieldDivider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.1)', marginLeft: sz(16) },
+  amountWrap: { flexDirection: 'row', alignItems: 'center', gap: sz(4), flexShrink: 1 },
+  currency: { color: MUTED, fontSize: sz(17) },
   amountInput: {
     color: '#FFF',
-    fontSize: 17,
+    fontSize: sz(17),
     fontWeight: '600',
     textAlign: 'right',
-    minWidth: 90,
+    minWidth: sz(90),
     paddingVertical: 0,
     fontVariant: ['tabular-nums'],
   },
-  daysInput: { minWidth: 48 },
+  daysInput: { minWidth: sz(48) },
   // A free-text row: the input fills the row instead of sitting right-aligned.
   fieldRowText: { justifyContent: 'flex-start' },
-  textInput: { flex: 1, color: '#FFF', fontSize: 16, paddingVertical: 0 },
-  unit: { color: MUTED, fontSize: 15, marginLeft: 6 },
-  helperRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 4 },
-  helperText: { color: MUTED, fontSize: 12.5, lineHeight: 17, marginTop: 10, paddingHorizontal: 4, flexShrink: 1 },
+  textInput: { flex: 1, color: '#FFF', fontSize: sz(16), paddingVertical: 0 },
+  unit: { color: MUTED, fontSize: sz(15), marginLeft: sz(6) },
+  helperRow: { flexDirection: 'row', alignItems: 'center', gap: sz(6), marginTop: sz(10), paddingHorizontal: sz(4) },
+  helperText: { color: MUTED, fontSize: sz(12.5), lineHeight: sz(17), marginTop: sz(10), paddingHorizontal: sz(4), flexShrink: 1 },
   // Inside helperRow the row already carries the spacing.
   helperTextInline: { marginTop: 0, paddingHorizontal: 0, color: DANGER },
 
   saveErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 18,
-    paddingHorizontal: 4,
+    gap: sz(8),
+    marginTop: sz(18),
+    paddingHorizontal: sz(4),
   },
-  saveErrorText: { color: DANGER, fontSize: 13, flexShrink: 1 },
+  saveErrorText: { color: DANGER, fontSize: sz(13), flexShrink: 1 },
 
   saveBtn: {
     backgroundColor: PRIMARY,
-    borderRadius: 16,
-    height: 54,
+    borderRadius: sz(16),
+    height: sz(54),
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 22,
+    marginTop: sz(22),
   },
   saveBtnDisabled: {
     backgroundColor: '#1E1E1E',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  savingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  saveBtnTxt: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  savingRow: { flexDirection: 'row', alignItems: 'center', gap: sz(10) },
+  saveBtnTxt: { color: '#FFF', fontSize: sz(16), fontWeight: '700' },
   saveBtnTxtDisabled: { color: '#6F6F6F' },
   pressedSoft: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 
   interestedBtn: {
-    alignItems: 'center', backgroundColor: PRIMARY, borderRadius: 16,
-    paddingVertical: 18, marginHorizontal: H, marginTop: 12, marginBottom: 16,
+    alignItems: 'center', backgroundColor: PRIMARY, borderRadius: sz(16),
+    paddingVertical: sz(18), marginHorizontal: H, marginTop: sz(12), marginBottom: sz(16),
   },
-  interestedTxt: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  interestedTxt: { color: '#FFF', fontSize: sz(16), fontWeight: '800' },
   interestedBtnDone: { backgroundColor: '#1E1E1E', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)' },
   interestedTxtDone: { color: '#8A8A8A' },
 });

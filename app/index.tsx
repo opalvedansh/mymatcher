@@ -1,6 +1,7 @@
 import { View, ActivityIndicator, StyleSheet, Text, Pressable } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/theme/colors';
+import { sz } from '@/theme/scale';
 
 // Routing is handled by AuthGuard in app/_layout.tsx; this is what the user
 // sees while auth state resolves, or when it failed to load.
@@ -35,31 +36,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: sz(32),
   },
   text: {
     color: '#8A8A8A',
-    fontSize: 16,
-    marginTop: 16,
+    fontSize: sz(16),
+    marginTop: sz(16),
   },
   errorText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: sz(16),
     textAlign: 'center',
   },
   button: {
-    marginTop: 24,
+    marginTop: sz(24),
     backgroundColor: colors.primary,
-    borderRadius: 999,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
+    borderRadius: sz(999),
+    paddingVertical: sz(14),
+    paddingHorizontal: sz(40),
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
   link: {
-    marginTop: 8,
+    marginTop: sz(8),
   },
 });

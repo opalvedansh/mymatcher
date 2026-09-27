@@ -14,6 +14,7 @@ import {
 import api from '@/api/client';
 import { colors } from '@/theme/colors';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
+import { sz } from '@/theme/scale';
 
 const fetchInstagramUsers = async (query: string): Promise<string[]> => {
   if (!query || query.length < 3) return [];
@@ -65,7 +66,7 @@ export function NameInputScreen({
         <View style={styles.container}>
         {/* Header */}
         <Pressable onPress={onBack} style={styles.backButton}>
-          <AntDesign name="arrow-left" size={24} color={colors.text} />
+          <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
         {/* Text Content */}
@@ -99,8 +100,8 @@ export function NameInputScreen({
         </View>
 
         {role === 'Influencer' && (
-          <View style={{ marginTop: 24, zIndex: 100 }}>
-            <Text style={[styles.subtitle, { paddingRight: 0, marginBottom: 12 }]}>
+          <View style={{ marginTop: sz(24), zIndex: 100 }}>
+            <Text style={[styles.subtitle, { paddingRight: 0, marginBottom: sz(12) }]}>
               Connect Instagram (Optional)
             </Text>
             <View style={styles.igInputWrapper}>
@@ -120,7 +121,7 @@ export function NameInputScreen({
                 onSubmitEditing={Keyboard.dismiss}
               />
               {isSearching && (
-                <View style={{ position: 'absolute', right: 20, top: 0, bottom: 0, justifyContent: 'center' }}>
+                <View style={{ position: 'absolute', right: sz(20), top: 0, bottom: 0, justifyContent: 'center' }}>
                   <ActivityIndicator color={colors.primary} />
                 </View>
               )}
@@ -139,7 +140,7 @@ export function NameInputScreen({
                       setSearchResults([]);
                     }}
                   >
-                    <Feather name="instagram" size={16} color="#8A8A8A" />
+                    <Feather name="instagram" size={sz(16)} color="#8A8A8A" />
                     <Text style={styles.dropdownItemText}>{item}</Text>
                   </Pressable>
                 ))}
@@ -179,34 +180,34 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(16),
+    paddingBottom: sz(32),
   },
   backButton: {
-    marginBottom: 24,
+    marginBottom: sz(24),
   },
   textContainer: {
-    marginBottom: 40,
+    marginBottom: sz(40),
   },
   title: {
     color: colors.text,
-    fontSize: 40,
+    fontSize: sz(40),
     fontWeight: '700',
-    lineHeight: 44,
-    marginBottom: 8,
+    lineHeight: sz(44),
+    marginBottom: sz(8),
   },
   subtitle: {
     color: '#8A8A8A',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: sz(13),
+    lineHeight: sz(18),
     fontWeight: '400',
-    paddingRight: 20,
+    paddingRight: sz(20),
   },
   inputContainer: {
     width: '100%',
-    height: 86,
-    borderRadius: 12,
+    height: sz(86),
+    borderRadius: sz(12),
     borderWidth: 1,
     borderColor: '#262626',
     backgroundColor: '#000000',
@@ -214,8 +215,8 @@ const styles = StyleSheet.create({
   },
   igInputWrapper: {
     width: '100%',
-    height: 86,
-    borderRadius: 12,
+    height: sz(86),
+    borderRadius: sz(12),
     borderWidth: 1,
     borderColor: '#262626',
     backgroundColor: '#000000',
@@ -224,10 +225,10 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     color: colors.text,
-    fontSize: 14,
+    fontSize: sz(14),
     fontWeight: '600',
     textAlign: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: sz(16),
   },
   footer: {
     flex: 1,
@@ -235,8 +236,8 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     backgroundColor: colors.primary,
-    height: 56,
-    borderRadius: 999,
+    height: sz(56),
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -246,30 +247,30 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
   },
   dropdownContainer: {
     backgroundColor: '#1A1A1A',
-    borderRadius: 12,
+    borderRadius: sz(12),
     borderWidth: 1,
     borderColor: '#262626',
-    marginTop: 8,
+    marginTop: sz(8),
     zIndex: 100,
     elevation: 10,
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: sz(14),
+    paddingHorizontal: sz(16),
     borderBottomWidth: 1,
     borderBottomColor: '#262626',
-    gap: 12,
+    gap: sz(12),
   },
   dropdownItemText: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: sz(14),
     fontWeight: '500',
   },
 });

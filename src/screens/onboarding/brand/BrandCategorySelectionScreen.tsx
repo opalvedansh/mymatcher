@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { colors } from '@/theme/colors';
+import { sz } from '@/theme/scale';
 
 const CATEGORIES = [
   { id: 'retail', name: 'Retail & Consumer' },
@@ -54,7 +55,7 @@ export function BrandCategorySelectionScreen({
       <View style={styles.container}>
         {/* Header */}
         <Pressable onPress={onBack} style={styles.backButton}>
-          <AntDesign name="arrow-left" size={24} color={colors.text} />
+          <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
         <ScrollView 
@@ -93,7 +94,7 @@ export function BrandCategorySelectionScreen({
                     {cat.name}
                   </Text>
                   <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                    {isSelected && <AntDesign name="check" size={14} color="#000000" />}
+                    {isSelected && <AntDesign name="check" size={sz(14)} color="#000000" />}
                   </View>
                 </Pressable>
               );
@@ -126,50 +127,50 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingTop: sz(16),
+    paddingBottom: sz(32),
   },
   backButton: {
-    marginBottom: 24,
-    paddingHorizontal: 20,
+    marginBottom: sz(24),
+    paddingHorizontal: sz(20),
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: sz(20),
+    paddingBottom: sz(40),
   },
   textContainer: {
-    marginBottom: 32,
+    marginBottom: sz(32),
   },
   title: {
     color: colors.text,
-    fontSize: 40,
+    fontSize: sz(40),
     fontWeight: '700',
-    lineHeight: 44,
-    marginBottom: 12,
+    lineHeight: sz(44),
+    marginBottom: sz(12),
   },
   subtitle: {
     color: '#8A8A8A',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: sz(13),
+    lineHeight: sz(18),
     fontWeight: '400',
-    paddingRight: 20,
+    paddingRight: sz(20),
   },
   listContainer: {
-    gap: 16,
+    gap: sz(16),
   },
   categoryCard: {
-    height: 64,
+    height: sz(64),
     backgroundColor: '#000000',
-    borderRadius: 12,
+    borderRadius: sz(12),
     borderWidth: 1.5,
     borderColor: '#262626',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
+    paddingHorizontal: sz(24),
   },
   categoryCardSelected: {
     borderColor: colors.primary,
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
     flex: 1,
     textAlign: 'center',
@@ -187,9 +188,9 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: sz(24),
+    height: sz(24),
+    borderRadius: sz(12),
     borderWidth: 2,
     borderColor: '#444444',
     alignItems: 'center',
@@ -202,14 +203,14 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(16),
     backgroundColor: colors.background,
   },
   nextButton: {
     backgroundColor: colors.primary,
-    height: 56,
-    borderRadius: 999,
+    height: sz(56),
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
   },
 });

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { colors } from '@/theme/colors';
+import { sz } from '@/theme/scale';
 
 export function PhotoUploadScreen({
   onBack,
@@ -65,11 +66,11 @@ export function PhotoUploadScreen({
                   removePhoto(i);
                 }}
               >
-                <AntDesign name="close" size={12} color="#FFF" />
+                <AntDesign name="close" size={sz(12)} color="#FFF" />
               </Pressable>
             </>
           ) : (
-            <AntDesign name="plus" size={24} color="#444444" />
+            <AntDesign name="plus" size={sz(24)} color="#444444" />
           )}
         </Pressable>
       );
@@ -82,7 +83,7 @@ export function PhotoUploadScreen({
       <View style={styles.container}>
         {/* Header */}
         <Pressable onPress={onBack} style={styles.backButton}>
-          <AntDesign name="arrow-left" size={24} color={colors.text} />
+          <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
         <ScrollView 
@@ -137,36 +138,36 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingTop: sz(16),
+    paddingBottom: sz(32),
   },
   backButton: {
-    marginBottom: 24,
-    paddingHorizontal: 20,
+    marginBottom: sz(24),
+    paddingHorizontal: sz(20),
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: sz(20),
+    paddingBottom: sz(40),
   },
   textContainer: {
-    marginBottom: 32,
+    marginBottom: sz(32),
   },
   title: {
     color: colors.text,
-    fontSize: 40,
+    fontSize: sz(40),
     fontWeight: '700',
-    lineHeight: 44,
-    marginBottom: 12,
+    lineHeight: sz(44),
+    marginBottom: sz(12),
   },
   subtitle: {
     color: '#8A8A8A',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: sz(14),
+    lineHeight: sz(20),
     fontWeight: '400',
-    paddingRight: 20,
+    paddingRight: sz(20),
   },
   gridContainer: {
     flexDirection: 'row',
@@ -177,12 +178,12 @@ const styles = StyleSheet.create({
     width: '31%', // 3 per row with a bit of space
     aspectRatio: 0.65, // Taller than wide
     backgroundColor: '#000000',
-    borderRadius: 12,
+    borderRadius: sz(12),
     borderWidth: 1,
     borderColor: '#262626',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: sz(16),
     overflow: 'hidden',
   },
   image: {
@@ -191,24 +192,24 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: sz(8),
+    right: sz(8),
+    width: sz(24),
+    height: sz(24),
+    borderRadius: sz(12),
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(16),
     backgroundColor: colors.background,
   },
   nextButton: {
     backgroundColor: colors.primary,
-    height: 56,
-    borderRadius: 999,
+    height: sz(56),
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -218,7 +219,7 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
   },
   nextButtonTextDisabled: {

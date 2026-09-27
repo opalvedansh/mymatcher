@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Platform,
   Keyboard,
@@ -18,6 +17,7 @@ import {
 
   AccessibilityInfo,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons, MaterialIcons, Feather, MaterialCommunityIcons, FontAwesome6 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,16 +37,17 @@ import { VerificationModal } from './VerificationModal';
 import { LinkedinReviews } from './LinkedinReviews';
 import type { LinkedinReview } from '@/api/types';
 import { TouchableOpacity } from 'react-native';
+import { sz } from '@/theme/scale';
 
 // ──────────────────────── Line Chart ────────────────────────
 const CHART_DATA = [100, 98, 85, 60, 40, 25, 8, 2, 1, 0];
-const CHART_H = 160;
+const CHART_H = sz(160);
 const MAX_Y = 120;
-const Y_LABEL_W = 32;  // reserved width for y-axis labels
-const DOT_R = 5;       // dot radius
+const Y_LABEL_W = sz(32);  // reserved width for y-axis labels
+const DOT_R = sz(5);       // dot radius
 
 function LineChart({ width }: { width: number }) {
-  const PLOT_W = width - 48 - Y_LABEL_W - 12;
+  const PLOT_W = width - sz(48) - Y_LABEL_W - sz(12);
   const pts = CHART_DATA.map((v, i) => ({
     x: Y_LABEL_W + (i / (CHART_DATA.length - 1)) * PLOT_W,
     y: CHART_H - (v / MAX_Y) * CHART_H,
@@ -54,7 +55,7 @@ function LineChart({ width }: { width: number }) {
   const gridLines = [0, 30, 60, 90, 120];
 
   return (
-    <View style={{ width: width - 48, height: CHART_H + 28, position: 'relative' }}>
+    <View style={{ width: width - sz(48), height: CHART_H + sz(28), position: 'relative' }}>
       {gridLines.map((val) => {
         const y = CHART_H - (val / MAX_Y) * CHART_H;
         return (
@@ -78,7 +79,7 @@ function LineChart({ width }: { width: number }) {
               left: p.x,
               top: p.y,
               width: length,
-              height: 2,
+              height: sz(2),
               backgroundColor: '#FF6B2B',
               transformOrigin: '0 50%',
               transform: [{ rotate: `${angle}deg` }],
@@ -94,9 +95,9 @@ function LineChart({ width }: { width: number }) {
           key={`xlabel-${i}`}
           style={[chartSt.xLabel, {
             position: 'absolute',
-            top: CHART_H + 8,
-            left: p.x - 8,
-            width: 18,
+            top: CHART_H + sz(8),
+            left: p.x - sz(8),
+            width: sz(18),
             textAlign: 'center',
           }]}
         >
@@ -109,18 +110,18 @@ function LineChart({ width }: { width: number }) {
 }
 
 const chartSt = StyleSheet.create({
-  yLabel: { color: '#666', fontSize: 10, width: 28, textAlign: 'right' },
-  gridLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.15)', marginLeft: 4 },
+  yLabel: { color: '#666', fontSize: sz(10), width: sz(28), textAlign: 'right' },
+  gridLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.15)', marginLeft: sz(4) },
   dot: {
     position: 'absolute',
-    width: 10, height: 10, borderRadius: 5,
+    width: sz(10), height: sz(10), borderRadius: sz(5),
     backgroundColor: '#FF6B2B', borderWidth: 2, borderColor: '#121212',
   },
-  xLabel: { color: '#666', fontSize: 10 },
+  xLabel: { color: '#666', fontSize: sz(10) },
   addReelCard: {
-    width: 100,
-    height: 150,
-    borderRadius: 8,
+    width: sz(100),
+    height: sz(150),
+    borderRadius: sz(8),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
     borderStyle: 'dashed',
@@ -129,17 +130,17 @@ const chartSt = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.02)',
   },
   addReelIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: sz(48),
+    height: sz(48),
+    borderRadius: sz(24),
     backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: sz(8),
   },
   addReelText: {
     color: '#888',
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '500',
   },
   modalOverlay: {
@@ -149,49 +150,49 @@ const chartSt = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#111111',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    minHeight: 250,
+    borderTopLeftRadius: sz(24),
+    borderTopRightRadius: sz(24),
+    padding: sz(24),
+    minHeight: sz(250),
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: sz(12),
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
     color: '#FFF',
   },
   modalSubtitle: {
-    fontSize: 13,
+    fontSize: sz(13),
     color: '#AAA',
-    marginBottom: 24,
-    lineHeight: 20,
+    marginBottom: sz(24),
+    lineHeight: sz(20),
   },
   modalInput: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: sz(12),
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(14),
     color: '#FFF',
-    fontSize: 14,
-    marginBottom: 24,
+    fontSize: sz(14),
+    marginBottom: sz(24),
   },
   modalButton: {
     backgroundColor: '#FF6B2B',
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: sz(12),
+    paddingVertical: sz(14),
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: sz(10),
   },
   modalButtonText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
 });
@@ -246,10 +247,10 @@ function findCatalogCompany(company: string) {
 function companyLogo(company: string): { bg: string, icon: React.ReactNode } {
   const known = findCatalogCompany(company);
   const fg = known?.fg || '#FFF';
-  if (known?.icon) return { bg: known.bg, icon: <FontAwesome6 name={known.icon as any} size={14} color={fg} /> };
+  if (known?.icon) return { bg: known.bg, icon: <FontAwesome6 name={known.icon as any} size={sz(14)} color={fg} /> };
   return {
     bg: known?.bg || '#FF6B2B',
-    icon: <Text style={{ color: fg, fontSize: 10, fontWeight: '700' }}>{company.trim().substring(0, 2).toUpperCase()}</Text>,
+    icon: <Text style={{ color: fg, fontSize: sz(10), fontWeight: '700' }}>{company.trim().substring(0, 2).toUpperCase()}</Text>,
   };
 }
 
@@ -356,10 +357,10 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         <View style={{ height: height * 0.7, backgroundColor: '#1A1A1A' }} />
         <View style={[styles.mainContentContainer, { alignItems: 'center' }]}>
           <View style={[styles.avatarContainer, { backgroundColor: '#222' }]} />
-          <View style={[styles.skeletonLine, { width: 160, height: 20 }]} />
-          <View style={[styles.skeletonLine, { width: 110 }]} />
-          <View style={[styles.skeletonLine, { width: 220, marginBottom: 32 }]} />
-          <View style={[styles.skeletonLine, { alignSelf: 'stretch', height: 56 }]} />
+          <View style={[styles.skeletonLine, { width: sz(160), height: sz(20) }]} />
+          <View style={[styles.skeletonLine, { width: sz(110) }]} />
+          <View style={[styles.skeletonLine, { width: sz(220), marginBottom: sz(32) }]} />
+          <View style={[styles.skeletonLine, { alignSelf: 'stretch', height: sz(56) }]} />
         </View>
       </View>
     );
@@ -367,8 +368,8 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
 
   if (error || !activeProfile) {
     return (
-      <View style={[styles.center, { paddingHorizontal: 32 }]}>
-        <Ionicons name="cloud-offline-outline" size={32} color="#9A9A9A" />
+      <View style={[styles.center, { paddingHorizontal: sz(32) }]}>
+        <Ionicons name="cloud-offline-outline" size={sz(32)} color="#9A9A9A" />
         <Text style={styles.errorTitle}>Couldn't load this profile</Text>
         <Text style={styles.errorBody}>{error || 'No profile found'}</Text>
         <Pressable
@@ -379,8 +380,8 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           <Text style={styles.retryButtonText}>Try again</Text>
         </Pressable>
         {onBack && (
-          <Pressable onPress={onBack} style={{ marginTop: 16, padding: 8 }} accessibilityRole="button">
-            <Text style={{ color: '#9A9A9A', fontSize: 14 }}>Go back</Text>
+          <Pressable onPress={onBack} style={{ marginTop: sz(16), padding: sz(8) }} accessibilityRole="button">
+            <Text style={{ color: '#9A9A9A', fontSize: sz(14) }}>Go back</Text>
           </Pressable>
         )}
       </View>
@@ -589,29 +590,29 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
   const engagementStr = activeProfile.engagement_rate ? `${activeProfile.engagement_rate}%` : '0%';
 
   const PLATFORMS_DB: Record<string, { label: string, bg: string, icon: React.ReactNode }> = {
-    instagram: { label: 'Instagram', bg: '#E1306C', icon: <FontAwesome6 name="instagram" size={16} color="#FFF" /> },
-    youtube: { label: 'YouTube', bg: '#FF0000', icon: <FontAwesome6 name="youtube" size={16} color="#FFF" /> },
-    tiktok: { label: 'TikTok', bg: '#000000', icon: <FontAwesome6 name="tiktok" size={16} color="#FFF" /> },
-    x: { label: 'X', bg: '#000000', icon: <FontAwesome6 name="x-twitter" size={16} color="#FFF" /> },
-    twitter: { label: 'Twitter', bg: '#1DA1F2', icon: <FontAwesome6 name="twitter" size={16} color="#FFF" /> },
-    reddit: { label: 'Reddit', bg: '#FF6B2B', icon: <FontAwesome6 name="reddit-alien" size={16} color="#FFF" /> },
-    pinterest: { label: 'Pinterest', bg: '#E60023', icon: <FontAwesome6 name="pinterest" size={16} color="#FFF" /> },
-    facebook: { label: 'Facebook', bg: '#1877F2', icon: <FontAwesome6 name="facebook-f" size={16} color="#FFF" /> },
-    linkedin: { label: 'LinkedIn', bg: '#0A66C2', icon: <FontAwesome6 name="linkedin-in" size={16} color="#FFF" /> },
-    snapchat: { label: 'Snapchat', bg: '#FFFC00', icon: <FontAwesome6 name="snapchat" size={16} color="#000" /> },
-    threads: { label: 'Threads', bg: '#000000', icon: <FontAwesome6 name="threads" size={16} color="#FFF" /> },
-    spotify: { label: 'Spotify', bg: '#1DB954', icon: <FontAwesome6 name="spotify" size={16} color="#FFF" /> },
-    twitch: { label: 'Twitch', bg: '#9146FF', icon: <FontAwesome6 name="twitch" size={16} color="#FFF" /> },
-    discord: { label: 'Discord', bg: '#5865F2', icon: <FontAwesome6 name="discord" size={16} color="#FFF" /> },
-    behance: { label: 'Behance', bg: '#1769FF', icon: <FontAwesome6 name="behance" size={16} color="#FFF" /> },
-    dribbble: { label: 'Dribbble', bg: '#EA4C89', icon: <FontAwesome6 name="dribbble" size={16} color="#FFF" /> },
+    instagram: { label: 'Instagram', bg: '#E1306C', icon: <FontAwesome6 name="instagram" size={sz(16)} color="#FFF" /> },
+    youtube: { label: 'YouTube', bg: '#FF0000', icon: <FontAwesome6 name="youtube" size={sz(16)} color="#FFF" /> },
+    tiktok: { label: 'TikTok', bg: '#000000', icon: <FontAwesome6 name="tiktok" size={sz(16)} color="#FFF" /> },
+    x: { label: 'X', bg: '#000000', icon: <FontAwesome6 name="x-twitter" size={sz(16)} color="#FFF" /> },
+    twitter: { label: 'Twitter', bg: '#1DA1F2', icon: <FontAwesome6 name="twitter" size={sz(16)} color="#FFF" /> },
+    reddit: { label: 'Reddit', bg: '#FF6B2B', icon: <FontAwesome6 name="reddit-alien" size={sz(16)} color="#FFF" /> },
+    pinterest: { label: 'Pinterest', bg: '#E60023', icon: <FontAwesome6 name="pinterest" size={sz(16)} color="#FFF" /> },
+    facebook: { label: 'Facebook', bg: '#1877F2', icon: <FontAwesome6 name="facebook-f" size={sz(16)} color="#FFF" /> },
+    linkedin: { label: 'LinkedIn', bg: '#0A66C2', icon: <FontAwesome6 name="linkedin-in" size={sz(16)} color="#FFF" /> },
+    snapchat: { label: 'Snapchat', bg: '#FFFC00', icon: <FontAwesome6 name="snapchat" size={sz(16)} color="#000" /> },
+    threads: { label: 'Threads', bg: '#000000', icon: <FontAwesome6 name="threads" size={sz(16)} color="#FFF" /> },
+    spotify: { label: 'Spotify', bg: '#1DB954', icon: <FontAwesome6 name="spotify" size={sz(16)} color="#FFF" /> },
+    twitch: { label: 'Twitch', bg: '#9146FF', icon: <FontAwesome6 name="twitch" size={sz(16)} color="#FFF" /> },
+    discord: { label: 'Discord', bg: '#5865F2', icon: <FontAwesome6 name="discord" size={sz(16)} color="#FFF" /> },
+    behance: { label: 'Behance', bg: '#1769FF', icon: <FontAwesome6 name="behance" size={sz(16)} color="#FFF" /> },
+    dribbble: { label: 'Dribbble', bg: '#EA4C89', icon: <FontAwesome6 name="dribbble" size={sz(16)} color="#FFF" /> },
   };
 
   const platformsList = (activeProfile.platforms || []).map(p => {
     const matchedKey = Object.keys(PLATFORMS_DB).find(k => k.toLowerCase() === p.toLowerCase());
     return {
       name: p,
-      ...(matchedKey ? PLATFORMS_DB[matchedKey] : { label: p, bg: '#FF6B2B', icon: <FontAwesome6 name="star" size={16} color="#FFF" /> })
+      ...(matchedKey ? PLATFORMS_DB[matchedKey] : { label: p, bg: '#FF6B2B', icon: <FontAwesome6 name="star" size={sz(16)} color="#FFF" /> })
     };
   });
   const workedWith = activeProfile.worked_with || [];
@@ -643,14 +644,14 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
   return (
     <View style={styles.container}>
       {onBack && (
-        <View style={{ position: 'absolute', top: insets.top + 8, left: 16, zIndex: 10 }}>
-          <Pressable onPress={onBack} style={{ width: 40, height: 40, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="arrow-back" size={24} color="#FFF" />
+        <View style={{ position: 'absolute', top: insets.top + sz(8), left: sz(16), zIndex: 10 }}>
+          <Pressable onPress={onBack} style={{ width: sz(40), height: sz(40), backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: sz(20), justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name="arrow-back" size={sz(24)} color="#FFF" />
           </Pressable>
         </View>
       )}
 
-      <View style={{ position: 'absolute', top: insets.top + 8, right: 16, zIndex: 10 }}>
+      <View style={{ position: 'absolute', top: insets.top + sz(8), right: sz(16), zIndex: 10 }}>
         <Pressable
           accessibilityLabel={publicUserId ? 'Report or block' : 'Account options'}
           onPress={() =>
@@ -665,9 +666,9 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           }
           accessibilityRole="button"
           hitSlop={8}
-          style={({ pressed }) => [{ width: 40, height: 40, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, justifyContent: 'center', alignItems: 'center' }, pressed && styles.pressed]}
+          style={({ pressed }) => [{ width: sz(40), height: sz(40), backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: sz(20), justifyContent: 'center', alignItems: 'center' }, pressed && styles.pressed]}
         >
-          <Ionicons name={publicUserId ? 'ellipsis-horizontal' : 'settings-outline'} size={20} color="#FFF" />
+          <Ionicons name={publicUserId ? 'ellipsis-horizontal' : 'settings-outline'} size={sz(20)} color="#FFF" />
         </Pressable>
       </View>
 
@@ -696,8 +697,8 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           >
             {photos.length === 0 && (
               <View style={{ width, height: height * 0.7, backgroundColor: '#1A1A1A', justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="images-outline" size={36} color="#555" />
-                <Text style={{ color: '#9A9A9A', fontSize: 13, marginTop: 8 }}>
+                <Ionicons name="images-outline" size={sz(36)} color="#555" />
+                <Text style={{ color: '#9A9A9A', fontSize: sz(13), marginTop: sz(8) }}>
                   {publicUserId ? 'No photos yet' : 'Tap your avatar below to add a photo'}
                 </Text>
               </View>
@@ -717,7 +718,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             pointerEvents="none"
           />
           {/* Progress Bars */}
-          <View style={[styles.progressContainer, { pointerEvents: 'none', position: 'absolute', left: 16, right: 16 }]}>
+          <View style={[styles.progressContainer, { pointerEvents: 'none', position: 'absolute', left: sz(16), right: sz(16) }]}>
             {photos.length > 1 && photos.map((_, i) => (
               <View key={i} style={[styles.progressBar, i <= currentPhotoIndex ? styles.progressBarActive : {}]} />
             ))}
@@ -736,12 +737,12 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             />
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Ionicons name="person" size={40} color="#777" />
+              <Ionicons name="person" size={sz(40)} color="#777" />
             </View>
           )}
           {!publicUserId && (
-            <View style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: '#FF6B2B', borderRadius: 14, width: 28, height: 28, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.3, shadowRadius: 3 }}>
-              <Ionicons name="camera" size={14} color="#FFF" />
+            <View style={{ position: 'absolute', bottom: sz(4), right: sz(4), backgroundColor: '#FF6B2B', borderRadius: sz(14), width: sz(28), height: sz(28), justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: {width: 0, height: sz(2)}, shadowOpacity: 0.3, shadowRadius: sz(3) }}>
+              <Ionicons name="camera" size={sz(14)} color="#FFF" />
             </View>
           )}
         </Pressable>
@@ -751,7 +752,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           <View style={styles.nameRow}>
             <Text style={styles.name}>{name}{activeProfile.age ? `, ${activeProfile.age}` : ''}</Text>
             {activeProfile.verified ? (
-              <MaterialIcons name="verified" size={20} color="#FF6B2B" style={{ marginLeft: 8 }} />
+              <MaterialIcons name="verified" size={sz(20)} color="#FF6B2B" style={{ marginLeft: sz(8) }} />
             ) : !publicUserId ? (
               <TouchableOpacity style={styles.verifyButton} onPress={() => setIsVerificationModalVisible(true)}>
                 <Text style={styles.verifyButtonText}>Get Verified</Text>
@@ -771,9 +772,9 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               }}
               disabled={!!publicUserId}
             >
-              <FontAwesome6 name="instagram" size={13} color="#E1306C" />
+              <FontAwesome6 name="instagram" size={sz(13)} color="#E1306C" />
               <Text style={styles.instagramHandleText}>@{activeProfile.instagram_handle}</Text>
-              {!publicUserId && <Ionicons name="pencil" size={12} color="#888" style={{ marginLeft: 4 }} />}
+              {!publicUserId && <Ionicons name="pencil" size={sz(12)} color="#888" style={{ marginLeft: sz(4) }} />}
             </TouchableOpacity>
           ) : !publicUserId ? (
             <TouchableOpacity 
@@ -783,7 +784,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 setIsEditInstagramVisible(true);
               }}
             >
-              <FontAwesome6 name="instagram" size={13} color="#888" />
+              <FontAwesome6 name="instagram" size={sz(13)} color="#888" />
               <Text style={[styles.instagramHandleText, { color: '#888' }]}>Add Instagram Handle</Text>
             </TouchableOpacity>
           ) : null}
@@ -792,7 +793,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
 
           {location && (
             <View style={styles.locationRow}>
-              <Ionicons name="location-sharp" size={13} color="#9A9A9A" />
+              <Ionicons name="location-sharp" size={sz(13)} color="#9A9A9A" />
               <Text style={styles.locationText}>{location}</Text>
             </View>
           )}
@@ -820,20 +821,20 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
 
         {/* ── Instagram Sync Banner ── */}
         {isSyncing && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: sz(8), gap: sz(8) }}>
             <ActivityIndicator size="small" color="#FF6B2B" />
-            <Text style={{ color: '#AAA', fontSize: 12 }}>Fetching Instagram stats…</Text>
+            <Text style={{ color: '#AAA', fontSize: sz(12) }}>Fetching Instagram stats…</Text>
           </View>
         )}
 
         {/* ── Worked With ── */}
         {(workedWith.length > 0 || !publicUserId) && (
           <View style={styles.sectionCentered}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: sz(12) }}>
               <Text style={[styles.smallSubtitleCentered, { marginBottom: 0 }]}>Worked With</Text>
               {!publicUserId && (
-                <TouchableOpacity onPress={openEditWorkedWith} style={{ marginLeft: 8 }} accessibilityLabel="Edit worked with">
-                  <Ionicons name="pencil" size={14} color="#888" />
+                <TouchableOpacity onPress={openEditWorkedWith} style={{ marginLeft: sz(8) }} accessibilityLabel="Edit worked with">
+                  <Ionicons name="pencil" size={sz(14)} color="#888" />
                 </TouchableOpacity>
               )}
             </View>
@@ -850,7 +851,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               </View>
             ) : (
               <TouchableOpacity onPress={openEditWorkedWith}>
-                <Text style={{ color: '#888', fontSize: 13 }}>Add companies you've worked with</Text>
+                <Text style={{ color: '#888', fontSize: sz(13) }}>Add companies you've worked with</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -859,11 +860,11 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         {/* ── Available On ── */}
         {(platformsList.length > 0 || !publicUserId) && (
           <View style={styles.sectionCentered}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: sz(12) }}>
               <Text style={[styles.smallSubtitleCentered, { marginBottom: 0 }]}>Available on</Text>
               {!publicUserId && (
-                <TouchableOpacity onPress={openEditPlatforms} style={{ marginLeft: 8 }} accessibilityLabel="Edit platforms">
-                  <Ionicons name="pencil" size={14} color="#888" />
+                <TouchableOpacity onPress={openEditPlatforms} style={{ marginLeft: sz(8) }} accessibilityLabel="Edit platforms">
+                  <Ionicons name="pencil" size={sz(14)} color="#888" />
                 </TouchableOpacity>
               )}
             </View>
@@ -877,7 +878,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               </View>
             ) : (
               <TouchableOpacity onPress={openEditPlatforms}>
-                <Text style={{ color: '#888', fontSize: 13 }}>Add the platforms you create on</Text>
+                <Text style={{ color: '#888', fontSize: sz(13) }}>Add the platforms you create on</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -889,7 +890,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.smallSubtitle}>Top Reels</Text>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: sz(12) }}>
              {/* Add Reel Button */}
             {!publicUserId && (
               <Pressable
@@ -898,7 +899,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 accessibilityRole="button"
               >
                 <View style={styles.addReelIconBg}>
-                  <Ionicons name="add" size={32} color="#888" />
+                  <Ionicons name="add" size={sz(32)} color="#888" />
                 </View>
                 <Text style={styles.addReelText}>Add Reel</Text>
               </Pressable>
@@ -914,20 +915,20 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                    }
                  }}
                >
-                 <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }]}>
+                 <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: sz(12), justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }]}>
                    {item.thumbnail_url ? (
                      <Image source={{ uri: item.thumbnail_url }} style={StyleSheet.absoluteFill} contentFit="cover" />
                    ) : (
-                     <View style={{ padding: 8, alignItems: 'center' }}>
-                       <Ionicons name="logo-instagram" size={24} color="#888" />
-                       <Text style={{color: '#888', fontSize: 10, marginTop: 8, textAlign: 'center'}} numberOfLines={2}>
+                     <View style={{ padding: sz(8), alignItems: 'center' }}>
+                       <Ionicons name="logo-instagram" size={sz(24)} color="#888" />
+                       <Text style={{color: '#888', fontSize: sz(10), marginTop: sz(8), textAlign: 'center'}} numberOfLines={2}>
                          {item.url.replace('https://www.instagram.com/', '')}
                        </Text>
                      </View>
                    )}
                  </View>
                  <View style={styles.reelViewsOverlay}>
-                   <Ionicons name="play-outline" size={10} color="#FFF" />
+                   <Ionicons name="play-outline" size={sz(10)} color="#FFF" />
                    <Text style={styles.reelViewsText}>{item.views}</Text>
                  </View>
                </Pressable>
@@ -952,7 +953,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         </View>
 
         {/* ── Tab Content ── */}
-        <View style={{ position: 'relative', overflow: 'hidden', minHeight: 400 }}>
+        <View style={{ position: 'relative', overflow: 'hidden', minHeight: sz(400) }}>
         {activeTab === 'overview' && (
           <View style={styles.tabContent}>
             <Text style={styles.bigSectionTitle}>Summary</Text>
@@ -972,7 +973,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               ))}
             </View>
 
-            <View style={{ marginTop: 24, marginBottom: 24 }}>
+            <View style={{ marginTop: sz(24), marginBottom: sz(24) }}>
               <Text style={styles.bigSectionTitle}>What affects their views</Text>
               <Text style={styles.sectionSubtitle}>Rates are listed in order of importance to reach</Text>
               <View style={styles.ratesList}>
@@ -986,7 +987,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 ].map((rate, idx) => (
                   <View key={idx} style={styles.rateRow}>
                     <View style={styles.rateIconBox}>
-                      <Feather name={rate.icon as any} size={16} color="#aaa" />
+                      <Feather name={rate.icon as any} size={sz(16)} color="#aaa" />
                     </View>
                     <Text style={styles.rateLabel}>{rate.label}</Text>
                     <Text style={styles.rateValue}>{rate.val}</Text>
@@ -995,10 +996,10 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               </View>
             </View>
             
-            <View style={{ alignItems: 'center', marginBottom: 40 }}>
-              <Text style={[styles.bigSectionTitle, { textAlign: 'center', width: 200, marginBottom: 40 }]}>How long people have watched their reel</Text>
-              <View style={{ alignSelf: 'stretch', alignItems: 'center', paddingRight: 20 }}>
-                <LineChart width={width - 24} />
+            <View style={{ alignItems: 'center', marginBottom: sz(40) }}>
+              <Text style={[styles.bigSectionTitle, { textAlign: 'center', width: sz(200), marginBottom: sz(40) }]}>How long people have watched their reel</Text>
+              <View style={{ alignSelf: 'stretch', alignItems: 'center', paddingRight: sz(20) }}>
+                <LineChart width={width - sz(24)} />
               </View>
             </View>
           </View>
@@ -1007,76 +1008,76 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         {activeTab === 'engagement' && (
           <View style={styles.tabContent}>
             
-            <Text style={[styles.bigSectionTitle, { marginBottom: 20 }]}>Actions after viewing</Text>
+            <Text style={[styles.bigSectionTitle, { marginBottom: sz(20) }]}>Actions after viewing</Text>
             
-            <View style={{ marginBottom: 40 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={{ color: '#E0E0E0', fontSize: 15 }}>Profile Visits</Text>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>5</Text>
+            <View style={{ marginBottom: sz(40) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(16) }}>
+                <Text style={{ color: '#E0E0E0', fontSize: sz(15) }}>Profile Visits</Text>
+                <Text style={{ color: '#FFF', fontSize: sz(16), fontWeight: '600' }}>5</Text>
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={{ color: '#E0E0E0', fontSize: 15 }}>Follows</Text>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>8</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(16) }}>
+                <Text style={{ color: '#E0E0E0', fontSize: sz(15) }}>Follows</Text>
+                <Text style={{ color: '#FFF', fontSize: sz(16), fontWeight: '600' }}>8</Text>
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={{ color: '#E0E0E0', fontSize: 15 }}>Bio link taps</Text>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>4</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(16) }}>
+                <Text style={{ color: '#E0E0E0', fontSize: sz(15) }}>Bio link taps</Text>
+                <Text style={{ color: '#FFF', fontSize: sz(16), fontWeight: '600' }}>4</Text>
               </View>
             </View>
 
-            <Text style={[styles.bigSectionTitle, { marginBottom: 20 }]}>Interactions</Text>
+            <Text style={[styles.bigSectionTitle, { marginBottom: sz(20) }]}>Interactions</Text>
             
-            <View style={{ marginBottom: 20 }}>
-              <View style={{ marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={{ color: '#E0E0E0', fontSize: 15 }}>Likes and Reactions</Text>
-                  <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>47</Text>
+            <View style={{ marginBottom: sz(20) }}>
+              <View style={{ marginBottom: sz(20) }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(6) }}>
+                  <Text style={{ color: '#E0E0E0', fontSize: sz(15) }}>Likes and Reactions</Text>
+                  <Text style={{ color: '#FFF', fontSize: sz(16), fontWeight: '600' }}>47</Text>
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <Text style={{ color: '#888', fontSize: 11, fontWeight: '500' }}>Instagram</Text>
-                  <Text style={{ color: '#888', fontSize: 11, fontWeight: '600' }}>23</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(4) }}>
+                  <Text style={{ color: '#888', fontSize: sz(11), fontWeight: '500' }}>Instagram</Text>
+                  <Text style={{ color: '#888', fontSize: sz(11), fontWeight: '600' }}>23</Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: '#888', fontSize: 11, fontWeight: '500' }}>Facebook</Text>
-                  <Text style={{ color: '#888', fontSize: 11, fontWeight: '600' }}>24</Text>
+                  <Text style={{ color: '#888', fontSize: sz(11), fontWeight: '500' }}>Facebook</Text>
+                  <Text style={{ color: '#888', fontSize: sz(11), fontWeight: '600' }}>24</Text>
                 </View>
               </View>
 
-              <View style={{ marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={{ color: '#E0E0E0', fontSize: 15 }}>Comments</Text>
-                  <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>8</Text>
+              <View style={{ marginBottom: sz(20) }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(6) }}>
+                  <Text style={{ color: '#E0E0E0', fontSize: sz(15) }}>Comments</Text>
+                  <Text style={{ color: '#FFF', fontSize: sz(16), fontWeight: '600' }}>8</Text>
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <Text style={{ color: '#888', fontSize: 11, fontWeight: '500' }}>Instagram</Text>
-                  <Text style={{ color: '#888', fontSize: 11, fontWeight: '600' }}>5</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(4) }}>
+                  <Text style={{ color: '#888', fontSize: sz(11), fontWeight: '500' }}>Instagram</Text>
+                  <Text style={{ color: '#888', fontSize: sz(11), fontWeight: '600' }}>5</Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: '#888', fontSize: 11, fontWeight: '500' }}>Facebook</Text>
-                  <Text style={{ color: '#888', fontSize: 11, fontWeight: '600' }}>3</Text>
+                  <Text style={{ color: '#888', fontSize: sz(11), fontWeight: '500' }}>Facebook</Text>
+                  <Text style={{ color: '#888', fontSize: sz(11), fontWeight: '600' }}>3</Text>
                 </View>
               </View>
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <Text style={{ color: '#E0E0E0', fontSize: 15 }}>Reposts</Text>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>5</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(20) }}>
+                <Text style={{ color: '#E0E0E0', fontSize: sz(15) }}>Reposts</Text>
+                <Text style={{ color: '#FFF', fontSize: sz(16), fontWeight: '600' }}>5</Text>
               </View>
               
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <Text style={{ color: '#E0E0E0', fontSize: 15 }}>Shares</Text>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>28</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(20) }}>
+                <Text style={{ color: '#E0E0E0', fontSize: sz(15) }}>Shares</Text>
+                <Text style={{ color: '#FFF', fontSize: sz(16), fontWeight: '600' }}>28</Text>
               </View>
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <Text style={{ color: '#E0E0E0', fontSize: 15 }}>Saves</Text>
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>23</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(20) }}>
+                <Text style={{ color: '#E0E0E0', fontSize: sz(15) }}>Saves</Text>
+                <Text style={{ color: '#FFF', fontSize: sz(16), fontWeight: '600' }}>23</Text>
               </View>
             </View>
 
-            <View style={{ alignItems: 'center', marginTop: 10, marginBottom: 40 }}>
-              <Text style={[styles.bigSectionTitle, { textAlign: 'center', marginBottom: 40 }]}>When people liked their reel</Text>
-              <View style={{ alignSelf: 'stretch', alignItems: 'center', paddingRight: 20 }}>
-                <LineChart width={width - 24} />
+            <View style={{ alignItems: 'center', marginTop: sz(10), marginBottom: sz(40) }}>
+              <Text style={[styles.bigSectionTitle, { textAlign: 'center', marginBottom: sz(40) }]}>When people liked their reel</Text>
+              <View style={{ alignSelf: 'stretch', alignItems: 'center', paddingRight: sz(20) }}>
+                <LineChart width={width - sz(24)} />
               </View>
             </View>
 
@@ -1087,20 +1088,20 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           <View style={styles.tabContent}>
             
             {/* Demographics Filters (Pills) */}
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 40, marginTop: 10 }}>
-              <View style={{ backgroundColor: '#FFF', paddingVertical: 8, paddingHorizontal: 24, borderRadius: 20 }}>
-                <Text style={{ color: '#000', fontSize: 13, fontWeight: '600' }}>Age</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: sz(12), marginBottom: sz(40), marginTop: sz(10) }}>
+              <View style={{ backgroundColor: '#FFF', paddingVertical: sz(8), paddingHorizontal: sz(24), borderRadius: sz(20) }}>
+                <Text style={{ color: '#000', fontSize: sz(13), fontWeight: '600' }}>Age</Text>
               </View>
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 8, paddingHorizontal: 24, borderRadius: 20 }}>
-                <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600' }}>Gender</Text>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: sz(8), paddingHorizontal: sz(24), borderRadius: sz(20) }}>
+                <Text style={{ color: '#FFF', fontSize: sz(13), fontWeight: '600' }}>Gender</Text>
               </View>
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 8, paddingHorizontal: 24, borderRadius: 20 }}>
-                <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600' }}>Locations</Text>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: sz(8), paddingHorizontal: sz(24), borderRadius: sz(20) }}>
+                <Text style={{ color: '#FFF', fontSize: sz(13), fontWeight: '600' }}>Locations</Text>
               </View>
             </View>
 
             {/* Horizontal Bar Chart */}
-            <View style={{ marginBottom: 40 }}>
+            <View style={{ marginBottom: sz(40) }}>
               {[
                 { label: '13-17', val: 5 },
                 { label: '18-24', val: 25 },
@@ -1109,12 +1110,12 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 { label: '45-54', val: 8 },
                 { label: '55+', val: 2 },
               ].map((row, i) => (
-                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                  <Text style={{ color: '#E0E0E0', fontSize: 12, width: 45 }}>{row.label}</Text>
-                  <View style={{ flex: 1, height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, marginHorizontal: 12, overflow: 'hidden' }}>
-                    <View style={{ width: `${row.val}%`, height: '100%', backgroundColor: '#FF6B2B', borderRadius: 4 }} />
+                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: sz(12) }}>
+                  <Text style={{ color: '#E0E0E0', fontSize: sz(12), width: sz(45) }}>{row.label}</Text>
+                  <View style={{ flex: 1, height: sz(8), backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: sz(4), marginHorizontal: sz(12), overflow: 'hidden' }}>
+                    <View style={{ width: `${row.val}%`, height: '100%', backgroundColor: '#FF6B2B', borderRadius: sz(4) }} />
                   </View>
-                  <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600', width: 35, textAlign: 'right' }}>{row.val}%</Text>
+                  <Text style={{ color: '#FFF', fontSize: sz(12), fontWeight: '600', width: sz(35), textAlign: 'right' }}>{row.val}%</Text>
                 </View>
               ))}
             </View>
@@ -1127,7 +1128,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFill, { zIndex: 10, justifyContent: 'center', alignItems: 'center' }]}>
               <View style={styles.premiumBanner}>
                 <View style={styles.heartCircle}>
-                  <Ionicons name="lock-closed" size={24} color="#FF6B2B" />
+                  <Ionicons name="lock-closed" size={sz(24)} color="#FF6B2B" />
                 </View>
                 <Text style={styles.premiumTitle}>Unlock Analytics</Text>
                 <Text style={styles.premiumSubtitle}>
@@ -1142,23 +1143,23 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         </View>
 
         {/* ── Rates (Packages) ── */}
-        <View style={[styles.section, { paddingTop: 20 }]}>
-          <Text style={[styles.packagesTitle, { marginBottom: 20 }]}>Packages</Text>
+        <View style={[styles.section, { paddingTop: sz(20) }]}>
+          <Text style={[styles.packagesTitle, { marginBottom: sz(20) }]}>Packages</Text>
           <View style={styles.packagesContainer}>
             {packages.map((pkg, idx) => (
               <View key={idx} style={styles.packageCard}>
                 <View style={styles.packageIconContainer}>
                   {pkg.type === 'story' && (
-                    <StoryPackageIcon size={28} color="#FFF" />
+                    <StoryPackageIcon size={sz(28)} color="#FFF" />
                   )}
                   {pkg.type === 'reel' && (
-                    <ReelPackageIcon size={28} color="#FFF" />
+                    <ReelPackageIcon size={sz(28)} color="#FFF" />
                   )}
                   {pkg.type === 'ugc' && (
-                    <UgcPackageIcon size={28} color="#FFF" />
+                    <UgcPackageIcon size={sz(28)} color="#FFF" />
                   )}
                   {pkg.type === 'brand' && (
-                    <BrandPackageIcon size={28} color="#FFF" />
+                    <BrandPackageIcon size={sz(28)} color="#FFF" />
                   )}
                 </View>
                 <View style={styles.packageDetails}>
@@ -1173,7 +1174,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             <View style={styles.packageCard}>
               <View style={styles.packageIconContainer}>
                 <View style={styles.customIconBg}>
-                  <Ionicons name="add" size={24} color="#FF6B2B" />
+                  <Ionicons name="add" size={sz(24)} color="#FF6B2B" />
                 </View>
               </View>
               <View style={styles.packageDetails}>
@@ -1219,7 +1220,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         )}
 
         {/* ── Bottom Padding ── */}
-        <View style={{ height: 40 }} />
+        <View style={{ height: sz(40) }} />
 
       </View>
       </Animated.ScrollView>
@@ -1230,7 +1231,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Instagram Handle</Text>
               <Pressable onPress={() => setIsEditInstagramVisible(false)}>
-                <Ionicons name="close" size={24} color="#FFF" />
+                <Ionicons name="close" size={sz(24)} color="#FFF" />
               </Pressable>
             </View>
             <Text style={styles.modalSubtitle}>Enter your Instagram username to automatically sync followers, engagement, and views.</Text>
@@ -1269,7 +1270,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Instagram Reel</Text>
               <Pressable onPress={() => setIsAddReelVisible(false)}>
-                <Ionicons name="close" size={24} color="#FFF" />
+                <Ionicons name="close" size={sz(24)} color="#FFF" />
               </Pressable>
             </View>
             <Text style={styles.modalSubtitle}>Paste the link to your Instagram Reel to showcase it on your profile.</Text>
@@ -1302,13 +1303,13 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Worked With</Text>
               <Pressable onPress={() => setIsEditWorkedWithVisible(false)}>
-                <Ionicons name="close" size={24} color="#FFF" />
+                <Ionicons name="close" size={sz(24)} color="#FFF" />
               </Pressable>
             </View>
             <Text style={styles.modalSubtitle}>Select the brands you have collaborated with.</Text>
 
-            <View style={{ maxHeight: 280, width: '100%', marginBottom: 16 }}>
-              <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: 8 }]}>
+            <View style={{ maxHeight: sz(280), width: '100%', marginBottom: sz(16) }}>
+              <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: sz(8) }]}>
                 {companyOptions.map((company) => {
                   const selected = draftWorkedWith.some(c => c.toLowerCase() === company.toLowerCase());
                   const logo = companyLogo(company);
@@ -1330,7 +1331,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               </ScrollView>
             </View>
 
-            <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', marginBottom: sz(16) }}>
               <TextInput
                 style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
                 placeholder="Another company"
@@ -1341,7 +1342,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 returnKeyType="done"
                 onSubmitEditing={() => { Keyboard.dismiss(); handleAddCustomCompany(); }}
               />
-              <Pressable style={[styles.modalButton, { paddingHorizontal: 16, marginLeft: 10, marginBottom: 0, alignSelf: 'stretch', justifyContent: 'center', backgroundColor: '#222' }]} onPress={handleAddCustomCompany}>
+              <Pressable style={[styles.modalButton, { paddingHorizontal: sz(16), marginLeft: sz(10), marginBottom: 0, alignSelf: 'stretch', justifyContent: 'center', backgroundColor: '#222' }]} onPress={handleAddCustomCompany}>
                 <Text style={styles.modalButtonText}>Add</Text>
               </Pressable>
             </View>
@@ -1366,13 +1367,13 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Available On</Text>
               <Pressable onPress={() => setIsEditPlatformsVisible(false)}>
-                <Ionicons name="close" size={24} color="#FFF" />
+                <Ionicons name="close" size={sz(24)} color="#FFF" />
               </Pressable>
             </View>
             <Text style={styles.modalSubtitle}>Select the platforms where brands can work with you.</Text>
 
-            <View style={{ maxHeight: 320, width: '100%', marginBottom: 20 }}>
-              <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: 8 }]}>
+            <View style={{ maxHeight: sz(320), width: '100%', marginBottom: sz(20) }}>
+              <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: sz(8) }]}>
                 {pickablePlatforms.map((key) => {
                   const selected = draftPlatforms.includes(key);
                   const platform = PLATFORMS_DB[key];
@@ -1438,27 +1439,27 @@ const styles = StyleSheet.create({
 
   mainContentContainer: {
     backgroundColor: '#111111',
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
-    marginTop: -40,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    borderTopLeftRadius: sz(40),
+    borderTopRightRadius: sz(40),
+    marginTop: sz(-40),
+    paddingHorizontal: sz(20),
+    paddingBottom: sz(40),
   },
   progressContainer: {
     position: 'absolute',
-    top: 16,
-    left: 16,
-    right: 16,
+    top: sz(16),
+    left: sz(16),
+    right: sz(16),
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: sz(6),
     zIndex: 10,
     boxShadow: '0px 1px 2px rgba(0,0,0,0.8)',
     elevation: 3,
   },
   progressBar: {
     flex: 1,
-    height: 2,
+    height: sz(2),
     backgroundColor: 'rgba(255,255,255,0.4)',
     borderRadius: 1,
   },
@@ -1467,15 +1468,15 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     alignSelf: 'center',
-    marginTop: -45,
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    marginTop: sz(-45),
+    width: sz(90),
+    height: sz(90),
+    borderRadius: sz(45),
     borderWidth: 3,
     borderColor: '#111111',
     backgroundColor: '#333',
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: sz(16),
   },
   avatar: {
     width: '100%',
@@ -1487,71 +1488,71 @@ const styles = StyleSheet.create({
   },
   infoSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: sz(24),
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   name: {
-    fontSize: 24,
+    fontSize: sz(24),
     fontWeight: '700',
     color: '#FFF',
   },
   verifyButton: {
     backgroundColor: 'rgba(255, 107, 43, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 12,
+    paddingHorizontal: sz(12),
+    paddingVertical: sz(4),
+    borderRadius: sz(12),
+    marginLeft: sz(12),
     borderWidth: 1,
     borderColor: 'rgba(255, 107, 43, 0.3)',
   },
   verifyButtonText: {
     color: '#FF6B2B',
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '600',
   },
   instagramHandleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 4,
+    gap: sz(5),
+    marginTop: sz(4),
   },
   instagramHandleText: {
-    fontSize: 13,
+    fontSize: sz(13),
     color: '#E1306C',
     fontWeight: '500',
   },
   niche: {
-    fontSize: 14,
+    fontSize: sz(14),
     color: '#DDD',
     fontWeight: '400',
-    marginTop: 4,
+    marginTop: sz(4),
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-    gap: 4,
+    marginTop: sz(6),
+    gap: sz(4),
   },
   locationText: {
-    fontSize: 12,
+    fontSize: sz(12),
     color: '#9A9A9A',
   },
   bio: {
-    fontSize: 13,
+    fontSize: sz(13),
     color: '#B5B5B5',
-    lineHeight: 19,
-    marginTop: 16,
+    lineHeight: sz(19),
+    marginTop: sz(16),
     textAlign: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: sz(10),
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 32,
-    paddingVertical: 14,
+    marginBottom: sz(32),
+    paddingVertical: sz(14),
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
@@ -1562,59 +1563,59 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: StyleSheet.hairlineWidth,
-    height: 28,
+    height: sz(28),
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
   statVal: {
-    fontSize: 20,
+    fontSize: sz(20),
     fontWeight: '700',
     color: '#FFF',
     letterSpacing: -0.3,
-    marginBottom: 2,
+    marginBottom: sz(2),
     fontVariant: ['tabular-nums'],
   },
   statLbl: {
-    fontSize: 11,
+    fontSize: sz(11),
     color: '#9A9A9A',
   },
   section: {
-    marginBottom: 28,
+    marginBottom: sz(28),
   },
   sectionCentered: {
-    marginBottom: 28,
+    marginBottom: sz(28),
     alignItems: 'center',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: sz(16),
   },
   smallSubtitle: {
-    fontSize: 14,
+    fontSize: sz(14),
     fontWeight: '600',
     color: '#FFF',
   },
   smallSubtitleCentered: {
-    fontSize: 14,
+    fontSize: sz(14),
     fontWeight: '600',
     color: '#FFF',
-    marginBottom: 12,
+    marginBottom: sz(12),
   },
   platformRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 12,
+    gap: sz(12),
   },
   platformChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    paddingLeft: 8,
-    paddingRight: 12,
-    borderRadius: 20,
+    gap: sz(8),
+    paddingVertical: sz(8),
+    paddingLeft: sz(8),
+    paddingRight: sz(12),
+    borderRadius: sz(20),
     backgroundColor: '#222',
     borderWidth: 1,
     borderColor: '#222',
@@ -1624,57 +1625,57 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,107,43,0.12)',
   },
   platformChipIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: sz(24),
+    height: sz(24),
+    borderRadius: sz(12),
     justifyContent: 'center',
     alignItems: 'center',
   },
   platformChipText: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: sz(13),
   },
   platformCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: sz(36),
+    height: sz(36),
+    borderRadius: sz(18),
     justifyContent: 'center',
     alignItems: 'center',
   },
   dummyReel: {
-    width: 100,
-    height: 150,
-    borderRadius: 12,
+    width: sz(100),
+    height: sz(150),
+    borderRadius: sz(12),
     backgroundColor: '#333',
     overflow: 'hidden',
   },
   reelViewsOverlay: {
     position: 'absolute',
-    bottom: 6,
-    left: 6,
+    bottom: sz(6),
+    left: sz(6),
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: sz(4),
     backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingHorizontal: sz(6),
+    paddingVertical: sz(2),
+    borderRadius: sz(8),
   },
   reelViewsText: {
     color: '#FFF',
-    fontSize: 9,
+    fontSize: sz(9),
     fontWeight: '600',
   },
   tabRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 24,
-    gap: 12,
+    marginBottom: sz(24),
+    gap: sz(12),
   },
   tabPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+    paddingVertical: sz(6),
+    paddingHorizontal: sz(16),
+    borderRadius: sz(16),
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
@@ -1686,7 +1687,7 @@ const styles = StyleSheet.create({
   },
   tabPillText: {
     color: '#9A9A9A',
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '500',
   },
   tabPillTextActive: {
@@ -1697,94 +1698,94 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bigSectionTitle: {
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
     color: '#FFF',
-    marginBottom: 16,
+    marginBottom: sz(16),
   },
   summaryGrid: {
-    gap: 12,
+    gap: sz(12),
   },
   summaryRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: sz(12),
   },
   summaryCard: {
     flex: 1,
     backgroundColor: '#1E1E1E',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: sz(12),
+    padding: sz(16),
   },
   summaryCardLabel: {
-    fontSize: 11,
+    fontSize: sz(11),
     color: '#888',
-    marginBottom: 8,
+    marginBottom: sz(8),
   },
   summaryCardValue: {
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '700',
     color: '#FFF',
   },
   sectionSubtitle: {
-    fontSize: 12,
+    fontSize: sz(12),
     color: '#888',
-    marginBottom: 16,
+    marginBottom: sz(16),
   },
   ratesList: {
-    gap: 16,
+    gap: sz(16),
   },
   rateRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   rateIconBox: {
-    width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center', alignItems: 'center', marginRight: 12,
+    width: sz(32), height: sz(32), borderRadius: sz(16), borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center', marginRight: sz(12),
   },
   rateLabel: {
-    flex: 1, fontSize: 13, color: '#E0E0E0',
+    flex: 1, fontSize: sz(13), color: '#E0E0E0',
   },
   rateValue: {
-    fontSize: 13, fontWeight: '600', color: '#FFF',
+    fontSize: sz(13), fontWeight: '600', color: '#FFF',
   },
   packagesTitle: {
-    fontSize: 24,
+    fontSize: sz(24),
     fontWeight: '700',
     color: '#FFF',
   },
   packagesContainer: {
-    gap: 12,
+    gap: sz(12),
   },
   packageCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#050505',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+    paddingVertical: sz(14),
+    paddingHorizontal: sz(16),
+    borderRadius: sz(16),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
   },
   packageIconContainer: {
-    width: 40,
-    height: 40,
+    width: sz(40),
+    height: sz(40),
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: sz(16),
   },
   storyIconBg: {
-    width: 32,
-    height: 32,
+    width: sz(32),
+    height: sz(32),
     backgroundColor: '#FFF',
-    borderRadius: 8,
+    borderRadius: sz(8),
     justifyContent: 'center',
     alignItems: 'center',
   },
   customIconBg: {
-    width: 40,
-    height: 40,
+    width: sz(40),
+    height: sz(40),
     backgroundColor: 'transparent',
-    borderRadius: 20,
+    borderRadius: sz(20),
     borderWidth: 2,
     borderColor: '#FFF',
     justifyContent: 'center',
@@ -1794,51 +1795,51 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   packageName: {
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
     color: '#FFF',
-    marginBottom: 4,
+    marginBottom: sz(4),
   },
   packageDesc: {
-    fontSize: 12,
+    fontSize: sz(12),
     color: '#8A8A8A',
   },
   packagePriceLabel: {
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
     color: '#FF6B2B',
   },
   requestQuoteBtn: {
     backgroundColor: '#FF6B2B',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: sz(12),
+    paddingVertical: sz(6),
+    borderRadius: sz(12),
   },
   requestQuoteText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '600',
   },
   chatButtonDone: { backgroundColor: '#1E1E1E', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)' },
   chatButtonTextDone: { color: '#8A8A8A' },
   chatButton: {
     backgroundColor: '#FF6B2B',
-    borderRadius: 12,
-    paddingVertical: 16,
+    borderRadius: sz(12),
+    paddingVertical: sz(16),
     width: '60%',
     alignSelf: 'center',
     alignItems: 'center',
-    marginBottom: 60,
+    marginBottom: sz(60),
   },
   chatButtonText: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
   },
   addReelCard: {
-    width: 100,
-    height: 150,
-    borderRadius: 12,
+    width: sz(100),
+    height: sz(150),
+    borderRadius: sz(12),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
     borderStyle: 'dashed',
@@ -1847,17 +1848,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.02)',
   },
   addReelIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: sz(48),
+    height: sz(48),
+    borderRadius: sz(24),
     backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: sz(8),
   },
   addReelText: {
     color: '#888',
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '500',
   },
   modalOverlay: {
@@ -1867,61 +1868,61 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#111111',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    minHeight: 250,
+    borderTopLeftRadius: sz(24),
+    borderTopRightRadius: sz(24),
+    padding: sz(24),
+    minHeight: sz(250),
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: sz(12),
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
     color: '#FFF',
   },
   modalSubtitle: {
-    fontSize: 13,
+    fontSize: sz(13),
     color: '#AAA',
-    marginBottom: 24,
-    lineHeight: 20,
+    marginBottom: sz(24),
+    lineHeight: sz(20),
   },
   modalInput: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: sz(12),
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(14),
     color: '#FFF',
-    fontSize: 14,
-    marginBottom: 24,
+    fontSize: sz(14),
+    marginBottom: sz(24),
   },
   modalButton: {
     backgroundColor: '#FF6B2B',
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: sz(12),
+    paddingVertical: sz(14),
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: sz(10),
   },
   modalButtonText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
   pressed: { transform: [{ scale: 0.98 }], opacity: 0.85 },
-  skeletonLine: { height: 12, borderRadius: 6, backgroundColor: '#1E1E1E', marginBottom: 12 },
-  errorTitle: { color: '#FFF', fontSize: 17, fontWeight: '600', marginTop: 16, marginBottom: 6, textAlign: 'center' },
-  errorBody: { color: '#9A9A9A', fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 24 },
-  retryButton: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 28 },
-  retryButtonText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  premiumBanner: { alignItems: 'center', paddingHorizontal: 32 },
-  heartCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  premiumTitle: { color: '#FFF', fontSize: 20, fontWeight: '700', marginBottom: 10 },
-  premiumSubtitle: { color: '#FFF', fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
-  premiumBtn: { backgroundColor: '#FFF', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24 },
-  premiumBtnText: { color: '#000', fontSize: 14, fontWeight: '700' },
+  skeletonLine: { height: sz(12), borderRadius: sz(6), backgroundColor: '#1E1E1E', marginBottom: sz(12) },
+  errorTitle: { color: '#FFF', fontSize: sz(17), fontWeight: '600', marginTop: sz(16), marginBottom: sz(6), textAlign: 'center' },
+  errorBody: { color: '#9A9A9A', fontSize: sz(13), lineHeight: sz(19), textAlign: 'center', marginBottom: sz(24) },
+  retryButton: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: sz(12), paddingVertical: sz(12), paddingHorizontal: sz(28) },
+  retryButtonText: { color: '#FFF', fontSize: sz(15), fontWeight: '600' },
+  premiumBanner: { alignItems: 'center', paddingHorizontal: sz(32) },
+  heartCircle: { width: sz(56), height: sz(56), borderRadius: sz(28), backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', marginBottom: sz(16) },
+  premiumTitle: { color: '#FFF', fontSize: sz(20), fontWeight: '700', marginBottom: sz(10) },
+  premiumSubtitle: { color: '#FFF', fontSize: sz(14), textAlign: 'center', lineHeight: sz(20), marginBottom: sz(20) },
+  premiumBtn: { backgroundColor: '#FFF', paddingVertical: sz(12), paddingHorizontal: sz(24), borderRadius: sz(24) },
+  premiumBtnText: { color: '#000', fontSize: sz(14), fontWeight: '700' },
 });

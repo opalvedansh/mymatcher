@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   FlatList,
   Platform,
   Pressable,
   Dimensions,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { AntDesign, Feather, FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -25,6 +25,7 @@ import { useWindowDimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { getFeedStories, uploadStory } from '@/api';
 import { StoryViewer } from '@/components/StoryViewer';
+import { sz, tabBarClearance } from '@/theme/scale';
 
 // ─── Mock Data ───────────────────────────────────────────────────
 const FEED_POSTS = [
@@ -77,7 +78,7 @@ function PostCard({ item, width }: { item: typeof FEED_POSTS[0], width: number }
   const [following, setFollowing] = useState(item.isFollowing);
 
   return (
-    <View style={[fc.card, { width: width - 32 }]}>
+    <View style={[fc.card, { width: width - sz(32) }]}>
       {/* Background image */}
       <Image
         source={{ uri: item.postImage }}
@@ -107,7 +108,7 @@ function PostCard({ item, width }: { item: typeof FEED_POSTS[0], width: number }
           <View style={fc.nameRow}>
             <Text style={fc.name}>{item.influencerName}</Text>
             {item.isVerified && (
-              <MaterialCommunityIcons name="check-decagram" size={15} color="#1DA1F2" style={{ marginLeft: 4 }} />
+              <MaterialCommunityIcons name="check-decagram" size={sz(15)} color="#1DA1F2" style={{ marginLeft: sz(4) }} />
             )}
           </View>
           <Text style={fc.category}>{item.category}</Text>
@@ -142,11 +143,11 @@ function PostCard({ item, width }: { item: typeof FEED_POSTS[0], width: number }
       {/* Glass stats bar */}
       <BlurView style={fc.glassBar} intensity={40} tint="dark">
         <View style={fc.stat}>
-          <AntDesign name="heart" size={20} color="#FF3B30" />
+          <AntDesign name="heart" size={sz(20)} color="#FF3B30" />
           <Text style={fc.statTxt}>{item.likes}</Text>
         </View>
         <View style={fc.stat}>
-          <Feather name="send" size={20} color="#FFF" />
+          <Feather name="send" size={sz(20)} color="#FFF" />
           <Text style={fc.statTxt}>{item.shares}</Text>
         </View>
       </BlurView>
@@ -206,7 +207,7 @@ export function BrandDashboardScreen() {
         </LinearGradient>
         {item.isMe && (
           <Pressable style={st.plusBadge} onPress={handleAddStory}>
-            <AntDesign name="plus" size={10} color="#FFF" />
+            <AntDesign name="plus" size={sz(10)} color="#FFF" />
           </Pressable>
         )}
         <Text style={st.storyName} numberOfLines={1}>{item.name}</Text>
@@ -254,19 +255,19 @@ export function BrandDashboardScreen() {
       {!isConversationOpen && (
         <View style={s.nav}>
           <Pressable style={s.navBtn} onPress={() => setActiveTab('match')}>
-            <NavMatchIcon size={24} color={activeTab === 'match' ? '#FF6B2B' : '#555'} />
+            <NavMatchIcon size={sz(24)} color={activeTab === 'match' ? '#FF6B2B' : '#555'} />
           </Pressable>
           <Pressable style={s.navBtn} onPress={() => setActiveTab('home')}>
-            <NavHomeIcon size={24} color={activeTab === 'home' ? '#FF6B2B' : '#555'} />
+            <NavHomeIcon size={sz(24)} color={activeTab === 'home' ? '#FF6B2B' : '#555'} />
           </Pressable>
           <Pressable style={s.navBtn} onPress={() => setActiveTab('likes')}>
-            <NavHeartIcon size={26} color={activeTab === 'likes' ? '#FF6B2B' : '#555'} />
+            <NavHeartIcon size={sz(26)} color={activeTab === 'likes' ? '#FF6B2B' : '#555'} />
           </Pressable>
           <Pressable style={s.navBtn} onPress={() => setActiveTab('messages')}>
-            <NavMessageIcon size={24} color={activeTab === 'messages' ? '#FF6B2B' : '#555'} />
+            <NavMessageIcon size={sz(24)} color={activeTab === 'messages' ? '#FF6B2B' : '#555'} />
           </Pressable>
           <Pressable style={s.navBtn} onPress={() => setActiveTab('profile')}>
-            <NavProfileIcon size={24} color={activeTab === 'profile' ? '#FF6B2B' : '#555'} />
+            <NavProfileIcon size={sz(24)} color={activeTab === 'profile' ? '#FF6B2B' : '#555'} />
           </Pressable>
         </View>
       )}
@@ -283,16 +284,16 @@ export function BrandDashboardScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────
 const st = StyleSheet.create({
-  storyWrap: { alignItems: 'center', width: 72, marginRight: 14 },
-  ring: { width: 72, height: 72, borderRadius: 36, padding: 3, justifyContent: 'center', alignItems: 'center' },
-  logoCircle: { width: '100%', height: '100%', borderRadius: 33, justifyContent: 'center', alignItems: 'center', padding: 10, borderWidth: 3, borderColor: '#121212' },
+  storyWrap: { alignItems: 'center', width: sz(72), marginRight: sz(14) },
+  ring: { width: sz(72), height: sz(72), borderRadius: sz(36), padding: sz(3), justifyContent: 'center', alignItems: 'center' },
+  logoCircle: { width: '100%', height: '100%', borderRadius: sz(33), justifyContent: 'center', alignItems: 'center', padding: sz(10), borderWidth: 3, borderColor: '#121212' },
   logoImg: { width: '100%', height: '100%' },
-  plusBadge: { position: 'absolute', bottom: 20, right: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: '#FF6B2B', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#121212' },
-  storyName: { color: '#CCC', fontSize: 11, marginTop: 6, textAlign: 'center' },
+  plusBadge: { position: 'absolute', bottom: sz(20), right: 0, width: sz(22), height: sz(22), borderRadius: sz(11), backgroundColor: '#FF6B2B', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#121212' },
+  storyName: { color: '#CCC', fontSize: sz(11), marginTop: sz(6), textAlign: 'center' },
 });
 
 const fc = StyleSheet.create({
-  card: { alignSelf: 'center', aspectRatio: 0.78, borderRadius: 28, overflow: 'hidden', backgroundColor: '#1A1A1A', marginBottom: 20 },
+  card: { alignSelf: 'center', aspectRatio: 0.78, borderRadius: sz(28), overflow: 'hidden', backgroundColor: '#1A1A1A', marginBottom: sz(20) },
   image: { ...StyleSheet.absoluteFill as any },
   // Top shadow: dark black fading to transparent — covers the header area
   topShadow: {
@@ -300,7 +301,7 @@ const fc = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 160,
+    height: sz(160),
   },
   // Bottom shadow: transparent to dark — covers campaign text + stats
   bottomShadow: {
@@ -308,31 +309,31 @@ const fc = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 200,
+    height: sz(200),
   },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 10 },
-  avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#FFF' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: sz(16), gap: sz(10) },
+  avatar: { width: sz(42), height: sz(42), borderRadius: sz(21), borderWidth: 2, borderColor: '#FFF' },
   headerInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
-  name: { color: '#FFF', fontSize: 15, fontWeight: '700' },
-  category: { color: 'rgba(255,255,255,0.65)', fontSize: 11, marginTop: 1 },
-  followBtn: { backgroundColor: '#FF6B2B', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
+  name: { color: '#FFF', fontSize: sz(15), fontWeight: '700' },
+  category: { color: 'rgba(255,255,255,0.65)', fontSize: sz(11), marginTop: 1 },
+  followBtn: { backgroundColor: '#FF6B2B', borderRadius: sz(20), paddingHorizontal: sz(14), paddingVertical: sz(6) },
   followingBtn: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.6)' },
-  followTxt: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  followTxt: { color: '#FFF', fontSize: sz(12), fontWeight: '700' },
   followingTxt: { color: 'rgba(255,255,255,0.8)' },
   // Watermark sits below the header (~80px from top) so it never overlaps the Follow button
-  watermark: { position: 'absolute', top: 84, right: 16, alignItems: 'flex-end' },
-  watermarkName: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
-  watermarkSub: { color: 'rgba(255,255,255,0.75)', fontSize: 8, letterSpacing: 1.5, marginTop: 2, textAlign: 'right' },
-  campaignBox: { position: 'absolute', bottom: 76, left: 20, right: 20 },
-  campaignText: { color: '#FFF', fontSize: 26, fontWeight: '800', lineHeight: 34 },
+  watermark: { position: 'absolute', top: sz(84), right: sz(16), alignItems: 'flex-end' },
+  watermarkName: { color: '#FFF', fontSize: sz(16), fontWeight: '900', letterSpacing: 1 },
+  watermarkSub: { color: 'rgba(255,255,255,0.75)', fontSize: sz(8), letterSpacing: sz(1.5), marginTop: sz(2), textAlign: 'right' },
+  campaignBox: { position: 'absolute', bottom: sz(76), left: sz(20), right: sz(20) },
+  campaignText: { color: '#FFF', fontSize: sz(26), fontWeight: '800', lineHeight: sz(34) },
   // Fade gradient bridging campaign text to glass bar
   statsFade: {
     position: 'absolute',
-    bottom: 62,
+    bottom: sz(62),
     left: 0,
     right: 0,
-    height: 60,
+    height: sz(60),
   },
   // Glass stats bar
   glassBar: {
@@ -340,30 +341,30 @@ const fc = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 62,
+    height: sz(62),
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    gap: 28,
+    paddingHorizontal: sz(24),
+    gap: sz(28),
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.15)',
     overflow: 'hidden',
   },
-  stat: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statTxt: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  stat: { flexDirection: 'row', alignItems: 'center', gap: sz(6) },
+  statTxt: { color: '#FFF', fontSize: sz(15), fontWeight: '600' },
 });
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#121212' },
-  storiesSection: { paddingTop: 16, paddingBottom: 8 },
-  storiesRow: { paddingHorizontal: 16 },
-  feedContent: { paddingBottom: 90 },
+  storiesSection: { paddingTop: sz(16), paddingBottom: sz(8) },
+  storiesRow: { paddingHorizontal: sz(16) },
+  feedContent: { paddingBottom: tabBarClearance(90) },
   nav: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    height: 62, backgroundColor: '#FFF',
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    height: sz(62), backgroundColor: '#FFF',
+    borderTopLeftRadius: sz(24), borderTopRightRadius: sz(24),
     flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center',
-    paddingBottom: 4,
+    paddingBottom: sz(4),
   },
-  navBtn: { width: 42, height: 42, justifyContent: 'center', alignItems: 'center' },
+  navBtn: { width: sz(42), height: sz(42), justifyContent: 'center', alignItems: 'center' },
 });

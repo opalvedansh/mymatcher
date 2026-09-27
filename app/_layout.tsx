@@ -14,12 +14,16 @@ import { setPendingDeepLink, takePendingDeepLink } from '@/services/pendingDeepL
 // must stay mounted across the sign-in transition — a screen that routes itself
 // away (as app/index.tsx used to) unmounts and stops observing auth state.
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { user, loading, onboardingComplete, onboardingData, userDataError } = useAuth();
+  const { user, loading, onboardingComplete, onboardingData, userDataError, passwordRecovery } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
     if (loading) return;
+
+    // Verifying a recovery code signs the user in. Hold them on the auth
+    // screen until they have actually set the new password they came for.
+    if (passwordRecovery) return;
 
     const group = segments[0];
     const inAuthGroup = group === 'auth';
@@ -65,7 +69,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       const pending = takePendingDeepLink();
       if (pending) router.push(pending as never);
     }
-  }, [user, loading, onboardingComplete, onboardingData, userDataError, segments, router]);
+  }, [user, loading, onboardingComplete, onboardingData, userDataError, passwordRecovery, segments, router]);
 
   return <>{children}</>;
 }

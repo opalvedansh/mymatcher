@@ -13,10 +13,10 @@ const TARGET_LABEL: Record<ReportTargetType, string> = {
   user: 'profile',
   post: 'post',
   story: 'story',
-  message: 'conversation',
+  message: 'message',
 };
 
-function askReportReason(targetType: ReportTargetType, targetId: string) {
+export function askReportReason(targetType: ReportTargetType, targetId: string) {
   showAlert(`Report ${TARGET_LABEL[targetType]}`, 'Why are you reporting this?', [
     ...REPORT_REASONS.map(({ label, value }) => ({
       text: label,
@@ -33,7 +33,7 @@ function askReportReason(targetType: ReportTargetType, targetId: string) {
   ]);
 }
 
-function confirmBlock(userId: string, name: string, onBlocked?: () => void) {
+export function confirmBlock(userId: string, name: string, onBlocked?: () => void) {
   showAlert(
     `Block ${name}?`,
     "They won't be able to see your profile, posts or stories, and your conversation will end.",

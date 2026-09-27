@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { colors } from '@/theme/colors';
+import { sz } from '@/theme/scale';
 
 export function BrandLogoUploadScreen({
   onBack,
@@ -43,7 +44,7 @@ export function BrandLogoUploadScreen({
       <View style={styles.container}>
         {/* Header */}
         <Pressable onPress={onBack} style={styles.backButton}>
-          <AntDesign name="arrow-left" size={24} color={colors.text} />
+          <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
         {/* Text Content */}
@@ -70,11 +71,11 @@ export function BrandLogoUploadScreen({
                     removeLogo();
                   }}
                 >
-                  <AntDesign name="close" size={16} color="#FFF" />
+                  <AntDesign name="close" size={sz(16)} color="#FFF" />
                 </Pressable>
               </>
             ) : (
-              <AntDesign name="plus" size={32} color="#444444" />
+              <AntDesign name="plus" size={sz(32)} color="#444444" />
             )}
           </Pressable>
         </View>
@@ -111,29 +112,29 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(16),
+    paddingBottom: sz(32),
   },
   backButton: {
-    marginBottom: 24,
+    marginBottom: sz(24),
   },
   textContainer: {
-    marginBottom: 32,
+    marginBottom: sz(32),
   },
   title: {
     color: colors.text,
-    fontSize: 40,
+    fontSize: sz(40),
     fontWeight: '700',
-    lineHeight: 44,
-    marginBottom: 12,
+    lineHeight: sz(44),
+    marginBottom: sz(12),
   },
   subtitle: {
     color: '#8A8A8A',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: sz(14),
+    lineHeight: sz(20),
     fontWeight: '400',
-    paddingRight: 20,
+    paddingRight: sz(20),
   },
   uploadContainer: {
     width: '100%',
@@ -143,7 +144,7 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     backgroundColor: '#000000',
-    borderRadius: 16,
+    borderRadius: sz(16),
     borderWidth: 1.5,
     borderColor: '#262626',
     alignItems: 'center',
@@ -156,11 +157,11 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    top: sz(12),
+    right: sz(12),
+    width: sz(32),
+    height: sz(32),
+    borderRadius: sz(16),
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -169,14 +170,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#111111',
-    borderRadius: 14,
+    borderRadius: sz(14),
     alignItems: 'center',
     justifyContent: 'center',
   },
   placeholderLogoText: {
     color: '#8A8A8A',
     fontWeight: '600',
-    fontSize: 20,
+    fontSize: sz(20),
   },
   footer: {
     flex: 1,
@@ -184,8 +185,8 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     backgroundColor: colors.primary,
-    height: 56,
-    borderRadius: 999,
+    height: sz(56),
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -195,7 +196,7 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
   },
   nextButtonTextDisabled: {

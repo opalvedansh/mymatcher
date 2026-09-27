@@ -171,6 +171,16 @@ export interface MatchRecord {
   last_message_at?: string;
   last_message_sender?: string;
   last_message_read_at?: string;
+  last_message_delivered_at?: string | null;
+  last_message_kind?: ChatMessageKind | null;
+  /** "Photo", "Voice message", or a document's file name, for attachments. */
+  last_message_label?: string | null;
+  last_message_duration_ms?: number | null;
+  last_message_deleted_at?: string | null;
+  /** Messages from the other person I have not read yet. */
+  unread_count?: number;
+  /** Set while I have this conversation muted. */
+  muted_until?: string | null;
 }
 
 /** GET /api/matches returns a page, not a bare list. */
@@ -221,19 +231,85 @@ export interface VerificationRequestResult {
 
 // ── Chat ──────────────────────────────────────────────────────────
 
-export interface ChatMessage {
+export type ChatMessageKind = 'text' | 'image' | 'video' | 'audio' | 'document';
+export type ChatAttachmentKind = Exclude<ChatMessageKind, 'text'>;
+
+export interface ChatAttachment {
+  /** Stable id of the stored file: a cache key that survives URL re-signing. */
+  key: string;
+  /** Short-lived signed URL; null if it could not be signed this time. */
+  url: string | null;
+  expires_at?: string;
+  mime: string;
+  size: number | null;
+  name?: string;
+  width?: number;
+  height?: number;
+  duration_ms?: number;
+  /** Voice notes: 0..1 loudness bars. */
+  waveform?: number[];
+  /** The local file, while this device is still sending it. */
+  local_uri?: string;
+}
+
+/** What a reply shows of the message it quotes. */
+export interface ChatReplyPreview {
   id: string;
   sender_id: string;
+  kind: ChatMessageKind;
+  text: string;
+  deleted: boolean;
+  name: string | null;
+  duration_ms: number | null;
+  thumb_url: string | null;
+  thumb_key: string | null;
+}
+
+export interface ChatReaction {
+  user_id: string;
+  emoji: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  match_id?: string;
+  sender_id: string;
+  /** Absent on messages from servers older than attachments: treat as text. */
+  kind?: ChatMessageKind;
+  /** The text, or an attachment's caption ('' when there is none). */
   content: string;
+  attachment?: ChatAttachment | null;
+  reply_to?: ChatReplyPreview | null;
+  reactions?: ChatReaction[];
+  forwarded?: boolean;
   created_at: string;
+  delivered_at?: string | null;
   read_at: string | null;
+  edited_at?: string | null;
+  /** Deleted for everyone: show "This message was deleted". */
+  deleted_at?: string | null;
   client_msg_id?: string | null;
+}
+
+export interface ChatMemberState {
+  muted_until: string | null;
+  cleared_at: string | null;
 }
 
 export interface ChatResponse {
   data: ChatMessage[];
   next_cursor: string | null;
+  /** First page only. */
+  state?: ChatMemberState;
 }
+
+export interface ChatUploadTarget {
+  path: string;
+  upload_url: string;
+  max_bytes: number;
+}
+
+export type MuteDuration = '8h' | '1w' | 'always';
 
 // ── Profile update bodies ─────────────────────────────────────────
 

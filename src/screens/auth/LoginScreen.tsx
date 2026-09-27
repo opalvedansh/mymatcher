@@ -19,6 +19,7 @@ import {
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
+import { sz } from '@/theme/scale';
 
 type AuthMode =
   | 'login'
@@ -27,7 +28,16 @@ type AuthMode =
   | 'email_signup'
   | 'verify_email'
   | 'forgot_password'
-  | 'forgot_sent';
+  | 'reset_code'
+  | 'reset_password';
+
+// Length of the emailed one-time code. This must match the Supabase project's
+// Auth → Email OTP length setting (currently 8); a mismatch silently makes
+// every code unenterable, because the input truncates what the user pastes.
+const OTP_LENGTH = 8;
+
+// Supabase rejects anything shorter, and the signup form enforces the same.
+const MIN_PASSWORD_LENGTH = 6;
 
 // ─── Shared Sub-Components ───────────────────────────────────────
 
@@ -55,7 +65,7 @@ function AuthButton({
         isPrimary ? styles.primaryButton : styles.secondaryButton,
         {
           width: '100%',
-          minHeight: isPrimary ? 64 : 56,
+          minHeight: isPrimary ? sz(64) : sz(56),
         },
         loading && styles.buttonDisabled,
       ]}
@@ -130,6 +140,18 @@ function mapSupabaseError(err: any): string {
   if (code.includes('too_many_requests') || msg.includes('too many requests')) {
     return 'Too many attempts. Please wait a moment and try again.';
   }
+  if (code.includes('otp_expired') || msg.includes('expired')) {
+    return 'That code has expired. Request a new one.';
+  }
+  if (code.includes('otp_disabled') || msg.includes('token has invalid') || msg.includes('invalid token')) {
+    return 'That code is not valid. Check it and try again.';
+  }
+  if (code.includes('same_password') || msg.includes('should be different')) {
+    return 'Your new password must be different from your old one.';
+  }
+  if (msg.includes('over_email_send_rate') || code.includes('over_email_send_rate')) {
+    return 'Too many emails sent. Please wait a minute and try again.';
+  }
   if (msg.includes('invalid email') || code.includes('validation_failed')) {
     return 'Invalid email address';
   }
@@ -151,7 +173,7 @@ function EmailAuthForm({
 }) {
   const { signInWithEmail, signUpWithEmail } = useAuth();
   const { width } = useWindowDimensions();
-  const contentWidth = Math.min(width - 28, 500);
+  const contentWidth = Math.min(width - sz(28), 500);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -208,7 +230,7 @@ function EmailAuthForm({
           <View style={[styles.emailContent, { width: contentWidth }]}>
             {/* Back Button */}
             <Pressable onPress={onBack} style={styles.backButton}>
-              <AntDesign name="arrow-left" size={24} color={colors.text} />
+              <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
             </Pressable>
 
             <Text style={styles.emailTitle}>
@@ -311,14 +333,21 @@ function EmailAuthForm({
 
 function OtpVerificationForm({
   email,
+  purpose,
   onBack,
+  onVerified,
 }: {
   email: string;
+  // 'signup' confirms a new account; 'recovery' authorizes a password reset.
+  purpose: 'signup' | 'recovery';
   onBack: () => void;
+  onVerified?: () => void;
 }) {
-  const { verifyOtpCode, resendOtp } = useAuth();
+  const { verifyOtpCode, resendOtp, verifyPasswordResetCode, resetPassword } = useAuth();
   const { width } = useWindowDimensions();
-  const contentWidth = Math.min(width - 28, 500);
+  const contentWidth = Math.min(width - sz(28), 500);
+
+  const isRecovery = purpose === 'recovery';
 
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -338,15 +367,20 @@ function OtpVerificationForm({
   }, [countdown]);
 
   const handleVerify = async () => {
-    if (otp.length !== 6) {
-      setError('Please enter the full 6-digit code');
+    if (otp.length !== OTP_LENGTH) {
+      setError(`Please enter the full ${OTP_LENGTH}-digit code`);
       return;
     }
     setError('');
     setLoading(true);
     try {
-      await verifyOtpCode(email, otp);
-      // onAuthStateChange fires automatically → session created → app navigates
+      if (isRecovery) {
+        await verifyPasswordResetCode(email, otp);
+        onVerified?.();
+      } else {
+        await verifyOtpCode(email, otp);
+        // onAuthStateChange fires automatically → session created → app navigates
+      }
     } catch (err: any) {
       setError(mapSupabaseError(err) || 'Invalid or expired code. Please try again.');
     } finally {
@@ -358,7 +392,10 @@ function OtpVerificationForm({
     setResending(true);
     setError('');
     try {
-      await resendOtp(email);
+      // Recovery codes have no `resend` endpoint — re-requesting the reset
+      // issues a fresh one.
+      if (isRecovery) await resetPassword(email);
+      else await resendOtp(email);
       setOtp('');
       setCountdown(60);
       setCanResend(false);
@@ -387,17 +424,19 @@ function OtpVerificationForm({
             <View style={[styles.emailContent, { width: contentWidth }]}>
               {/* Back Button */}
               <Pressable onPress={onBack} style={styles.backButton}>
-                <AntDesign name="arrow-left" size={24} color={colors.text} />
+                <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
               </Pressable>
 
               {/* Icon */}
               <View style={styles.otpIconContainer}>
-                <AntDesign name="mail" size={36} color={colors.primary} />
+                <AntDesign name="mail" size={sz(36)} color={colors.primary} />
               </View>
 
-              <Text style={styles.emailTitle}>{'Verify your\nemail'}</Text>
+              <Text style={styles.emailTitle}>
+                {isRecovery ? 'Enter reset\ncode' : 'Verify your\nemail'}
+              </Text>
               <Text style={styles.emailSubtitle}>
-                {'We sent a 6-digit code to\n'}
+                {`We sent a ${OTP_LENGTH}-digit code to\n`}
                 <Text style={styles.emailHighlight}>{maskedEmail}</Text>
               </Text>
 
@@ -413,10 +452,12 @@ function OtpVerificationForm({
                 <TextInput
                   style={styles.otpInput}
                   value={otp}
-                  onChangeText={v => setOtp(v.replace(/[^0-9]/g, '').slice(0, 6))}
+                  onChangeText={v => setOtp(v.replace(/[^0-9]/g, '').slice(0, OTP_LENGTH))}
                   keyboardType="number-pad"
-                  maxLength={6}
-                  placeholder="000000"
+                  maxLength={OTP_LENGTH}
+                  textContentType="oneTimeCode"
+                  autoComplete="one-time-code"
+                  placeholder={'0'.repeat(OTP_LENGTH)}
                   placeholderTextColor="#333333"
                   textAlign="center"
                   returnKeyType="done"
@@ -425,7 +466,7 @@ function OtpVerificationForm({
                 />
                 {/* Visual digit indicator dots */}
                 <View style={styles.otpDotsRow}>
-                  {Array.from({ length: 6 }).map((_, i) => (
+                  {Array.from({ length: OTP_LENGTH }).map((_, i) => (
                     <View
                       key={i}
                       style={[
@@ -446,7 +487,9 @@ function OtpVerificationForm({
                 {loading ? (
                   <ActivityIndicator color={colors.text} />
                 ) : (
-                  <Text style={styles.submitButtonText}>Verify Email</Text>
+                  <Text style={styles.submitButtonText}>
+                    {isRecovery ? 'Continue' : 'Verify Email'}
+                  </Text>
                 )}
               </Pressable>
 
@@ -485,7 +528,7 @@ function ForgotPasswordForm({
 }) {
   const { resetPassword } = useAuth();
   const { width } = useWindowDimensions();
-  const contentWidth = Math.min(width - 28, 500);
+  const contentWidth = Math.min(width - sz(28), 500);
 
   const [email, setEmail] = useState(initialEmail);
   const [loading, setLoading] = useState(false);
@@ -521,17 +564,17 @@ function ForgotPasswordForm({
             <View style={[styles.emailContent, { width: contentWidth }]}>
               {/* Back Button */}
               <Pressable onPress={onBack} style={styles.backButton}>
-                <AntDesign name="arrow-left" size={24} color={colors.text} />
+                <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
               </Pressable>
 
               {/* Icon */}
               <View style={styles.otpIconContainer}>
-                <AntDesign name="lock" size={36} color={colors.primary} />
+                <AntDesign name="lock" size={sz(36)} color={colors.primary} />
               </View>
 
               <Text style={styles.emailTitle}>{'Forgot\npassword?'}</Text>
               <Text style={styles.emailSubtitle}>
-                Enter your email and we'll send you a link to reset your password.
+                Enter your email and we'll send you a code to reset your password.
               </Text>
 
               {/* Error */}
@@ -567,7 +610,7 @@ function ForgotPasswordForm({
                 {loading ? (
                   <ActivityIndicator color={colors.text} />
                 ) : (
-                  <Text style={styles.submitButtonText}>Send Reset Link</Text>
+                  <Text style={styles.submitButtonText}>Send Reset Code</Text>
                 )}
               </Pressable>
             </View>
@@ -578,40 +621,113 @@ function ForgotPasswordForm({
   );
 }
 
-// ─── Forgot Password Sent Screen ──────────────────────────────────
+// ─── Set New Password (after a verified recovery code) ────────────
 
-function ForgotPasswordSentScreen({
-  email,
-  onBackToLogin,
-}: {
-  email: string;
-  onBackToLogin: () => void;
-}) {
+function NewPasswordForm({ onDone }: { onDone: () => void }) {
+  const { updatePassword } = useAuth();
   const { width } = useWindowDimensions();
-  const contentWidth = Math.min(width - 28, 500);
+  const contentWidth = Math.min(width - sz(28), 500);
+
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    if (!password.trim()) {
+      setError('Please enter a new password');
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await updatePassword(password);
+      // The recovery session is already valid, so clearing recovery mode lets
+      // AuthGuard take them straight into the app.
+      onDone();
+    } catch (err: any) {
+      setError(mapSupabaseError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={[styles.emailContainer, styles.centeredContainer]}>
-        <View style={[styles.emailContent, { width: contentWidth, alignItems: 'center' }]}>
-          {/* Success Icon */}
-          <View style={styles.sentIconContainer}>
-            <AntDesign name="check-circle" size={72} color={colors.primary} />
+      <ScrollView
+        bounces={false}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <DismissKeyboard>
+          <View style={styles.emailContainer}>
+            <View style={[styles.emailContent, { width: contentWidth }]}>
+              <View style={styles.otpIconContainer}>
+                <AntDesign name="lock" size={sz(36)} color={colors.primary} />
+              </View>
+
+              <Text style={styles.emailTitle}>{'Set a new\npassword'}</Text>
+              <Text style={styles.emailSubtitle}>
+                Choose a new password for your account.
+              </Text>
+
+              {error ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>New Password</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#666666"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>Confirm New Password</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#666666"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                  returnKeyType="done"
+                  onSubmitEditing={() => { Keyboard.dismiss(); handleSubmit(); }}
+                />
+              </View>
+
+              <Pressable
+                style={[styles.submitButton, loading && styles.buttonDisabled]}
+                onPress={() => { Keyboard.dismiss(); handleSubmit(); }}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.text} />
+                ) : (
+                  <Text style={styles.submitButtonText}>Update Password</Text>
+                )}
+              </Pressable>
+            </View>
           </View>
-
-          <Text style={[styles.emailTitle, styles.textCenter]}>{'Check your\nemail'}</Text>
-          <Text style={[styles.emailSubtitle, styles.textCenter]}>
-            {'We sent a password reset link to\n'}
-            <Text style={styles.emailHighlight}>{email}</Text>
-          </Text>
-
-          <Text style={styles.sentNote}>Didn't receive it? Check your spam folder.</Text>
-
-          <Pressable style={[styles.submitButton, { marginTop: 40, width: '100%' }]} onPress={onBackToLogin}>
-            <Text style={styles.submitButtonText}>Back to Login</Text>
-          </Pressable>
-        </View>
-      </View>
+        </DismissKeyboard>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -627,10 +743,10 @@ function AuthPage({
 }) {
   const { signInWithGoogle, signInWithApple, signInWithLinkedIn } = useAuth();
   const { width, height } = useWindowDimensions();
-  const contentWidth = Math.min(width - 28, 500);
-  const titleSize = 48;
-  const subtitleSize = 18;
-  const topSpacing = Math.max(height * 0.20, 140);
+  const contentWidth = Math.min(width - sz(28), 500);
+  const titleSize = sz(48);
+  const subtitleSize = sz(18);
+  const topSpacing = Math.max(height * 0.20, sz(140));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -740,19 +856,19 @@ function AuthPage({
               <SocialButton onPress={handleLinkedInSignIn}>
                 <FontAwesome
                   name="linkedin-square"
-                  size={24}
+                  size={sz(24)}
                   color={colors.background}
                 />
               </SocialButton>
               <SocialButton onPress={handleAppleSignIn}>
                 <FontAwesome
                   name="apple"
-                  size={24}
+                  size={sz(24)}
                   color={colors.background}
                 />
               </SocialButton>
               <SocialButton>
-                <FontAwesome name="facebook" size={22} color={colors.background} />
+                <FontAwesome name="facebook" size={sz(22)} color={colors.background} />
               </SocialButton>
             </View>
 
@@ -773,17 +889,30 @@ function AuthPage({
 // ─── Root LoginScreen — state machine ────────────────────────────
 
 export function LoginScreen() {
+  const { beginPasswordRecovery, endPasswordRecovery } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   // Email carried across mode transitions (signup → verify, login → forgot)
   const [pendingEmail, setPendingEmail] = useState('');
-  // Email shown on the "reset link sent" confirmation screen
-  const [forgotSentEmail, setForgotSentEmail] = useState('');
+  // Email the reset code was sent to
+  const [resetEmail, setResetEmail] = useState('');
+
+  // Leaving the reset flow must always release the guard, or the user is
+  // stranded on the auth screen with a live session.
+  const leaveRecovery = (next: AuthMode) => {
+    endPasswordRecovery();
+    setMode(next);
+  };
+
+  // `mode` resets when this screen remounts but the guard lives in context, so
+  // release it here too — otherwise an interrupted reset locks the user out.
+  useEffect(() => endPasswordRecovery, []);
 
   // ── OTP verification after signup ──
   if (mode === 'verify_email') {
     return (
       <OtpVerificationForm
         email={pendingEmail}
+        purpose="signup"
         onBack={() => setMode('email_signup')}
       />
     );
@@ -796,21 +925,31 @@ export function LoginScreen() {
         initialEmail={pendingEmail}
         onBack={() => setMode('email_login')}
         onSent={(sentEmail) => {
-          setForgotSentEmail(sentEmail);
-          setMode('forgot_sent');
+          setResetEmail(sentEmail);
+          // Guard before the code is verified — verification itself creates
+          // the session that would otherwise trigger a redirect.
+          beginPasswordRecovery();
+          setMode('reset_code');
         }}
       />
     );
   }
 
-  // ── Forgot password sent confirmation ──
-  if (mode === 'forgot_sent') {
+  // ── Enter the emailed reset code ──
+  if (mode === 'reset_code') {
     return (
-      <ForgotPasswordSentScreen
-        email={forgotSentEmail}
-        onBackToLogin={() => setMode('login')}
+      <OtpVerificationForm
+        email={resetEmail}
+        purpose="recovery"
+        onBack={() => leaveRecovery('forgot_password')}
+        onVerified={() => setMode('reset_password')}
       />
     );
+  }
+
+  // ── Choose the new password ──
+  if (mode === 'reset_password') {
+    return <NewPasswordForm onDone={() => leaveRecovery('login')} />;
   }
 
   // ── Email form (login or signup) ──
@@ -848,7 +987,7 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: sz(24),
     backgroundColor: colors.background,
   },
   content: {
@@ -858,26 +997,26 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text,
     fontWeight: '700',
-    letterSpacing: -2,
+    letterSpacing: sz(-2),
     textAlign: 'center',
   },
   subtitle: {
     color: '#F0F0F0',
     fontWeight: '400',
     textAlign: 'center',
-    marginTop: 18,
+    marginTop: sz(18),
   },
   buttonStack: {
     width: '100%',
     alignItems: 'center',
-    gap: 16,
-    marginTop: 48,
+    gap: sz(16),
+    marginTop: sz(48),
   },
   button: {
-    borderRadius: 999,
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: sz(20),
   },
   primaryButton: {
     backgroundColor: colors.primary,
@@ -893,31 +1032,31 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: colors.text,
-    fontSize: 20,
+    fontSize: sz(20),
     fontWeight: '700',
   },
   secondaryButtonText: {
     color: '#111111',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '400',
   },
   separator: {
     color: colors.text,
-    fontSize: 20,
+    fontSize: sz(20),
     fontWeight: '700',
     textAlign: 'center',
-    marginTop: 24,
+    marginTop: sz(24),
   },
   socialRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
-    marginTop: 24,
+    gap: sz(16),
+    marginTop: sz(24),
   },
   socialButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 999,
+    width: sz(50),
+    height: sz(50),
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,
@@ -927,17 +1066,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexWrap: 'wrap',
-    marginTop: 48,
+    marginTop: sz(48),
   },
   footerText: {
     color: '#D4D4D4',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '400',
     textAlign: 'center',
   },
   footerLink: {
     color: colors.primary,
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '400',
     textDecorationLine: 'underline',
   },
@@ -945,9 +1084,9 @@ const styles = StyleSheet.create({
   // ── Email auth form shared ──────────────────────────────────────
   emailContainer: {
     flex: 1,
-    paddingHorizontal: 14,
-    paddingTop: 60,
-    paddingBottom: 42,
+    paddingHorizontal: sz(14),
+    paddingTop: sz(60),
+    paddingBottom: sz(42),
     backgroundColor: colors.background,
   },
   centeredContainer: {
@@ -959,20 +1098,20 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   backButton: {
-    marginBottom: 32,
+    marginBottom: sz(32),
   },
   emailTitle: {
     color: colors.text,
-    fontSize: 40,
+    fontSize: sz(40),
     fontWeight: '700',
-    lineHeight: 44,
-    marginBottom: 12,
+    lineHeight: sz(44),
+    marginBottom: sz(12),
   },
   emailSubtitle: {
     color: '#8A8A8A',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 32,
+    fontSize: sz(14),
+    lineHeight: sz(20),
+    marginBottom: sz(32),
   },
   emailHighlight: {
     color: colors.text,
@@ -983,102 +1122,103 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     backgroundColor: 'rgba(255, 59, 48, 0.15)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    marginTop: 8,
+    borderRadius: sz(12),
+    padding: sz(12),
+    marginBottom: sz(16),
+    marginTop: sz(8),
   },
   errorText: {
     color: '#FF3B30',
-    fontSize: 14,
+    fontSize: sz(14),
     textAlign: 'center',
   },
   inputWrapper: {
-    marginBottom: 20,
+    marginBottom: sz(20),
   },
   inputLabel: {
     color: '#8A8A8A',
-    fontSize: 13,
+    fontSize: sz(13),
     fontWeight: '500',
-    marginBottom: 8,
+    marginBottom: sz(8),
   },
   textInput: {
     backgroundColor: '#000000',
-    borderRadius: 12,
+    borderRadius: sz(12),
     borderWidth: 1.5,
     borderColor: '#262626',
     color: colors.text,
-    fontSize: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    fontSize: sz(16),
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(14),
   },
   submitButton: {
     backgroundColor: colors.primary,
-    height: 56,
-    borderRadius: 999,
+    height: sz(56),
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
+    marginTop: sz(16),
   },
   submitButtonText: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
   },
 
   // ── Forgot password ─────────────────────────────────────────────
   forgotPasswordButton: {
     alignSelf: 'flex-end',
-    marginTop: -8,
-    marginBottom: 12,
-    paddingVertical: 4,
+    marginTop: sz(-8),
+    marginBottom: sz(12),
+    paddingVertical: sz(4),
   },
   forgotPasswordText: {
     color: colors.primary,
-    fontSize: 13,
+    fontSize: sz(13),
     fontWeight: '500',
     textDecorationLine: 'underline',
   },
 
   // ── OTP verification ────────────────────────────────────────────
   otpIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: sz(72),
+    height: sz(72),
+    borderRadius: sz(36),
     backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: sz(24),
     borderWidth: 1,
     borderColor: '#1f1f1f',
   },
   otpInputWrapper: {
-    marginBottom: 8,
+    marginBottom: sz(8),
   },
   otpInput: {
     backgroundColor: '#000000',
-    borderRadius: 16,
+    borderRadius: sz(16),
     borderWidth: 1.5,
     borderColor: '#3a3a3a',
     color: colors.text,
-    fontSize: 36,
+    // Sized so OTP_LENGTH digits still fit on a 320pt-wide screen.
+    fontSize: sz(28),
     fontWeight: '700',
-    letterSpacing: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
+    letterSpacing: sz(8),
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(18),
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: sz(12),
   },
   otpDotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 10,
-    marginBottom: 8,
+    gap: sz(10),
+    marginBottom: sz(8),
   },
   otpDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: sz(8),
+    height: sz(8),
+    borderRadius: sz(4),
     backgroundColor: '#333333',
   },
   otpDotFilled: {
@@ -1087,12 +1227,12 @@ const styles = StyleSheet.create({
   resendButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    marginTop: 8,
+    paddingVertical: sz(16),
+    marginTop: sz(8),
   },
   resendText: {
     color: colors.primary,
-    fontSize: 15,
+    fontSize: sz(15),
     fontWeight: '500',
     textDecorationLine: 'underline',
   },
@@ -1102,14 +1242,4 @@ const styles = StyleSheet.create({
   },
 
   // ── Forgot sent confirmation ────────────────────────────────────
-  sentIconContainer: {
-    marginBottom: 28,
-    marginTop: 16,
-  },
-  sentNote: {
-    color: '#555555',
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 16,
-  },
 });

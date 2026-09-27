@@ -19,6 +19,7 @@ import { FontAwesome6, Ionicons } from '@expo/vector-icons';
 import type { LinkedinReview } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { showAlert } from '@/components/ActionSheet';
+import { sz } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 const LINKEDIN_BLUE = '#0A66C2';
@@ -86,7 +87,7 @@ function ReviewCard({
     <View style={[styles.card, { width }]}>
       <View style={styles.cardTop}>
         <View style={styles.linkedinMark}>
-          <FontAwesome6 name="linkedin" size={20} color={LINKEDIN_BLUE} />
+          <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
         </View>
         {editable && (
           <Pressable
@@ -96,7 +97,7 @@ function ReviewCard({
             accessibilityLabel={`Edit review from ${review.reviewer_name}`}
             style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
           >
-            <Ionicons name="pencil" size={14} color="#BDBDBD" />
+            <Ionicons name="pencil" size={sz(14)} color="#BDBDBD" />
           </Pressable>
         )}
       </View>
@@ -128,7 +129,7 @@ function ReviewCard({
         style={({ pressed }) => [styles.viewLink, pressed && styles.pressed]}
       >
         <Text style={styles.viewLinkText}>View on LinkedIn</Text>
-        <Ionicons name="open-outline" size={14} color="#BDBDBD" />
+        <Ionicons name="open-outline" size={sz(14)} color="#BDBDBD" />
       </Pressable>
     </View>
   );
@@ -259,7 +260,7 @@ export function LinkedinReviews({
             accessibilityRole="button"
             style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
           >
-            <Ionicons name="add" size={16} color="#FFF" />
+            <Ionicons name="add" size={sz(16)} color="#FFF" />
             <Text style={styles.addButtonText}>Add</Text>
           </Pressable>
         )}
@@ -272,13 +273,13 @@ export function LinkedinReviews({
           style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
         >
           <View style={styles.linkedinMark}>
-            <FontAwesome6 name="linkedin" size={20} color={LINKEDIN_BLUE} />
+            <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.emptyTitle}>Add a LinkedIn review</Text>
             <Text style={styles.emptyBody}>Show brands what past clients said, with a link to the original.</Text>
           </View>
-          <Ionicons name="add-circle" size={26} color={ACCENT} />
+          <Ionicons name="add-circle" size={sz(26)} color={ACCENT} />
         </Pressable>
       ) : (
         <ScrollView
@@ -286,7 +287,7 @@ export function LinkedinReviews({
           showsHorizontalScrollIndicator={false}
           snapToInterval={cardWidth + 12}
           decelerationRate="fast"
-          contentContainerStyle={{ gap: 12 }}
+          contentContainerStyle={{ gap: sz(12) }}
           scrollEnabled={reviews.length > 1}
         >
           {reviews.map(review => (
@@ -310,7 +311,7 @@ export function LinkedinReviews({
 
               <View style={styles.sheetHeader}>
                 <View style={styles.headerMark}>
-                  <FontAwesome6 name="linkedin" size={22} color={LINKEDIN_BLUE} />
+                  <FontAwesome6 name="linkedin" size={sz(22)} color={LINKEDIN_BLUE} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sheetTitle} accessibilityRole="header">
@@ -330,7 +331,7 @@ export function LinkedinReviews({
                     return [styles.closeButton, (hovered || focused) && styles.closeButtonActive, pressed && styles.pressed];
                   }}
                 >
-                  <Ionicons name="close" size={20} color="#FFF" />
+                  <Ionicons name="close" size={sz(20)} color="#FFF" />
                 </Pressable>
               </View>
 
@@ -371,7 +372,7 @@ export function LinkedinReviews({
                   <Text style={styles.fieldHelp}>Paste it exactly as it appears on LinkedIn.</Text>
                 )}
 
-                <Text style={[styles.groupLabel, { marginTop: 24 }]}>Reviewer</Text>
+                <Text style={[styles.groupLabel, { marginTop: sz(24) }]}>Reviewer</Text>
                 <View style={styles.group}>
                   <FieldRow
                     icon="person-outline"
@@ -436,7 +437,7 @@ export function LinkedinReviews({
               </ScrollView>
 
               <View style={styles.sheetFooter}>
-                {submitError && <Text style={[styles.fieldError, { marginBottom: 12 }]}>{submitError}</Text>}
+                {submitError && <Text style={[styles.fieldError, { marginBottom: sz(12) }]}>{submitError}</Text>}
                 <View style={styles.footerRow}>
                   {editingId && (
                     <Pressable
@@ -445,7 +446,7 @@ export function LinkedinReviews({
                       accessibilityRole="button"
                       style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}
                     >
-                      <Ionicons name="trash-outline" size={18} color={DANGER} />
+                      <Ionicons name="trash-outline" size={sz(18)} color={DANGER} />
                       <Text style={styles.removeButtonText}>Remove</Text>
                     </Pressable>
                   )}
@@ -497,7 +498,7 @@ function FieldRow({
     <View style={[styles.row, !last && styles.rowDivider, focused && styles.rowFocused]}>
       <Ionicons
         name={icon}
-        size={18}
+        size={sz(18)}
         color={error ? DANGER : focused ? ACCENT : '#8A8A8A'}
         style={styles.rowIcon}
       />
@@ -507,136 +508,136 @@ function FieldRow({
           {optional && <Text style={styles.rowOptional}>  Optional</Text>}
         </Text>
         {children}
-        {!!error && <Text style={[styles.fieldError, { marginTop: 4 }]}>{error}</Text>}
+        {!!error && <Text style={[styles.fieldError, { marginTop: sz(4) }]}>{error}</Text>}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { marginTop: 12, marginBottom: 28 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: '700', color: '#FFF' },
-  subtitle: { fontSize: 12, color: '#9A9A9A', marginTop: 4 },
+  section: { marginTop: sz(12), marginBottom: sz(28) },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: sz(16) },
+  title: { fontSize: sz(24), fontWeight: '700', color: '#FFF' },
+  subtitle: { fontSize: sz(12), color: '#9A9A9A', marginTop: sz(4) },
   addButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', borderRadius: 12,
-    paddingVertical: 7, paddingHorizontal: 12,
+    flexDirection: 'row', alignItems: 'center', gap: sz(4),
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', borderRadius: sz(12),
+    paddingVertical: sz(7), paddingHorizontal: sz(12),
   },
-  addButtonText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  addButtonText: { color: '#FFF', fontSize: sz(13), fontWeight: '600' },
   card: {
     backgroundColor: '#050505',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: sz(16),
+    padding: sz(20),
   },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(14) },
   linkedinMark: {
-    width: 36, height: 36, borderRadius: 10, backgroundColor: '#FFF',
+    width: sz(36), height: sz(36), borderRadius: sz(10), backgroundColor: '#FFF',
     justifyContent: 'center', alignItems: 'center',
   },
   iconButton: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.08)',
+    width: sz(32), height: sz(32), borderRadius: sz(16), backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center', alignItems: 'center',
   },
-  quote: { color: '#E6E6E6', fontSize: 15, lineHeight: 23 },
-  readMore: { color: '#BDBDBD', fontSize: 13, fontWeight: '600', marginTop: 6 },
-  reviewerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20 },
+  quote: { color: '#E6E6E6', fontSize: sz(15), lineHeight: sz(23) },
+  readMore: { color: '#BDBDBD', fontSize: sz(13), fontWeight: '600', marginTop: sz(6) },
+  reviewerRow: { flexDirection: 'row', alignItems: 'center', gap: sz(12), marginTop: sz(20) },
   initials: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: '#262626',
+    width: sz(40), height: sz(40), borderRadius: sz(20), backgroundColor: '#262626',
     justifyContent: 'center', alignItems: 'center',
   },
-  initialsText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
-  reviewerName: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  reviewerTitle: { color: '#9A9A9A', fontSize: 12, marginTop: 2 },
+  initialsText: { color: '#FFF', fontSize: sz(14), fontWeight: '700' },
+  reviewerName: { color: '#FFF', fontSize: sz(15), fontWeight: '600' },
+  reviewerTitle: { color: '#9A9A9A', fontSize: sz(12), marginTop: sz(2) },
   viewLink: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-    marginTop: 16, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row', alignItems: 'center', gap: sz(6), alignSelf: 'flex-start',
+    marginTop: sz(16), paddingTop: sz(14), borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.12)', width: '100%',
   },
-  viewLinkText: { color: '#BDBDBD', fontSize: 13, fontWeight: '600' },
+  viewLinkText: { color: '#BDBDBD', fontSize: sz(13), fontWeight: '600' },
   emptyCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
+    flexDirection: 'row', alignItems: 'center', gap: sz(14),
     borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 16, padding: 16, backgroundColor: 'rgba(255,255,255,0.02)',
+    borderRadius: sz(16), padding: sz(16), backgroundColor: 'rgba(255,255,255,0.02)',
   },
-  emptyTitle: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  emptyBody: { color: '#9A9A9A', fontSize: 12, lineHeight: 17, marginTop: 3 },
+  emptyTitle: { color: '#FFF', fontSize: sz(15), fontWeight: '600' },
+  emptyBody: { color: '#9A9A9A', fontSize: sz(12), lineHeight: sz(17), marginTop: sz(3) },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'flex-end', alignItems: 'center' },
   sheet: {
     width: '100%',
-    maxWidth: 560,
+    maxWidth: sz(560),
     maxHeight: '94%',
     backgroundColor: '#141414',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: sz(28),
+    borderTopRightRadius: sz(28),
     borderWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: 0,
     borderColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   grabber: {
-    alignSelf: 'center', width: 36, height: 4, borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.18)', marginTop: 10,
+    alignSelf: 'center', width: sz(36), height: sz(4), borderRadius: sz(2),
+    backgroundColor: 'rgba(255,255,255,0.18)', marginTop: sz(10),
   },
   sheetHeader: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 14,
-    paddingHorizontal: 24, paddingTop: 18, paddingBottom: 18,
+    flexDirection: 'row', alignItems: 'flex-start', gap: sz(14),
+    paddingHorizontal: sz(24), paddingTop: sz(18), paddingBottom: sz(18),
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   headerMark: {
-    width: 44, height: 44, borderRadius: 12, backgroundColor: '#FFF',
+    width: sz(44), height: sz(44), borderRadius: sz(12), backgroundColor: '#FFF',
     justifyContent: 'center', alignItems: 'center',
   },
-  sheetTitle: { fontSize: 19, fontWeight: '700', color: '#FFF', letterSpacing: -0.3 },
-  sheetSubtitle: { fontSize: 13, color: '#9A9A9A', lineHeight: 19, marginTop: 4 },
+  sheetTitle: { fontSize: sz(19), fontWeight: '700', color: '#FFF', letterSpacing: -0.3 },
+  sheetSubtitle: { fontSize: sz(13), color: '#9A9A9A', lineHeight: sz(19), marginTop: sz(4) },
   closeButton: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)',
+    width: sz(36), height: sz(36), borderRadius: sz(18), backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center', alignItems: 'center',
     ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
   },
   closeButtonActive: { backgroundColor: 'rgba(255,255,255,0.16)' },
   sheetBody: { flexGrow: 0 },
-  sheetBodyContent: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 },
-  groupLabel: { color: '#E6E6E6', fontSize: 13, fontWeight: '600', marginBottom: 10 },
+  sheetBodyContent: { paddingHorizontal: sz(24), paddingTop: sz(20), paddingBottom: sz(8) },
+  groupLabel: { color: '#E6E6E6', fontSize: sz(13), fontWeight: '600', marginBottom: sz(10) },
   textareaBox: {
-    backgroundColor: '#1C1C1C', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
-    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
+    backgroundColor: '#1C1C1C', borderRadius: sz(16), borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: sz(16), paddingTop: sz(14), paddingBottom: sz(10),
   },
   boxFocused: { borderColor: ACCENT, backgroundColor: '#1F1F1F' },
   boxError: { borderColor: DANGER },
-  textarea: { color: '#FFF', fontSize: 15, lineHeight: 22, minHeight: 112, padding: 0 },
-  counter: { alignSelf: 'flex-end', fontSize: 12, marginTop: 6, fontVariant: ['tabular-nums'] },
-  fieldHelp: { color: '#8A8A8A', fontSize: 12, lineHeight: 17, marginTop: 8 },
-  fieldError: { color: DANGER, fontSize: 12, lineHeight: 17, marginTop: 8 },
+  textarea: { color: '#FFF', fontSize: sz(15), lineHeight: sz(22), minHeight: sz(112), padding: 0 },
+  counter: { alignSelf: 'flex-end', fontSize: sz(12), marginTop: sz(6), fontVariant: ['tabular-nums'] },
+  fieldHelp: { color: '#8A8A8A', fontSize: sz(12), lineHeight: sz(17), marginTop: sz(8) },
+  fieldError: { color: DANGER, fontSize: sz(12), lineHeight: sz(17), marginTop: sz(8) },
   group: {
-    backgroundColor: '#1C1C1C', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#1C1C1C', borderRadius: sz(16), borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
   },
-  row: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 12 },
+  row: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: sz(16), paddingVertical: sz(12) },
   rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.08)' },
   rowFocused: { backgroundColor: 'rgba(255,107,43,0.06)' },
-  rowIcon: { marginTop: 2, marginRight: 12, width: 20 },
-  rowLabel: { color: '#9A9A9A', fontSize: 12, fontWeight: '500', marginBottom: 4 },
+  rowIcon: { marginTop: sz(2), marginRight: sz(12), width: sz(20) },
+  rowLabel: { color: '#9A9A9A', fontSize: sz(12), fontWeight: '500', marginBottom: sz(4) },
   rowOptional: { color: '#6F6F6F', fontWeight: '400' },
-  rowInput: { color: '#FFF', fontSize: 15, paddingVertical: 2, paddingHorizontal: 0 },
+  rowInput: { color: '#FFF', fontSize: sz(15), paddingVertical: sz(2), paddingHorizontal: 0 },
   sheetFooter: {
-    paddingHorizontal: 24, paddingTop: 14, paddingBottom: 28,
+    paddingHorizontal: sz(24), paddingTop: sz(14), paddingBottom: sz(28),
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)',
     backgroundColor: '#141414',
   },
-  footerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  footerRow: { flexDirection: 'row', alignItems: 'center', gap: sz(10) },
   saveButton: {
-    flex: 1, height: 52, borderRadius: 14, backgroundColor: ACCENT,
+    flex: 1, height: sz(52), borderRadius: sz(14), backgroundColor: ACCENT,
     justifyContent: 'center', alignItems: 'center',
   },
   saveButtonDisabled: { opacity: 0.45 },
-  saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.1 },
+  saveButtonText: { color: '#FFF', fontSize: sz(16), fontWeight: '700', letterSpacing: 0.1 },
   removeButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, height: 52, paddingHorizontal: 16,
-    borderRadius: 14, backgroundColor: 'rgba(255,107,107,0.1)',
+    flexDirection: 'row', alignItems: 'center', gap: sz(6), height: sz(52), paddingHorizontal: sz(16),
+    borderRadius: sz(14), backgroundColor: 'rgba(255,107,107,0.1)',
   },
-  removeButtonText: { color: DANGER, fontSize: 15, fontWeight: '600' },
+  removeButtonText: { color: DANGER, fontSize: sz(15), fontWeight: '600' },
   pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
 });

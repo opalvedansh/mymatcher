@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { sharePost as sharePostToOS } from '@/utils/postShare';
 import { timeAgo } from '@/utils/relativeTime';
 import type { Post } from '@/components/PostCard';
+import { sz } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 const LIKE_RED = '#FF3B30';
@@ -117,7 +118,7 @@ export default function PostScreen() {
     <SafeAreaView style={s.screen}>
       <View style={s.topBar}>
         <Pressable onPress={goBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color="#FFF" />
+          <Ionicons name="chevron-back" size={sz(26)} color="#FFF" />
         </Pressable>
         <Text style={s.topTitle}>Post</Text>
         {post && post.user_id !== user?.id ? (
@@ -134,10 +135,10 @@ export default function PostScreen() {
             accessibilityRole="button"
             accessibilityLabel="Report or block"
           >
-            <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />
+            <Ionicons name="ellipsis-horizontal" size={sz(20)} color="#FFF" />
           </Pressable>
         ) : (
-          <View style={{ width: 20 }} />
+          <View style={{ width: sz(20) }} />
         )}
       </View>
 
@@ -147,7 +148,7 @@ export default function PostScreen() {
         </View>
       ) : notFound ? (
         <View style={s.center}>
-          <Ionicons name="image-outline" size={34} color="#262626" />
+          <Ionicons name="image-outline" size={sz(34)} color="#262626" />
           <Text style={s.emptyTitle}>Post unavailable</Text>
           <Text style={s.emptyBody}>It was removed, or the account no longer exists.</Text>
           <Pressable onPress={goBack} style={s.cta} accessibilityRole="button">
@@ -156,7 +157,7 @@ export default function PostScreen() {
         </View>
       ) : failed ? (
         <View style={s.center}>
-          <Ionicons name="cloud-offline-outline" size={34} color="#262626" />
+          <Ionicons name="cloud-offline-outline" size={sz(34)} color="#262626" />
           <Text style={s.emptyTitle}>Could not load this post</Text>
           <Text style={s.emptyBody}>Check your connection and try again.</Text>
           <Pressable onPress={load} style={s.cta} accessibilityRole="button">
@@ -181,7 +182,7 @@ export default function PostScreen() {
               <View style={s.nameRow}>
                 <Text style={s.name} numberOfLines={1}>{post.author_name || 'Creator'}</Text>
                 {post.author_verified && (
-                  <MaterialIcons name="verified" size={15} color={ACCENT} style={{ marginLeft: 4 }} />
+                  <MaterialIcons name="verified" size={sz(15)} color={ACCENT} style={{ marginLeft: sz(4) }} />
                 )}
               </View>
               <Text style={s.meta}>
@@ -206,7 +207,7 @@ export default function PostScreen() {
               <Animated.View style={{ transform: [{ scale: heartScale }] }}>
                 <Ionicons
                   name={post.liked_by_me ? 'heart' : 'heart-outline'}
-                  size={25}
+                  size={sz(25)}
                   color={post.liked_by_me ? LIKE_RED : '#FFF'}
                 />
               </Animated.View>
@@ -220,7 +221,7 @@ export default function PostScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Comments, ${post.comments_count ?? 0}`}
             >
-              <Ionicons name="chatbubble-outline" size={23} color="#FFF" />
+              <Ionicons name="chatbubble-outline" size={sz(23)} color="#FFF" />
               {!!post.comments_count && <Text style={s.actionTxt}>{fmtCount(post.comments_count)}</Text>}
             </Pressable>
 
@@ -231,7 +232,7 @@ export default function PostScreen() {
               accessibilityRole="button"
               accessibilityLabel="Share"
             >
-              <Ionicons name="paper-plane-outline" size={23} color="#FFF" />
+              <Ionicons name="paper-plane-outline" size={sz(23)} color="#FFF" />
               {!!post.shares_count && <Text style={s.actionTxt}>{fmtCount(post.shares_count)}</Text>}
             </Pressable>
           </View>
@@ -277,41 +278,41 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(12),
   },
-  topTitle: { color: '#E0E0E0', fontSize: 16, fontWeight: '600' },
+  topTitle: { color: '#E0E0E0', fontSize: sz(16), fontWeight: '600' },
 
-  body: { paddingBottom: 40 },
-  author: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#262626' },
-  authorInfo: { marginLeft: 10, flex: 1 },
+  body: { paddingBottom: sz(40) },
+  author: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: sz(16), paddingBottom: sz(12) },
+  avatar: { width: sz(40), height: sz(40), borderRadius: sz(20), backgroundColor: '#262626' },
+  authorInfo: { marginLeft: sz(10), flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
-  name: { color: '#E0E0E0', fontSize: 14, fontWeight: '600', flexShrink: 1 },
-  meta: { color: MUTED, fontSize: 12, marginTop: 1 },
+  name: { color: '#E0E0E0', fontSize: sz(14), fontWeight: '600', flexShrink: 1 },
+  meta: { color: MUTED, fontSize: sz(12), marginTop: 1 },
 
   image: { width: '100%', aspectRatio: 1, backgroundColor: '#1A1A1A' },
 
-  actions: { flexDirection: 'row', gap: 22, paddingHorizontal: 16, paddingTop: 14 },
-  action: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  actionTxt: { color: '#CFCFCF', fontSize: 13, fontWeight: '600' },
+  actions: { flexDirection: 'row', gap: sz(22), paddingHorizontal: sz(16), paddingTop: sz(14) },
+  action: { flexDirection: 'row', alignItems: 'center', gap: sz(6) },
+  actionTxt: { color: '#CFCFCF', fontSize: sz(13), fontWeight: '600' },
   pressed: { opacity: 0.6 },
 
-  caption: { color: '#E0E0E0', fontSize: 14, lineHeight: 20, paddingHorizontal: 16, paddingTop: 12 },
+  caption: { color: '#E0E0E0', fontSize: sz(14), lineHeight: sz(20), paddingHorizontal: sz(16), paddingTop: sz(12) },
   captionAuthor: { fontWeight: '700' },
 
-  commentsCta: { paddingHorizontal: 16, paddingTop: 12 },
-  commentsCtaText: { color: MUTED, fontSize: 13, fontWeight: '600' },
+  commentsCta: { paddingHorizontal: sz(16), paddingTop: sz(12) },
+  commentsCtaText: { color: MUTED, fontSize: sz(13), fontWeight: '600' },
 
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 6 },
-  emptyTitle: { color: '#E0E0E0', fontSize: 16, fontWeight: '600', marginTop: 10 },
-  emptyBody: { color: MUTED, fontSize: 13, textAlign: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: sz(32), gap: sz(6) },
+  emptyTitle: { color: '#E0E0E0', fontSize: sz(16), fontWeight: '600', marginTop: sz(10) },
+  emptyBody: { color: MUTED, fontSize: sz(13), textAlign: 'center' },
   cta: {
-    marginTop: 16,
+    marginTop: sz(16),
     backgroundColor: ACCENT,
-    paddingHorizontal: 22,
-    paddingVertical: 11,
-    borderRadius: 22,
+    paddingHorizontal: sz(22),
+    paddingVertical: sz(11),
+    borderRadius: sz(22),
   },
-  ctaText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  ctaText: { color: '#FFF', fontSize: sz(14), fontWeight: '700' },
 });

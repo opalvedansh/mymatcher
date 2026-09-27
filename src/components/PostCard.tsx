@@ -15,6 +15,7 @@ import { BlurView } from 'expo-blur';
 import api from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { openSafetyMenu } from '@/components/safetyMenu';
+import { sz } from '@/theme/scale';
 
 export interface Post {
   id: string;
@@ -130,7 +131,7 @@ export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }:
               {post.author_name || 'Creator'}
             </Text>
             {post.author_verified && (
-              <MaterialCommunityIcons name="check-decagram" size={14} color="#1DA1F2" style={{ marginLeft: 4 }} />
+              <MaterialCommunityIcons name="check-decagram" size={sz(14)} color="#1DA1F2" style={{ marginLeft: sz(4) }} />
             )}
           </View>
           <Text style={styles.meta}>{category} · {timeAgo(post.created_at)}</Text>
@@ -142,7 +143,7 @@ export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }:
           <Pressable
             accessibilityLabel="Report or block"
             hitSlop={8}
-            style={{ marginLeft: 8 }}
+            style={{ marginLeft: sz(8) }}
             onPress={() =>
               openSafetyMenu({
                 userId: post.user_id,
@@ -152,7 +153,7 @@ export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }:
               })
             }
           >
-            <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />
+            <Ionicons name="ellipsis-horizontal" size={sz(20)} color="#FFF" />
           </Pressable>
         )}
       </TouchableOpacity>
@@ -185,7 +186,7 @@ export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }:
               <Animated.View style={{ transform: [{ scale: heartScale }] }}>
                 <Ionicons
                   name={liked ? 'heart' : 'heart-outline'}
-                  size={26}
+                  size={sz(26)}
                   color={liked ? '#FF3B30' : '#FFF'}
                 />
               </Animated.View>
@@ -196,18 +197,18 @@ export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }:
 
             {/* Comment (placeholder) */}
             <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-              <Ionicons name="chatbubble-outline" size={24} color="#FFF" />
+              <Ionicons name="chatbubble-outline" size={sz(24)} color="#FFF" />
             </TouchableOpacity>
 
             {/* Share */}
             <TouchableOpacity style={styles.actionBtn} onPress={handleShare} activeOpacity={0.7}>
-              <Ionicons name="paper-plane-outline" size={24} color="#FFF" />
+              <Ionicons name="paper-plane-outline" size={sz(24)} color="#FFF" />
             </TouchableOpacity>
           </View>
 
           {/* Bookmark */}
           <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-            <Ionicons name="bookmark-outline" size={24} color="#FFF" />
+            <Ionicons name="bookmark-outline" size={sz(24)} color="#FFF" />
           </TouchableOpacity>
         </View>
 
@@ -231,28 +232,28 @@ export function PostCard({ post, onLikeToggle, onViewProfile, onAuthorBlocked }:
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#111111',
-    marginBottom: 2,
+    marginBottom: sz(2),
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
+    paddingHorizontal: sz(14),
+    paddingVertical: sz(10),
+    gap: sz(10),
   },
   avatarRing: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: sz(42),
+    height: sz(42),
+    borderRadius: sz(21),
     borderWidth: 2,
     borderColor: '#FF4500',
-    padding: 2,
+    padding: sz(2),
     overflow: 'hidden',
   },
   avatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 18,
+    borderRadius: sz(18),
   },
   authorInfo: {
     flex: 1,
@@ -263,24 +264,24 @@ const styles = StyleSheet.create({
   },
   authorName: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: sz(14),
     fontWeight: '700',
-    maxWidth: 160,
+    maxWidth: sz(160),
   },
   meta: {
     color: '#888',
-    fontSize: 12,
+    fontSize: sz(12),
     marginTop: 1,
   },
   followBtn: {
     backgroundColor: '#FF4500',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: sz(14),
+    paddingVertical: sz(6),
+    borderRadius: sz(20),
   },
   followBtnText: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: sz(13),
     fontWeight: '700',
   },
   imageContainer: {
@@ -294,49 +295,49 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   footer: {
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 14,
+    paddingHorizontal: sz(14),
+    paddingTop: sz(10),
+    paddingBottom: sz(14),
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: sz(8),
   },
   leftActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: sz(16),
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: sz(4),
   },
   actionCount: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: sz(13),
     fontWeight: '600',
   },
   captionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 2,
+    marginTop: sz(2),
   },
   captionAuthor: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: sz(13),
     fontWeight: '700',
   },
   captionText: {
     color: '#CCC',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: sz(13),
+    lineHeight: sz(18),
     flexShrink: 1,
   },
   captionMore: {
     color: '#888',
-    fontSize: 13,
+    fontSize: sz(13),
   },
 });

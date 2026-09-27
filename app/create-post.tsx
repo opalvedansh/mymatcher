@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import api from '@/api/client';
 import { uploadImage } from '@/api';
 import { showAlert } from '@/components/ActionSheet';
+import { sz } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 const MAX_CAPTION = 500;
@@ -101,7 +102,7 @@ export default function CreatePostScreen() {
             accessibilityLabel="Back"
             disabled={isUploading}
           >
-            <Ionicons name="arrow-back" size={22} color="#FFF" />
+            <Ionicons name="arrow-back" size={sz(22)} color="#FFF" />
           </Pressable>
 
           <Text style={styles.headerTitle} accessibilityRole="header">New post</Text>
@@ -149,7 +150,7 @@ export default function CreatePostScreen() {
                   accessibilityLabel="Remove photo"
                   hitSlop={8}
                 >
-                  <Ionicons name="close" size={18} color="#FFF" />
+                  <Ionicons name="close" size={sz(18)} color="#FFF" />
                 </Pressable>
 
                 <View style={styles.previewActions}>
@@ -159,7 +160,7 @@ export default function CreatePostScreen() {
                     disabled={isUploading}
                     accessibilityRole="button"
                   >
-                    <Ionicons name="images-outline" size={17} color="#FFF" />
+                    <Ionicons name="images-outline" size={sz(17)} color="#FFF" />
                     <Text style={styles.previewActionText}>Replace photo</Text>
                   </Pressable>
                 </View>
@@ -199,7 +200,7 @@ export default function CreatePostScreen() {
                 >
                   <View style={styles.emptyPickerInner}>
                     <View style={styles.uploadIconRing}>
-                      <Ionicons name="image-outline" size={28} color={ACCENT} />
+                      <Ionicons name="image-outline" size={sz(28)} color={ACCENT} />
                     </View>
                     <Text style={styles.emptyPickerTitle}>Add a photo</Text>
                     <Text style={styles.emptyPickerSub}>Tap anywhere to choose from your library</Text>
@@ -210,7 +211,7 @@ export default function CreatePostScreen() {
                         onPress={() => pickImage(false)}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="images-outline" size={18} color="#FFF" />
+                        <Ionicons name="images-outline" size={sz(18)} color="#FFF" />
                         <Text style={styles.emptyPickerBtnText}>Gallery</Text>
                       </Pressable>
                       <Pressable
@@ -218,7 +219,7 @@ export default function CreatePostScreen() {
                         onPress={() => pickImage(true)}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="camera-outline" size={18} color="#FFF" />
+                        <Ionicons name="camera-outline" size={sz(18)} color="#FFF" />
                         <Text style={styles.emptyPickerBtnText}>Camera</Text>
                       </Pressable>
                     </View>
@@ -251,7 +252,7 @@ export default function CreatePostScreen() {
 
             {/* ── Info ───────────────────────────────────────────── */}
             <View style={styles.infoBanner}>
-              <Ionicons name="information-circle-outline" size={15} color="#8A8A8A" />
+              <Ionicons name="information-circle-outline" size={sz(15)} color="#8A8A8A" />
               <Text style={styles.infoText}>Your post appears in the feed and on your profile.</Text>
             </View>
           </View>
@@ -264,110 +265,110 @@ export default function CreatePostScreen() {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0D0D0D' },
-  scrollContent: { paddingBottom: 40 },
-  content: { width: '100%', maxWidth: 520, alignSelf: 'center', paddingHorizontal: 16 },
+  scrollContent: { paddingBottom: sz(40) },
+  content: { width: '100%', maxWidth: sz(520), alignSelf: 'center', paddingHorizontal: sz(16) },
 
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(14),
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: sz(40),
+    height: sz(40),
+    borderRadius: sz(20),
     backgroundColor: '#1A1A1A',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: { color: '#FFF', fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
+  headerTitle: { color: '#FFF', fontSize: sz(17), fontWeight: '700', letterSpacing: -0.3 },
   shareBtn: {
-    minWidth: 86,
-    height: 40,
-    paddingHorizontal: 18,
-    borderRadius: 20,
+    minWidth: sz(86),
+    height: sz(40),
+    paddingHorizontal: sz(18),
+    borderRadius: sz(20),
     backgroundColor: ACCENT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: sz(8),
   },
   shareBtnDisabled: {
     backgroundColor: '#1A1A1A',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  shareBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  shareBtnText: { color: '#FFF', fontSize: sz(15), fontWeight: '700' },
   shareBtnTextDisabled: { color: '#6F6F6F' },
 
   // Image
-  aspectRow: { flexDirection: 'row', gap: 8, marginTop: 16, marginBottom: 12 },
+  aspectRow: { flexDirection: 'row', gap: sz(8), marginTop: sz(16), marginBottom: sz(12) },
   aspectChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(7),
+    borderRadius: sz(20),
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.14)',
     backgroundColor: '#161616',
   },
   aspectChipActive: { backgroundColor: '#FFF', borderColor: '#FFF' },
-  aspectChipText: { color: '#9A9A9A', fontSize: 13, fontWeight: '600' },
+  aspectChipText: { color: '#9A9A9A', fontSize: sz(13), fontWeight: '600' },
   aspectChipTextActive: { color: '#111' },
 
   previewContainer: {
     width: '100%',
-    marginTop: 16,
-    borderRadius: 20,
+    marginTop: sz(16),
+    borderRadius: sz(20),
     overflow: 'hidden',
     backgroundColor: '#1A1A1A',
   },
   removeBtn: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    top: sz(12),
+    right: sz(12),
+    width: sz(34),
+    height: sz(34),
+    borderRadius: sz(17),
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  previewActions: { position: 'absolute', bottom: 14, left: 0, right: 0, alignItems: 'center' },
+  previewActions: { position: 'absolute', bottom: sz(14), left: 0, right: 0, alignItems: 'center' },
   previewActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: sz(7),
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 20,
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(9),
+    borderRadius: sz(20),
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.25)',
   },
-  previewActionText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  previewActionText: { color: '#FFF', fontSize: sz(13), fontWeight: '600' },
   uploadingOverlay: {
     position: 'absolute',
     top: 0, right: 0, bottom: 0, left: 0,
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 10,
+    gap: sz(10),
   },
-  uploadingText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  uploadingText: { color: '#FFF', fontSize: sz(14), fontWeight: '600' },
 
   // Empty picker
   emptyPicker: {
     width: '100%',
-    borderRadius: 20,
+    borderRadius: sz(20),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
@@ -375,61 +376,61 @@ const styles = StyleSheet.create({
     backgroundColor: '#131313',
   },
   emptyPickerPressed: { backgroundColor: '#171717', borderColor: 'rgba(255,107,43,0.5)' },
-  emptyPickerInner: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  emptyPickerInner: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: sz(24) },
   uploadIconRing: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: sz(68),
+    height: sz(68),
+    borderRadius: sz(34),
     backgroundColor: 'rgba(255,107,43,0.1)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,107,43,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: sz(16),
   },
-  emptyPickerTitle: { color: '#FFF', fontSize: 18, fontWeight: '700' },
-  emptyPickerSub: { color: '#9A9A9A', fontSize: 13, marginTop: 6, marginBottom: 22, textAlign: 'center' },
-  emptyPickerBtns: { flexDirection: 'row', gap: 10 },
+  emptyPickerTitle: { color: '#FFF', fontSize: sz(18), fontWeight: '700' },
+  emptyPickerSub: { color: '#9A9A9A', fontSize: sz(13), marginTop: sz(6), marginBottom: sz(22), textAlign: 'center' },
+  emptyPickerBtns: { flexDirection: 'row', gap: sz(10) },
   emptyPickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: sz(7),
     backgroundColor: ACCENT,
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-    borderRadius: 22,
+    paddingHorizontal: sz(18),
+    paddingVertical: sz(11),
+    borderRadius: sz(22),
   },
   emptyPickerBtnOutline: {
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
   },
-  emptyPickerBtnText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  emptyPickerBtnText: { color: '#FFF', fontSize: sz(14), fontWeight: '600' },
 
   // Caption card
   captionCard: {
-    marginTop: 16,
+    marginTop: sz(16),
     backgroundColor: '#131313',
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: sz(18),
+    padding: sz(16),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   captionCardFocused: { borderColor: ACCENT, backgroundColor: '#161616' },
-  captionLabel: { color: '#E6E6E6', fontSize: 13, fontWeight: '600', marginBottom: 10 },
-  captionInput: { color: '#FFF', fontSize: 15, minHeight: 90, lineHeight: 22, padding: 0 },
+  captionLabel: { color: '#E6E6E6', fontSize: sz(13), fontWeight: '600', marginBottom: sz(10) },
+  captionInput: { color: '#FFF', fontSize: sz(15), minHeight: sz(90), lineHeight: sz(22), padding: 0 },
   captionFooter: {
     alignItems: 'flex-end',
-    marginTop: 10,
-    paddingTop: 10,
+    marginTop: sz(10),
+    paddingTop: sz(10),
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.1)',
   },
-  charCount: { color: '#8A8A8A', fontSize: 12, fontVariant: ['tabular-nums'] },
+  charCount: { color: '#8A8A8A', fontSize: sz(12), fontVariant: ['tabular-nums'] },
 
   // Info
-  infoBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingHorizontal: 4 },
-  infoText: { color: '#8A8A8A', fontSize: 12, flex: 1, lineHeight: 17 },
+  infoBanner: { flexDirection: 'row', alignItems: 'center', gap: sz(8), marginTop: sz(16), paddingHorizontal: sz(4) },
+  infoText: { color: '#8A8A8A', fontSize: sz(12), flex: 1, lineHeight: sz(17) },
 
   pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
 });

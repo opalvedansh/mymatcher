@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { BrandProfileScreen } from '@/screens/main/brand/BrandProfileScreen';
 import { InfluencerProfileScreen } from '@/screens/main/influencer/InfluencerProfileScreen';
 import type { UserRole } from '@/api/types';
+import { sz } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 
@@ -52,7 +53,7 @@ export default function PublicProfileRoute() {
   if (!id || failed) {
     return (
       <SafeAreaView style={styles.centre}>
-        <Ionicons name="person-circle-outline" size={44} color="#4A4A4A" />
+        <Ionicons name="person-circle-outline" size={sz(44)} color="#4A4A4A" />
         <Text style={styles.message}>This profile is not available.</Text>
         <Pressable
           onPress={goBack}
@@ -84,16 +85,16 @@ export default function PublicProfileRoute() {
 }
 
 const styles = StyleSheet.create({
-  centre: { flex: 1, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', gap: 14 },
-  message: { color: '#9A9A9A', fontSize: 15 },
+  centre: { flex: 1, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', gap: sz(14) },
+  message: { color: '#9A9A9A', fontSize: sz(15) },
   button: {
-    marginTop: 6,
-    paddingHorizontal: 22,
-    paddingVertical: 11,
-    borderRadius: 22,
+    marginTop: sz(6),
+    paddingHorizontal: sz(22),
+    paddingVertical: sz(11),
+    borderRadius: sz(22),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
   },
-  buttonTxt: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  buttonTxt: { color: '#FFF', fontSize: sz(14), fontWeight: '600' },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });

@@ -11,6 +11,7 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { sz } from '@/theme/scale';
 
 interface Props {
   visible: boolean;
@@ -48,10 +49,10 @@ export function PublicProfileModal({ visible, onClose, profile, type }: Props) {
           <View style={styles.container}>
             {/* Header / Close button */}
             <Pressable style={styles.closeBtn} onPress={onClose}>
-              <Ionicons name="close" size={28} color="#fff" />
+              <Ionicons name="close" size={sz(28)} color="#fff" />
             </Pressable>
 
-            <ScrollView bounces={false} contentContainerStyle={{ paddingBottom: 60 }}>
+            <ScrollView bounces={false} contentContainerStyle={{ paddingBottom: sz(60) }}>
               {/* Cover Image */}
               <View style={styles.coverContainer}>
                 <Image source={{ uri: avatarUrl }} style={styles.coverImage} />
@@ -65,12 +66,12 @@ export function PublicProfileModal({ visible, onClose, profile, type }: Props) {
               <View style={styles.infoContainer}>
                 <View style={styles.nameRow}>
                   <Text style={styles.nameTxt}>{name}</Text>
-                  <MaterialCommunityIcons name="check-decagram" size={20} color="#1DA1F2" style={{ marginLeft: 8 }} />
+                  <MaterialCommunityIcons name="check-decagram" size={sz(20)} color="#1DA1F2" style={{ marginLeft: sz(8) }} />
                 </View>
                 
                 {location ? (
                   <View style={styles.locationRow}>
-                    <Ionicons name="location-sharp" size={16} color="#aaa" />
+                    <Ionicons name="location-sharp" size={sz(16)} color="#aaa" />
                     <Text style={styles.locationTxt}>{location}</Text>
                   </View>
                 ) : null}
@@ -146,23 +147,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#121212',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: sz(24),
+    borderTopRightRadius: sz(24),
     overflow: 'hidden',
-    marginTop: 40,
+    marginTop: sz(40),
   },
   closeBtn: {
     position: 'absolute',
-    top: 16,
-    right: 16,
+    top: sz(16),
+    right: sz(16),
     zIndex: 10,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    padding: 4,
+    borderRadius: sz(20),
+    padding: sz(4),
   },
   coverContainer: {
     width: '100%',
-    height: 400,
+    height: sz(400),
   },
   coverImage: {
     width: '100%',
@@ -174,83 +175,83 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 150,
+    height: sz(150),
   },
   infoContainer: {
-    padding: 24,
+    padding: sz(24),
     paddingTop: 0,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: sz(8),
   },
   nameTxt: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: sz(28),
     fontWeight: '700',
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: sz(16),
   },
   locationTxt: {
     color: '#aaa',
-    fontSize: 14,
-    marginLeft: 4,
+    fontSize: sz(14),
+    marginLeft: sz(4),
   },
   bioTxt: {
     color: '#ccc',
-    fontSize: 16,
-    lineHeight: 24,
-    marginBottom: 24,
+    fontSize: sz(16),
+    lineHeight: sz(24),
+    marginBottom: sz(24),
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: '#1a1a1a',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
+    borderRadius: sz(16),
+    padding: sz(20),
+    marginBottom: sz(24),
   },
   statCol: {
     alignItems: 'center',
   },
   statVal: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: sz(20),
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: sz(4),
   },
   statLbl: {
     color: '#888',
-    fontSize: 12,
+    fontSize: sz(12),
   },
   section: {
-    marginTop: 16,
+    marginTop: sz(16),
   },
   sectionTitle: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: sz(12),
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: sz(8),
   },
   pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: sz(12),
+    paddingVertical: sz(5),
     backgroundColor: '#1a1a1a',
-    borderRadius: 20,
+    borderRadius: sz(20),
     borderWidth: 1,
     borderColor: '#333',
   },
   pillTxt: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: sz(11),
   },
 });

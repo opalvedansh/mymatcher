@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { colors } from '@/theme/colors';
 import { verifyFace } from '@/api';
+import { sz } from '@/theme/scale';
 
 interface VerificationModalProps {
   visible: boolean;
@@ -115,7 +116,7 @@ export function VerificationModal({ visible, onClose, onVerified }: Verification
       <View style={styles.container}>
         {!permission.granted ? (
           <SafeAreaView style={styles.permissionContainer}>
-            <Ionicons name="camera-outline" size={64} color="#FFF" style={styles.permissionIcon} />
+            <Ionicons name="camera-outline" size={sz(64)} color="#FFF" style={styles.permissionIcon} />
             <Text style={styles.title}>Camera Access Required</Text>
             <Text style={styles.subtitle}>
               We need access to your camera to verify your identity using facial recognition.
@@ -133,7 +134,7 @@ export function VerificationModal({ visible, onClose, onVerified }: Verification
             <SafeAreaView style={[styles.overlay, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}>
                 <View style={styles.header}>
                   <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                    <Ionicons name="close" size={28} color="#FFF" />
+                    <Ionicons name="close" size={sz(28)} color="#FFF" />
                   </TouchableOpacity>
                 </View>
 
@@ -179,7 +180,7 @@ export function VerificationModal({ visible, onClose, onVerified }: Verification
                     </BlurView>
                   ) : scanningStatus === 'error' ? (
                     <BlurView intensity={80} tint="dark" style={[styles.instructionCard, styles.errorCard]}>
-                      <Ionicons name="warning" size={48} color="#FF3B30" />
+                      <Ionicons name="warning" size={sz(48)} color="#FF3B30" />
                       <Text style={styles.errorTitle}>Verification Failed</Text>
                       <Text style={styles.errorText}>
                         {errorMsg || 'Face is not matching the uploaded image by the user.'}
@@ -190,7 +191,7 @@ export function VerificationModal({ visible, onClose, onVerified }: Verification
                     </BlurView>
                   ) : (
                     <BlurView intensity={80} tint="dark" style={[styles.instructionCard, styles.successCard]}>
-                      <Ionicons name="checkmark-circle" size={48} color="#4CD964" />
+                      <Ionicons name="checkmark-circle" size={sz(48)} color="#4CD964" />
                       <Text style={styles.successTitle}>Verified!</Text>
                       <Text style={styles.instructionText}>
                         Your profile has been successfully verified.
@@ -215,49 +216,49 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: sz(24),
   },
   permissionIcon: {
-    marginBottom: 24,
+    marginBottom: sz(24),
   },
   title: {
-    fontSize: 24,
+    fontSize: sz(24),
     fontWeight: '700',
     color: '#FFF',
-    marginBottom: 16,
+    marginBottom: sz(16),
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: sz(16),
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 24,
+    marginBottom: sz(32),
+    lineHeight: sz(24),
   },
   primaryButton: {
     backgroundColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 30,
+    paddingVertical: sz(16),
+    paddingHorizontal: sz(32),
+    borderRadius: sz(30),
     width: '100%',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: sz(16),
   },
   primaryButtonText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
   secondaryButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 30,
+    paddingVertical: sz(16),
+    paddingHorizontal: sz(32),
+    borderRadius: sz(30),
     width: '100%',
     alignItems: 'center',
   },
   secondaryButtonText: {
     color: 'rgba(255,255,255,0.7)',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
   cameraContainer: {
@@ -272,14 +273,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 40 : 10,
+    paddingHorizontal: sz(20),
+    paddingTop: Platform.OS === 'android' ? sz(40) : sz(10),
     alignItems: 'flex-start',
   },
   closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: sz(44),
+    height: sz(44),
+    borderRadius: sz(22),
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -289,9 +290,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   faceOval: {
-    width: 260,
-    height: 350,
-    borderRadius: 150,
+    width: sz(260),
+    height: sz(350),
+    borderRadius: sz(150),
     borderWidth: 4,
     borderColor: 'rgba(255,255,255,0.6)',
     borderStyle: 'dashed',
@@ -305,21 +306,21 @@ const styles = StyleSheet.create({
   },
   scanLine: {
     width: '100%',
-    height: 3,
+    height: sz(3),
     backgroundColor: '#00FF00',
     shadowColor: '#00FF00',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
-    shadowRadius: 10,
+    shadowRadius: sz(10),
     elevation: 5,
   },
   footer: {
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    padding: sz(24),
+    paddingBottom: Platform.OS === 'ios' ? sz(40) : sz(24),
   },
   instructionCard: {
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: sz(24),
+    padding: sz(24),
     alignItems: 'center',
     overflow: 'hidden',
   },
@@ -330,58 +331,58 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 59, 48, 0.1)',
   },
   instructionTitle: {
-    fontSize: 22,
+    fontSize: sz(22),
     fontWeight: '700',
     color: '#FFF',
-    marginBottom: 8,
+    marginBottom: sz(8),
   },
   successTitle: {
-    fontSize: 24,
+    fontSize: sz(24),
     fontWeight: '700',
     color: '#4CD964',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: sz(12),
+    marginBottom: sz(8),
   },
   errorTitle: {
-    fontSize: 24,
+    fontSize: sz(24),
     fontWeight: '700',
     color: '#FF3B30',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: sz(12),
+    marginBottom: sz(8),
   },
   instructionText: {
-    fontSize: 15,
+    fontSize: sz(15),
     color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 22,
+    marginBottom: sz(24),
+    lineHeight: sz(22),
   },
   errorText: {
-    fontSize: 15,
+    fontSize: sz(15),
     color: 'rgba(255,59,48,0.9)',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 22,
+    marginBottom: sz(24),
+    lineHeight: sz(22),
   },
   scanButton: {
     backgroundColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 30,
+    paddingVertical: sz(16),
+    paddingHorizontal: sz(32),
+    borderRadius: sz(30),
     width: '100%',
     alignItems: 'center',
   },
   retryButton: {
     backgroundColor: '#FF3B30',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 30,
+    paddingVertical: sz(16),
+    paddingHorizontal: sz(32),
+    borderRadius: sz(30),
     width: '100%',
     alignItems: 'center',
   },
   scanButtonText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
 });

@@ -25,6 +25,7 @@ import {
   type PostComment,
 } from '@/api';
 import { timeAgo } from '@/utils/relativeTime';
+import { sz } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 const LIKE_RED = '#FF3B30';
@@ -351,9 +352,9 @@ export default function CommentsSheet({
           {comment.author_verified && (
             <MaterialCommunityIcons
               name="check-decagram"
-              size={12}
+              size={sz(12)}
               color="#1DA1F2"
-              style={{ marginLeft: 3 }}
+              style={{ marginLeft: sz(3) }}
             />
           )}
           <Text style={styles.time}>{timeAgo(comment.created_at)}</Text>
@@ -412,7 +413,7 @@ export default function CommentsSheet({
         >
           <Ionicons
             name={comment.liked_by_me ? 'heart' : 'heart-outline'}
-            size={15}
+            size={sz(15)}
             color={comment.liked_by_me ? LIKE_RED : MUTED}
           />
           {comment.likes_count > 0 && <Text style={styles.likeCount}>{comment.likes_count}</Text>}
@@ -432,7 +433,7 @@ export default function CommentsSheet({
             <View style={styles.header}>
               <Text style={styles.title}>Comments</Text>
               <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
-                <Ionicons name="close" size={22} color={MUTED} />
+                <Ionicons name="close" size={sz(22)} color={MUTED} />
               </Pressable>
             </View>
           </View>
@@ -462,25 +463,25 @@ export default function CommentsSheet({
                 contentContainerStyle={comments.length === 0 && styles.flexGrow}
                 ListEmptyComponent={
                   <View style={styles.center}>
-                    <Ionicons name="chatbubble-outline" size={30} color={BORDER} />
+                    <Ionicons name="chatbubble-outline" size={sz(30)} color={BORDER} />
                     <Text style={styles.emptyTitle}>No comments yet</Text>
                     <Text style={styles.emptyBody}>Be the first to say something.</Text>
                   </View>
                 }
                 ListFooterComponent={
-                  loadingMore ? <ActivityIndicator color={MUTED} style={{ paddingVertical: 16 }} /> : null
+                  loadingMore ? <ActivityIndicator color={MUTED} style={{ paddingVertical: sz(16) }} /> : null
                 }
               />
             )}
 
-            <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+            <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, sz(10)) }]}>
               {replyTo && (
                 <View style={styles.replyBanner}>
                   <Text style={styles.replyBannerText} numberOfLines={1}>
                     Replying to {replyTo.author_name || 'someone'}
                   </Text>
                   <Pressable onPress={() => setReplyTo(null)} hitSlop={8} accessibilityLabel="Cancel reply">
-                    <Ionicons name="close" size={15} color={MUTED} />
+                    <Ionicons name="close" size={sz(15)} color={MUTED} />
                   </Pressable>
                 </View>
               )}
@@ -530,12 +531,12 @@ export default function CommentsSheet({
 /** Matches the real row's shape so the list does not jump when data lands. */
 function CommentSkeletons() {
   return (
-    <View style={{ paddingTop: 6 }}>
+    <View style={{ paddingTop: sz(6) }}>
       {[0, 1, 2, 3].map((i) => (
         <View key={i} style={styles.row}>
           <View style={[styles.avatar, styles.skeleton]} />
           <View style={styles.body}>
-            <View style={[styles.skeleton, styles.skelLine, { width: 96 }]} />
+            <View style={[styles.skeleton, styles.skelLine, { width: sz(96) }]} />
             <View style={[styles.skeleton, styles.skelLine, { width: '82%' }]} />
             <View style={[styles.skeleton, styles.skelLine, { width: '54%' }]} />
           </View>
@@ -554,101 +555,101 @@ const styles = StyleSheet.create({
   sheet: {
     height: '78%',
     backgroundColor: SURFACE,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: sz(20),
+    borderTopRightRadius: sz(20),
     overflow: 'hidden',
   },
-  grabArea: { paddingTop: 8 },
+  grabArea: { paddingTop: sz(8) },
   grabber: {
     alignSelf: 'center',
-    width: 38,
-    height: 4,
-    borderRadius: 2,
+    width: sz(38),
+    height: sz(4),
+    borderRadius: sz(2),
     backgroundColor: BORDER,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(12),
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
   },
-  title: { color: TEXT, fontSize: 16, fontWeight: '600' },
+  title: { color: TEXT, fontSize: sz(16), fontWeight: '600' },
 
-  row: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10 },
-  replyRow: { paddingHorizontal: 0, paddingRight: 0, paddingTop: 10, paddingBottom: 2 },
+  row: { flexDirection: 'row', paddingHorizontal: sz(16), paddingVertical: sz(10) },
+  replyRow: { paddingHorizontal: 0, paddingRight: 0, paddingTop: sz(10), paddingBottom: sz(2) },
   rowPending: { opacity: 0.55 },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: BORDER },
-  avatarSmall: { width: 26, height: 26, borderRadius: 13 },
-  body: { flex: 1, marginLeft: 10 },
+  avatar: { width: sz(34), height: sz(34), borderRadius: sz(17), backgroundColor: BORDER },
+  avatarSmall: { width: sz(26), height: sz(26), borderRadius: sz(13) },
+  body: { flex: 1, marginLeft: sz(10) },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
-  name: { color: TEXT, fontSize: 13, fontWeight: '600', flexShrink: 1 },
-  time: { color: MUTED, fontSize: 11, marginLeft: 8 },
-  text: { color: TEXT, fontSize: 14, lineHeight: 19, marginTop: 2 },
-  actions: { flexDirection: 'row', gap: 16, marginTop: 5 },
-  actionText: { color: MUTED, fontSize: 12, fontWeight: '600' },
-  repliesToggle: { color: MUTED, fontSize: 12, fontWeight: '600', marginTop: 8 },
+  name: { color: TEXT, fontSize: sz(13), fontWeight: '600', flexShrink: 1 },
+  time: { color: MUTED, fontSize: sz(11), marginLeft: sz(8) },
+  text: { color: TEXT, fontSize: sz(14), lineHeight: sz(19), marginTop: sz(2) },
+  actions: { flexDirection: 'row', gap: sz(16), marginTop: sz(5) },
+  actionText: { color: MUTED, fontSize: sz(12), fontWeight: '600' },
+  repliesToggle: { color: MUTED, fontSize: sz(12), fontWeight: '600', marginTop: sz(8) },
 
-  likeBtn: { alignItems: 'center', paddingLeft: 10, paddingTop: 2, minWidth: 26 },
-  likeCount: { color: MUTED, fontSize: 11, marginTop: 2 },
+  likeBtn: { alignItems: 'center', paddingLeft: sz(10), paddingTop: sz(2), minWidth: sz(26) },
+  likeCount: { color: MUTED, fontSize: sz(11), marginTop: sz(2) },
 
-  center: { alignItems: 'center', justifyContent: 'center', flex: 1, padding: 32, gap: 6 },
-  emptyTitle: { color: TEXT, fontSize: 15, fontWeight: '600', marginTop: 8, textAlign: 'center' },
-  emptyBody: { color: MUTED, fontSize: 13, textAlign: 'center' },
+  center: { alignItems: 'center', justifyContent: 'center', flex: 1, padding: sz(32), gap: sz(6) },
+  emptyTitle: { color: TEXT, fontSize: sz(15), fontWeight: '600', marginTop: sz(8), textAlign: 'center' },
+  emptyBody: { color: MUTED, fontSize: sz(13), textAlign: 'center' },
   retry: {
-    marginTop: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 10,
+    marginTop: sz(12),
+    paddingHorizontal: sz(18),
+    paddingVertical: sz(9),
+    borderRadius: sz(10),
     borderWidth: 1,
     borderColor: BORDER,
   },
-  retryText: { color: TEXT, fontSize: 13, fontWeight: '600' },
+  retryText: { color: TEXT, fontSize: sz(13), fontWeight: '600' },
 
   composer: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: BORDER,
-    paddingHorizontal: 12,
-    paddingTop: 10,
+    paddingHorizontal: sz(12),
+    paddingTop: sz(10),
     backgroundColor: SURFACE,
   },
   replyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    paddingBottom: 8,
+    paddingHorizontal: sz(4),
+    paddingBottom: sz(8),
   },
-  replyBannerText: { color: MUTED, fontSize: 12, flexShrink: 1 },
-  composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  replyBannerText: { color: MUTED, fontSize: sz(12), flexShrink: 1 },
+  composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: sz(8) },
   input: {
     flex: 1,
     color: TEXT,
-    fontSize: 14,
-    maxHeight: 110,
-    minHeight: 40,
-    paddingHorizontal: 14,
-    paddingTop: Platform.OS === 'ios' ? 11 : 8,
-    paddingBottom: Platform.OS === 'ios' ? 11 : 8,
-    borderRadius: 20,
+    fontSize: sz(14),
+    maxHeight: sz(110),
+    minHeight: sz(40),
+    paddingHorizontal: sz(14),
+    paddingTop: Platform.OS === 'ios' ? sz(11) : sz(8),
+    paddingBottom: Platform.OS === 'ios' ? sz(11) : sz(8),
+    borderRadius: sz(20),
     backgroundColor: '#1F1F1F',
   },
   postBtn: {
     backgroundColor: ACCENT,
-    paddingHorizontal: 16,
-    height: 40,
-    borderRadius: 20,
+    paddingHorizontal: sz(16),
+    height: sz(40),
+    borderRadius: sz(20),
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 62,
+    minWidth: sz(62),
   },
   // Dimmed, not greyed: white on this orange still clears AA at 14px semibold.
   postBtnOff: { opacity: 0.4 },
-  postBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  postBtnText: { color: '#FFF', fontSize: sz(14), fontWeight: '700' },
   pressed: { opacity: 0.7 },
 
-  skeleton: { backgroundColor: '#1F1F1F', borderRadius: 6 },
-  skelLine: { height: 10, marginTop: 7 },
+  skeleton: { backgroundColor: '#1F1F1F', borderRadius: sz(6) },
+  skelLine: { height: sz(10), marginTop: sz(7) },
 });

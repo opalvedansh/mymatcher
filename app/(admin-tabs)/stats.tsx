@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '@/api/client';
 import { colors } from '@/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { sz } from '@/theme/scale';
 
 const { width } = Dimensions.get('window');
 
@@ -66,7 +68,7 @@ export default function AdminStatsScreen() {
             end={{ x: 1, y: 1 }}
           >
             <View style={[styles.iconContainer, { backgroundColor: config.color + '20' }]}>
-              <Ionicons name={config.icon} size={24} color={config.color} />
+              <Ionicons name={config.icon} size={sz(24)} color={config.color} />
             </View>
             <Text style={styles.cardValue}>{formatNumber(value)}</Text>
             <Text style={styles.cardTitle}>{config.label}</Text>
@@ -85,7 +87,7 @@ export default function AdminStatsScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: sz(50) }} />
         ) : (
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             <View style={styles.grid}>
@@ -108,26 +110,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    paddingHorizontal: 24,
-    marginTop: 20,
-    marginBottom: 20,
+    paddingHorizontal: sz(24),
+    marginTop: sz(20),
+    marginBottom: sz(20),
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '800',
     color: colors.primary,
-    letterSpacing: 1.5,
-    marginBottom: 4,
+    letterSpacing: sz(1.5),
+    marginBottom: sz(4),
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: sz(32),
     fontWeight: '900',
     color: '#fff',
     letterSpacing: -0.5,
   },
   scroll: {
-    paddingHorizontal: 20,
-    paddingBottom: 120,
+    paddingHorizontal: sz(20),
+    paddingBottom: sz(120),
   },
   grid: {
     flexDirection: 'row',
@@ -135,47 +137,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardContainer: {
-    width: (width - 56) / 2, // 20 padding on sides + 16 gap
-    height: 160,
-    marginBottom: 16,
-    borderRadius: 24,
+    width: (width - sz(56)) / 2, // 20 padding on sides + 16 gap
+    height: sz(160),
+    marginBottom: sz(16),
+    borderRadius: sz(24),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   fullWidthCard: {
     width: '100%',
-    height: 140,
+    height: sz(140),
   },
   blurCard: {
     flex: 1,
   },
   cardGradient: {
     flex: 1,
-    padding: 20,
+    padding: sz(20),
     justifyContent: 'flex-end',
     alignItems: 'flex-start',
   },
   iconContainer: {
     position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    top: sz(20),
+    right: sz(20),
+    width: sz(44),
+    height: sz(44),
+    borderRadius: sz(22),
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardValue: {
     color: '#fff',
-    fontSize: 32,
+    fontSize: sz(32),
     fontWeight: '900',
     letterSpacing: -1,
-    marginBottom: 4,
+    marginBottom: sz(4),
   },
   cardTitle: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
+    fontSize: sz(14),
     fontWeight: '600',
   },
 });

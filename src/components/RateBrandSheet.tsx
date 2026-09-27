@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { getBrandRating, rateBrand, removeBrandRating } from '@/api';
 import type { BrandRating } from '@/api/types';
+import { sz } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 const DANGER = '#FF6B6B';
@@ -125,7 +126,7 @@ export function RateBrandSheet({
                 accessibilityLabel="Close"
                 style={({ pressed }) => [styles.close, pressed && styles.pressed]}
               >
-                <Ionicons name="close" size={20} color="#DDD" />
+                <Ionicons name="close" size={sz(20)} color="#DDD" />
               </Pressable>
             </View>
 
@@ -152,7 +153,7 @@ export function RateBrandSheet({
                     >
                       <Ionicons
                         name={n <= score ? 'star' : 'star-outline'}
-                        size={34}
+                        size={sz(34)}
                         color={n <= score ? ACCENT : '#4A4A4A'}
                       />
                     </Pressable>
@@ -166,7 +167,7 @@ export function RateBrandSheet({
 
             {error && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={16} color={DANGER} />
+                <Ionicons name="alert-circle" size={sz(16)} color={DANGER} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -215,53 +216,53 @@ export function RateBrandSheet({
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)' },
-  sheetWrap: { width: '100%', maxWidth: 520, alignSelf: 'center' },
+  sheetWrap: { width: '100%', maxWidth: sz(520), alignSelf: 'center' },
   sheet: {
     backgroundColor: '#141414',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: sz(28),
+    borderTopRightRadius: sz(28),
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 28,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(10),
+    paddingBottom: sz(28),
   },
   grabber: {
-    width: 36, height: 4, borderRadius: 2,
+    width: sz(36), height: sz(4), borderRadius: sz(2),
     backgroundColor: 'rgba(255,255,255,0.18)',
-    alignSelf: 'center', marginBottom: 18,
+    alignSelf: 'center', marginBottom: sz(18),
   },
-  header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 22 },
-  title: { color: '#FFF', fontSize: 21, fontWeight: '700', letterSpacing: -0.4 },
-  subtitle: { color: MUTED, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  header: { flexDirection: 'row', alignItems: 'flex-start', gap: sz(12), marginBottom: sz(22) },
+  title: { color: '#FFF', fontSize: sz(21), fontWeight: '700', letterSpacing: -0.4 },
+  subtitle: { color: MUTED, fontSize: sz(13), lineHeight: sz(18), marginTop: sz(4) },
   close: {
-    width: 34, height: 34, borderRadius: 17,
+    width: sz(34), height: sz(34), borderRadius: sz(17),
     backgroundColor: '#1F1F1F',
     alignItems: 'center', justifyContent: 'center',
   },
-  centre: { paddingVertical: 28, alignItems: 'center' },
-  note: { color: MUTED, fontSize: 14, lineHeight: 20, paddingVertical: 12 },
-  stars: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
-  star: { padding: 4 },
-  scoreWord: { color: '#FFF', fontSize: 15, fontWeight: '600', textAlign: 'center', marginTop: 14, minHeight: 22 },
-  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 },
-  errorText: { color: DANGER, fontSize: 13, flexShrink: 1 },
+  centre: { paddingVertical: sz(28), alignItems: 'center' },
+  note: { color: MUTED, fontSize: sz(14), lineHeight: sz(20), paddingVertical: sz(12) },
+  stars: { flexDirection: 'row', justifyContent: 'center', gap: sz(10) },
+  star: { padding: sz(4) },
+  scoreWord: { color: '#FFF', fontSize: sz(15), fontWeight: '600', textAlign: 'center', marginTop: sz(14), minHeight: sz(22) },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: sz(8), marginTop: sz(18) },
+  errorText: { color: DANGER, fontSize: sz(13), flexShrink: 1 },
   saveBtn: {
     backgroundColor: ACCENT,
-    borderRadius: 16,
-    height: 54,
+    borderRadius: sz(16),
+    height: sz(54),
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: sz(24),
   },
   saveBtnDisabled: {
     backgroundColor: '#1E1E1E',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  saveTxt: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  saveTxt: { color: '#FFF', fontSize: sz(16), fontWeight: '700' },
   saveTxtDisabled: { color: '#6F6F6F' },
-  removeBtn: { alignSelf: 'center', paddingVertical: 14 },
-  removeTxt: { color: MUTED, fontSize: 14, fontWeight: '500' },
+  removeBtn: { alignSelf: 'center', paddingVertical: sz(14) },
+  removeTxt: { color: MUTED, fontSize: sz(14), fontWeight: '500' },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });

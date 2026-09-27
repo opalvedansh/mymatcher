@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, ActivityIndicator, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage, uploadStory } from '@/api';
+import { sz } from '@/theme/scale';
 
 export default function StoryCameraScreen() {
   const router = useRouter();
@@ -27,14 +29,14 @@ export default function StoryCameraScreen() {
   if (!permission.granted) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: 'white', textAlign: 'center', marginBottom: 20 }}>
+        <Text style={{ color: 'white', textAlign: 'center', marginBottom: sz(20) }}>
           We need your permission to show the camera
         </Text>
         <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
           <Text style={{ color: 'white', fontWeight: '600' }}>Grant Permission</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ marginTop: 20 }} onPress={() => router.back()}>
-          <Text style={{ color: 'white', fontSize: 16 }}>Cancel</Text>
+        <TouchableOpacity style={{ marginTop: sz(20) }} onPress={() => router.back()}>
+          <Text style={{ color: 'white', fontSize: sz(16) }}>Cancel</Text>
         </TouchableOpacity>
       </View>
     );
@@ -92,31 +94,31 @@ export default function StoryCameraScreen() {
           {/* Top Bar */}
           <View style={styles.topBar}>
             <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-              <Ionicons name="close" size={32} color="white" />
+              <Ionicons name="close" size={sz(32)} color="white" />
             </TouchableOpacity>
             
             <TouchableOpacity onPress={toggleFlash} style={styles.iconButton}>
-              <Ionicons name={flash === 'on' ? "flash" : "flash-off"} size={26} color="white" />
+              <Ionicons name={flash === 'on' ? "flash" : "flash-off"} size={sz(26)} color="white" />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.iconButton}>
-              <Ionicons name="settings-outline" size={26} color="white" />
+              <Ionicons name="settings-outline" size={sz(26)} color="white" />
             </TouchableOpacity>
           </View>
 
           {/* Side Toolbar */}
           <View style={styles.sideToolbar}>
             <TouchableOpacity style={styles.toolButton}>
-              <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Aa</Text>
+              <Text style={{ color: 'white', fontSize: sz(20), fontWeight: 'bold' }}>Aa</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.toolButton}>
-              <Ionicons name="infinite" size={26} color="white" />
+              <Ionicons name="infinite" size={sz(26)} color="white" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.toolButton}>
-              <MaterialCommunityIcons name="view-grid-outline" size={26} color="white" />
+              <MaterialCommunityIcons name="view-grid-outline" size={sz(26)} color="white" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.toolButton}>
-              <Feather name="stop-circle" size={26} color="white" />
+              <Feather name="stop-circle" size={sz(26)} color="white" />
             </TouchableOpacity>
           </View>
 
@@ -139,7 +141,7 @@ export default function StoryCameraScreen() {
 
             {/* Flip Camera */}
             <TouchableOpacity style={styles.flipButton} onPress={toggleCameraFacing}>
-              <Ionicons name="camera-reverse-outline" size={30} color="white" />
+              <Ionicons name="camera-reverse-outline" size={sz(30)} color="white" />
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -164,47 +166,47 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(20),
   },
   iconButton: {
-    width: 44,
-    height: 44,
+    width: sz(44),
+    height: sz(44),
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.5,
-    shadowRadius: 2,
+    shadowRadius: sz(2),
   },
   sideToolbar: {
     position: 'absolute',
-    left: 20,
+    left: sz(20),
     top: '30%',
     alignItems: 'center',
-    gap: 24,
+    gap: sz(24),
   },
   toolButton: {
-    width: 40,
-    height: 40,
+    width: sz(40),
+    height: sz(40),
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.5,
-    shadowRadius: 2,
+    shadowRadius: sz(2),
   },
   bottomBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingBottom: 40,
+    paddingHorizontal: sz(40),
+    paddingBottom: sz(40),
   },
   galleryButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: sz(40),
+    height: sz(40),
+    borderRadius: sz(8),
     borderWidth: 2,
     borderColor: 'white',
     overflow: 'hidden',
@@ -216,34 +218,34 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   captureButtonContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: sz(80),
+    height: sz(80),
+    borderRadius: sz(40),
     borderWidth: 4,
     borderColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
   },
   captureButtonInner: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: sz(66),
+    height: sz(66),
+    borderRadius: sz(33),
     backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
   },
   flipButton: {
-    width: 44,
-    height: 44,
+    width: sz(44),
+    height: sz(44),
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 22,
+    borderRadius: sz(22),
   },
   permissionButton: {
     backgroundColor: '#FF6B2B',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingHorizontal: sz(24),
+    paddingVertical: sz(14),
+    borderRadius: sz(12),
   },
 });

@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, View } from 'react-native';
+import { sz } from '@/theme/scale';
 
 export default function AdminTabsLayout() {
   return (
@@ -14,7 +15,7 @@ export default function AdminTabsLayout() {
           backgroundColor: 'transparent',
           elevation: 0,
           borderTopWidth: 0,
-          height: 85,
+          height: sz(85),
         },
         tabBarBackground: () => (
           <View style={StyleSheet.absoluteFill}>
@@ -32,7 +33,7 @@ export default function AdminTabsLayout() {
         options={{
           title: 'Users',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'people' : 'people-outline'} size={24} color={color} />
+            <Ionicons name={focused ? 'people' : 'people-outline'} size={sz(24)} color={color} />
           ),
         }}
       />
@@ -41,7 +42,7 @@ export default function AdminTabsLayout() {
         options={{
           title: 'Algorithm',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'options' : 'options-outline'} size={24} color={color} />
+            <Ionicons name={focused ? 'options' : 'options-outline'} size={sz(24)} color={color} />
           ),
         }}
       />
@@ -50,7 +51,7 @@ export default function AdminTabsLayout() {
         options={{
           title: 'Stats',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'stats-chart' : 'stats-chart-outline'} size={24} color={color} />
+            <Ionicons name={focused ? 'stats-chart' : 'stats-chart-outline'} size={sz(24)} color={color} />
           ),
         }}
       />

@@ -13,6 +13,7 @@ import { Ionicons, AntDesign } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { getMapAutocomplete, getMapGeocode } from '@/api';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
+import { sz } from '@/theme/scale';
 
 
 
@@ -117,7 +118,7 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
       {/* Back Button */}
       {onBack && (
         <Pressable onPress={onBack} style={styles.backButton}>
-          <AntDesign name="arrow-left" size={24} color={colors.text} />
+          <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
       )}
 
@@ -133,7 +134,7 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
 
       {/* Search Input */}
       <View style={styles.searchWrapper}>
-        <Ionicons name="search" size={18} color="#888" style={styles.searchIcon} />
+        <Ionicons name="search" size={sz(18)} color="#888" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search city or area…"
@@ -152,7 +153,7 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
         )}
         {query.length > 0 && !loading && (
           <Pressable onPress={() => { setQuery(''); setSelected(null); setPredictions([]); }}>
-            <AntDesign name="close" size={16} color="#666" style={styles.clearIcon} />
+            <AntDesign name="close" size={sz(16)} color="#666" style={styles.clearIcon} />
           </Pressable>
         )}
       </View>
@@ -169,7 +170,7 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
                 style={({ pressed }) => [styles.predictionItem, pressed && styles.predictionItemPressed]}
                 onPress={() => handleSelect(item)}
               >
-                <Ionicons name="location-outline" size={16} color={colors.primary} style={styles.predictionIcon} />
+                <Ionicons name="location-outline" size={sz(16)} color={colors.primary} style={styles.predictionIcon} />
                 <Text style={styles.predictionText} numberOfLines={2}>
                   {item.description}
                 </Text>
@@ -183,7 +184,7 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
       {/* Selected Location Confirmation */}
       {selected && (
         <View style={styles.selectedCard}>
-          <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+          <Ionicons name="checkmark-circle" size={sz(22)} color={colors.primary} />
           <View style={styles.selectedTextBlock}>
             <Text style={styles.selectedLabel}>Selected Location</Text>
             <Text style={styles.selectedName} numberOfLines={2}>{selected.name}</Text>
@@ -222,140 +223,140 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(16),
+    paddingBottom: sz(32),
     backgroundColor: colors.background,
   },
   backButton: {
-    marginBottom: 24,
+    marginBottom: sz(24),
   },
   headerText: {
-    marginBottom: 28,
+    marginBottom: sz(28),
   },
   title: {
     color: colors.text,
-    fontSize: 40,
+    fontSize: sz(40),
     fontWeight: '700',
-    lineHeight: 44,
-    marginBottom: 12,
+    lineHeight: sz(44),
+    marginBottom: sz(12),
   },
   subtitle: {
     color: '#8A8A8A',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: sz(13),
+    lineHeight: sz(18),
     fontWeight: '400',
-    paddingRight: 20,
+    paddingRight: sz(20),
   },
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1E1E1E',
-    borderRadius: 14,
+    borderRadius: sz(14),
     borderWidth: 1,
     borderColor: '#333',
-    paddingHorizontal: 14,
-    height: 52,
-    marginBottom: 4,
+    paddingHorizontal: sz(14),
+    height: sz(52),
+    marginBottom: sz(4),
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: sz(10),
   },
   searchInput: {
     flex: 1,
     color: colors.text,
-    fontSize: 15,
+    fontSize: sz(15),
     height: '100%',
   },
   searchSpinner: {
-    marginLeft: 8,
+    marginLeft: sz(8),
   },
   clearIcon: {
-    marginLeft: 8,
-    padding: 4,
+    marginLeft: sz(8),
+    padding: sz(4),
   },
   dropdown: {
     backgroundColor: '#1A1A1A',
-    borderRadius: 12,
+    borderRadius: sz(12),
     borderWidth: 1,
     borderColor: '#2A2A2A',
-    marginTop: 4,
-    marginBottom: 8,
-    maxHeight: 240,
+    marginTop: sz(4),
+    marginBottom: sz(8),
+    maxHeight: sz(240),
     overflow: 'hidden',
   },
   predictionItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: sz(12),
+    paddingHorizontal: sz(16),
   },
   predictionItemPressed: {
     backgroundColor: '#252525',
   },
   predictionIcon: {
-    marginRight: 10,
-    marginTop: 2,
+    marginRight: sz(10),
+    marginTop: sz(2),
   },
   predictionText: {
     flex: 1,
     color: colors.text,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: sz(14),
+    lineHeight: sz(20),
   },
   separator: {
     height: 1,
     backgroundColor: '#2A2A2A',
-    marginHorizontal: 16,
+    marginHorizontal: sz(16),
   },
   selectedCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: '#1A1A1A',
-    borderRadius: 14,
+    borderRadius: sz(14),
     borderWidth: 1,
     borderColor: colors.primary + '44',
-    padding: 16,
-    marginTop: 16,
-    gap: 12,
+    padding: sz(16),
+    marginTop: sz(16),
+    gap: sz(12),
   },
   selectedTextBlock: {
     flex: 1,
   },
   selectedLabel: {
     color: colors.primary,
-    fontSize: 11,
+    fontSize: sz(11),
     fontWeight: '600',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: sz(4),
   },
   selectedName: {
     color: colors.text,
-    fontSize: 15,
+    fontSize: sz(15),
     fontWeight: '600',
-    lineHeight: 20,
-    marginBottom: 4,
+    lineHeight: sz(20),
+    marginBottom: sz(4),
   },
   selectedCoords: {
     color: '#666',
-    fontSize: 11,
+    fontSize: sz(11),
   },
   resolvingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-    paddingHorizontal: 4,
+    gap: sz(10),
+    marginTop: sz(12),
+    paddingHorizontal: sz(4),
   },
   resolvingText: {
     color: '#888',
-    fontSize: 13,
+    fontSize: sz(13),
   },
   confirmButton: {
     backgroundColor: colors.primary,
-    height: 56,
-    borderRadius: 999,
+    height: sz(56),
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -365,7 +366,7 @@ const styles = StyleSheet.create({
   },
   confirmButtonText: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '700',
   },
 });

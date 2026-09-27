@@ -28,6 +28,7 @@ import { MatchBoomModal } from '@/components/MatchBoomModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { showAlert } from '@/components/ActionSheet';
 import { NotificationBell } from '@/components/NotificationBell';
+import { sz, tabBarClearance } from '@/theme/scale';
 
 
 const ACCENT = '#FF6B2B';
@@ -125,7 +126,7 @@ const CardContent = ({ item }: { item: CardItem }) => (
     {item.verified && (
       <View style={card.topRight}>
         <View style={card.verifiedBadge}>
-          <MaterialCommunityIcons name="check-decagram" size={15} color={ACCENT} />
+          <MaterialCommunityIcons name="check-decagram" size={sz(15)} color={ACCENT} />
           <Text style={card.verifiedTxt}>Verified Brand</Text>
         </View>
       </View>
@@ -137,7 +138,7 @@ const CardContent = ({ item }: { item: CardItem }) => (
       {!!item.categories && <Text style={card.infoCats} numberOfLines={1}>{item.categories}</Text>}
       {!!item.location && (
         <View style={card.locationRow}>
-          <Ionicons name="location-sharp" size={14} color="#AAA" />
+          <Ionicons name="location-sharp" size={sz(14)} color="#AAA" />
           <Text style={card.locationTxt} numberOfLines={1}>{item.location}</Text>
         </View>
       )}
@@ -343,9 +344,9 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
       return (
         <View style={[card.wrapper, card.skeleton]} accessibilityLabel="Finding brands">
           <View style={card.infoPanel}>
-            <View style={[ss.skeletonLine, { width: '55%', height: 24 }]} />
-            <View style={[ss.skeletonLine, { width: '35%', marginTop: 10 }]} />
-            <View style={[ss.skeletonLine, { width: '70%', height: 36, marginTop: 22, borderRadius: 18 }]} />
+            <View style={[ss.skeletonLine, { width: '55%', height: sz(24) }]} />
+            <View style={[ss.skeletonLine, { width: '35%', marginTop: sz(10) }]} />
+            <View style={[ss.skeletonLine, { width: '70%', height: sz(36), marginTop: sz(22), borderRadius: sz(18) }]} />
           </View>
         </View>
       );
@@ -354,7 +355,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
       return (
         <View style={ss.empty}>
           <View style={ss.emptyIcon}>
-            <Ionicons name="cloud-offline-outline" size={28} color="#BDBDBD" />
+            <Ionicons name="cloud-offline-outline" size={sz(28)} color="#BDBDBD" />
           </View>
           <Text style={ss.emptyTxt}>Couldn't load brands</Text>
           <Text style={ss.emptySub}>Check your connection and try again.</Text>
@@ -368,7 +369,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
       return (
         <View style={ss.empty}>
           <View style={ss.emptyIcon}>
-            <Ionicons name="checkmark-done" size={28} color={ACCENT} />
+            <Ionicons name="checkmark-done" size={sz(28)} color={ACCENT} />
           </View>
           <Text style={ss.emptyTxt}>You've seen all brands</Text>
           <Text style={ss.emptySub}>New brands join every day. Check back soon.</Text>
@@ -392,7 +393,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
                 ss.cardWrapper,
                 isTop
                   ? [animatedCardStyle, { zIndex: 10 }]
-                  : { zIndex: 1, transform: [{ scale: 0.97 }], top: 6 },
+                  : { zIndex: 1, transform: [{ scale: 0.97 }], top: sz(6) },
               ]}
             >
               <Pressable
@@ -426,8 +427,8 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
       {/* ── Header ── */}
       <View style={ss.header}>
         <View style={ss.logoRow}>
-          <View style={{ marginRight: 6 }}>
-            <MatchrLogo size={24} color={ACCENT} />
+          <View style={{ marginRight: sz(6) }}>
+            <MatchrLogo size={sz(24)} color={ACCENT} />
           </View>
           <Text style={ss.logoWord}>Matchr</Text>
         </View>
@@ -452,7 +453,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
               accessibilityLabel="Pass"
               style={({ pressed }) => [ss.btnPass, pressed && ss.pressed]}
             >
-              <Ionicons name="close" size={28} color="#111" />
+              <Ionicons name="close" size={sz(28)} color="#111" />
             </Pressable>
             <Pressable
               onPress={() => forceSwipe('right')}
@@ -460,7 +461,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
               accessibilityLabel="Like"
               style={({ pressed }) => [ss.btnLike, pressed && ss.pressed]}
             >
-              <Ionicons name="heart" size={26} color="#FFF" />
+              <Ionicons name="heart" size={sz(26)} color="#FFF" />
             </Pressable>
           </View>
         )}
@@ -485,7 +486,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
 const card = StyleSheet.create({
   wrapper: {
     flex: 1,
-    borderRadius: 22,
+    borderRadius: sz(22),
     overflow: 'hidden',
     backgroundColor: '#0e0e0e',
     justifyContent: 'flex-end',
@@ -498,108 +499,108 @@ const card = StyleSheet.create({
     backgroundColor: '#1C1C1C',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 180,
+    paddingBottom: tabBarClearance(180),
   },
-  fallbackInitial: { color: '#333', fontSize: 120, fontWeight: '800' },
+  fallbackInitial: { color: '#333', fontSize: sz(120), fontWeight: '800' },
   skeleton: { flex: 1, backgroundColor: '#1A1A1A' },
   topFade: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
-    height: 160,
+    height: sz(160),
   },
   bottomFade: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
     height: '60%',
   },
-  topRight: { position: 'absolute', top: 16, right: 16 },
+  topRight: { position: 'absolute', top: sz(16), right: sz(16) },
   verifiedBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20,
+    flexDirection: 'row', alignItems: 'center', gap: sz(5),
+    backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: sz(11), paddingVertical: sz(6), borderRadius: sz(20),
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)',
   },
-  verifiedTxt: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  verifiedTxt: { color: '#FFF', fontSize: sz(12), fontWeight: '600' },
   photoText: {
     position: 'absolute',
     bottom: 0,
     left: 0,
-    paddingHorizontal: 22,
-    paddingBottom: 20,
+    paddingHorizontal: sz(22),
+    paddingBottom: sz(20),
   },
   theWord: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: sz(20),
     fontWeight: '300',
     letterSpacing: 1,
   },
   hugeName: {
     color: '#fff',
-    fontSize: 38,
+    fontSize: sz(38),
     fontWeight: '800',
-    marginTop: -4,
+    marginTop: sz(-4),
     letterSpacing: -0.5,
   },
   rule: {
-    width: 56,
-    height: 2,
+    width: sz(56),
+    height: sz(2),
     backgroundColor: '#FF6B2B',
-    marginVertical: 10,
+    marginVertical: sz(10),
   },
   slogan: {
     color: 'rgba(255,255,255,0.85)',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: sz(13),
+    lineHeight: sz(19),
     fontWeight: '400',
   },
   // ── info panel ──
   infoPanel: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 130, // increased space for the overlapping buttons
+    paddingHorizontal: sz(20),
+    paddingTop: sz(14),
+    paddingBottom: tabBarClearance(130), // increased space for the overlapping buttons
     backgroundColor: 'transparent',
   },
   infoName: {
     color: '#fff',
-    fontSize: 30,
+    fontSize: sz(30),
     fontWeight: '700',
     letterSpacing: -0.6,
   },
   infoCats: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    marginTop: 3,
+    fontSize: sz(14),
+    marginTop: sz(3),
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-    gap: 4,
+    marginTop: sz(6),
+    gap: sz(4),
   },
   locationTxt: {
     color: '#ccc',
-    fontSize: 12,
+    fontSize: sz(12),
   },
-  tagsScroll: { marginTop: 16, flexGrow: 0, height: 44 },
-  tagsContent: { gap: 10, paddingRight: 16, alignItems: 'center', height: '100%' },
-  pill: { paddingHorizontal: 15, paddingVertical: 7, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  tagsScroll: { marginTop: sz(16), flexGrow: 0, height: sz(44) },
+  tagsContent: { gap: sz(10), paddingRight: sz(16), alignItems: 'center', height: '100%' },
+  pill: { paddingHorizontal: sz(15), paddingVertical: sz(7), borderRadius: sz(22), backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
   pillLabel: { backgroundColor: 'rgba(255,107,43,0.16)', borderColor: 'rgba(255,107,43,0.45)' },
-  pillTxt: { color: '#FFF', fontSize: 13, fontWeight: '600' },
-  pillLabelTxt: { color: '#FF8A55', fontSize: 13, fontWeight: '700' },
+  pillTxt: { color: '#FFF', fontSize: sz(13), fontWeight: '600' },
+  pillLabelTxt: { color: '#FF8A55', fontSize: sz(13), fontWeight: '700' },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 20,
-    paddingTop: 14,
+    marginTop: sz(20),
+    paddingTop: sz(14),
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.2)',
   },
-  statCol: { alignItems: 'center', flex: 1, paddingHorizontal: 6 },
-  statVal: { color: '#fff', fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  statLbl: { color: '#aaa', fontSize: 11, marginTop: 3, textAlign: 'center' },
+  statCol: { alignItems: 'center', flex: 1, paddingHorizontal: sz(6) },
+  statVal: { color: '#fff', fontSize: sz(18), fontWeight: '700', fontVariant: ['tabular-nums'] },
+  statLbl: { color: '#aaa', fontSize: sz(11), marginTop: sz(3), textAlign: 'center' },
   statDivider: {
     width: StyleSheet.hairlineWidth,
-    height: 32,
+    height: sz(32),
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
 });
@@ -614,32 +615,32 @@ const ss = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 4,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(6),
+    paddingBottom: sz(4),
   },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  logoM: { fontSize: 26, fontWeight: '900', color: '#FF6B2B' },
-  logoWord: { fontSize: 22, fontWeight: '700', color: '#fff' },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: sz(6) },
+  logoM: { fontSize: sz(26), fontWeight: '900', color: '#FF6B2B' },
+  logoWord: { fontSize: sz(22), fontWeight: '700', color: '#fff' },
   titleBlock: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingHorizontal: sz(20),
+    paddingBottom: sz(12),
   },
   title: {
     color: '#fff',
-    fontSize: 22,
+    fontSize: sz(22),
     fontWeight: '700',
   },
   subtitle: {
     color: '#9A9A9A',
-    fontSize: 13,
-    marginTop: 3,
+    fontSize: sz(13),
+    marginTop: sz(3),
   },
   // The area that holds both the stacked cards AND the floating buttons
   stackArea: {
     flex: 1,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: sz(16),
+    marginBottom: sz(16),
     position: 'relative',
   },
   cardWrapper: {
@@ -649,19 +650,19 @@ const ss = StyleSheet.create({
   // Buttons are positioned absolutely inside stackArea, near the bottom
   actionRow: {
     position: 'absolute',
-    bottom: 70,
+    bottom: tabBarClearance(70),
     left: 0,
     right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 28,
+    gap: sz(28),
     zIndex: 100,
   },
   btnPass: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: sz(56),
+    height: sz(56),
+    borderRadius: sz(28),
     backgroundColor: '#F4F4F4',
     justifyContent: 'center',
     alignItems: 'center',
@@ -669,9 +670,9 @@ const ss = StyleSheet.create({
     elevation: 6,
   },
   btnLike: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: sz(64),
+    height: sz(64),
+    borderRadius: sz(32),
     backgroundColor: ACCENT,
     justifyContent: 'center',
     alignItems: 'center',
@@ -683,55 +684,55 @@ const ss = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: sz(32),
   },
   emptyIcon: {
-    width: 64, height: 64, borderRadius: 32, backgroundColor: '#1E1E1E',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 18,
+    width: sz(64), height: sz(64), borderRadius: sz(32), backgroundColor: '#1E1E1E',
+    justifyContent: 'center', alignItems: 'center', marginBottom: sz(18),
   },
   emptyTxt: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: sz(20),
     fontWeight: '700',
     textAlign: 'center',
   },
-  emptySub: { color: '#9A9A9A', fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 6 },
+  emptySub: { color: '#9A9A9A', fontSize: sz(14), lineHeight: sz(20), textAlign: 'center', marginTop: sz(6) },
   emptyBtn: {
-    marginTop: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 12,
-    paddingVertical: 11, paddingHorizontal: 24,
+    marginTop: sz(22), borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: sz(12),
+    paddingVertical: sz(11), paddingHorizontal: sz(24),
   },
-  emptyBtnTxt: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  skeletonLine: { height: 12, borderRadius: 6, backgroundColor: '#262626' },
+  emptyBtnTxt: { color: '#FFF', fontSize: sz(15), fontWeight: '600' },
+  skeletonLine: { height: sz(12), borderRadius: sz(6), backgroundColor: '#262626' },
   stamp: {
     position: 'absolute',
-    top: 40,
+    top: sz(40),
     borderWidth: 4,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: sz(8),
+    paddingHorizontal: sz(12),
+    paddingVertical: sz(6),
     zIndex: 10,
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   likeStamp: {
-    left: 40,
+    left: sz(40),
     borderColor: ACCENT,
     transform: [{ rotate: '-15deg' }],
   },
   likeStampTxt: {
     color: ACCENT,
-    fontSize: 28,
+    fontSize: sz(28),
     fontWeight: '900',
-    letterSpacing: 2,
+    letterSpacing: sz(2),
   },
   nopeStamp: {
-    right: 40,
+    right: sz(40),
     borderColor: '#FFF',
     transform: [{ rotate: '15deg' }],
   },
   nopeStampTxt: {
     color: '#FFF',
-    fontSize: 28,
+    fontSize: sz(28),
     fontWeight: '900',
-    letterSpacing: 2,
+    letterSpacing: sz(2),
   },
 });

@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { TAB_BAR_STYLE } from '@/theme/tabBar';
 import { NavHomeIcon, NavMatchIcon, NavHeartIcon, NavMessageIcon, NavProfileIcon } from '@/components/BottomNavIcons';
+import { sz } from '@/theme/scale';
 
 export default function BrandTabsLayout() {
   return (
@@ -9,8 +10,8 @@ export default function BrandTabsLayout() {
         headerShown: false,
         tabBarStyle: TAB_BAR_STYLE,
         tabBarItemStyle: {
-          height: 55,
-          paddingTop: 8,
+          height: sz(55),
+          paddingTop: sz(8),
           // @ts-ignore
           outlineStyle: 'none' as any,
           // @ts-ignore
@@ -27,35 +28,35 @@ export default function BrandTabsLayout() {
         name="match"
         options={{
           title: 'Match',
-          tabBarIcon: ({ color, size }) => <NavMatchIcon size={24} color={color as string} />,
+          tabBarIcon: ({ color, size }) => <NavMatchIcon size={sz(24)} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => <NavHomeIcon size={24} color={color as string} />,
+          tabBarIcon: ({ color, size }) => <NavHomeIcon size={sz(24)} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="likes"
         options={{
           title: 'Likes',
-          tabBarIcon: ({ color, size }) => <NavHeartIcon size={26} color={color as string} />,
+          tabBarIcon: ({ color, size }) => <NavHeartIcon size={sz(26)} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
           title: 'Messages',
-          tabBarIcon: ({ color, size }) => <NavMessageIcon size={24} color={color as string} />,
+          tabBarIcon: ({ color, size }) => <NavMessageIcon size={sz(24)} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <NavProfileIcon size={24} color={color as string} />,
+          tabBarIcon: ({ color, size }) => <NavProfileIcon size={sz(24)} color={color as string} />,
         }}
       />
     </Tabs>

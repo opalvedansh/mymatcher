@@ -18,6 +18,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { recordStoryView, getStoryViewers } from '@/api';
 import { openSafetyMenu } from '@/components/safetyMenu';
+import { sz } from '@/theme/scale';
 
 const { width, height } = Dimensions.get('window');
 
@@ -265,7 +266,7 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
               </View>
               <View style={styles.headerRight}>
                 <Pressable onPress={togglePause} style={styles.headerIconBtn}>
-                  <Ionicons name={isPaused.current ? "play" : "pause"} size={22} color="#FFF" />
+                  <Ionicons name={isPaused.current ? "play" : "pause"} size={sz(22)} color="#FFF" />
                 </Pressable>
                 {!currentGroup.isMe && (
                   <Pressable
@@ -283,11 +284,11 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                       });
                     }}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={24} color="#FFF" />
+                    <Ionicons name="ellipsis-horizontal" size={sz(24)} color="#FFF" />
                   </Pressable>
                 )}
                 <Pressable accessibilityLabel="Close" onPress={onClose} style={styles.headerIconBtn}>
-                  <Ionicons name="close" size={26} color="#FFF" />
+                  <Ionicons name="close" size={sz(26)} color="#FFF" />
                 </Pressable>
               </View>
             </View>
@@ -306,11 +307,11 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
               {currentGroup.isMe ? (
                 <View style={styles.viewersBarContainer}>
                   <Pressable style={styles.viewersBtn} onPress={handleOpenViewers}>
-                    <Ionicons name="eye-outline" size={24} color="#FFF" />
+                    <Ionicons name="eye-outline" size={sz(24)} color="#FFF" />
                     <Text style={styles.viewersText}>Viewers</Text>
                   </Pressable>
                   <Pressable style={styles.actionBtn} onPress={handleShare}>
-                    <Ionicons name="ellipsis-horizontal" size={28} color="#FFF" />
+                    <Ionicons name="ellipsis-horizontal" size={sz(28)} color="#FFF" />
                   </Pressable>
                 </View>
               ) : (
@@ -340,10 +341,10 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                   {!isKeyboardVisible && (
                     <View style={styles.actionButtons}>
                       <Pressable style={styles.actionBtn} onPress={handleLike}>
-                        <Ionicons name="heart-outline" size={30} color="#FFF" />
+                        <Ionicons name="heart-outline" size={sz(30)} color="#FFF" />
                       </Pressable>
                       <Pressable style={styles.actionBtn} onPress={handleShare}>
-                        <Ionicons name="paper-plane-outline" size={28} color="#FFF" />
+                        <Ionicons name="paper-plane-outline" size={sz(28)} color="#FFF" />
                       </Pressable>
                     </View>
                   )}
@@ -394,14 +395,14 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 120,
+    height: sz(120),
   },
   bottomGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 150,
+    height: sz(150),
   },
   overlay: {
     position: 'absolute',
@@ -413,15 +414,15 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    gap: 4,
+    paddingHorizontal: sz(10),
+    paddingTop: sz(10),
+    gap: sz(4),
   },
   progressBarBg: {
     flex: 1,
-    height: 2.5,
+    height: sz(2.5),
     backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 2,
+    borderRadius: sz(2),
     overflow: 'hidden',
   },
   progressBarFg: {
@@ -432,67 +433,67 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: sz(16),
+    paddingTop: sz(12),
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    marginRight: 10,
+    width: sz(34),
+    height: sz(34),
+    borderRadius: sz(17),
+    marginRight: sz(10),
     borderWidth: 1,
     borderColor: '#FFF',
   },
   username: {
     color: '#FFF',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: sz(14),
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: sz(2),
   },
   timeElapsed: {
     color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    marginLeft: 8,
+    fontSize: sz(14),
+    marginLeft: sz(8),
     fontWeight: '600',
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: sz(16),
   },
   headerIconBtn: {
-    padding: 4,
+    padding: sz(4),
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'ios' ? 10 : 20,
-    gap: 16,
+    paddingHorizontal: sz(16),
+    paddingBottom: Platform.OS === 'ios' ? sz(10) : sz(20),
+    gap: sz(16),
   },
   inputContainer: {
     flex: 1,
-    height: 48,
-    borderRadius: 24,
+    height: sz(48),
+    borderRadius: sz(24),
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.7)',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: sz(16),
   },
   input: {
     color: '#FFF',
-    fontSize: 15,
+    fontSize: sz(15),
   },
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: sz(16),
   },
   actionBtn: {
     justifyContent: 'center',
@@ -503,7 +504,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: sz(8),
   },
   viewersBtn: {
     flexDirection: 'column',
@@ -512,9 +513,9 @@ const styles = StyleSheet.create({
   },
   viewersText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: sz(2),
   },
   viewersModalOverlay: {
     flex: 1,
@@ -523,47 +524,47 @@ const styles = StyleSheet.create({
   },
   viewersSheet: {
     backgroundColor: '#1E1E1E',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 16,
-    minHeight: 300,
+    borderTopLeftRadius: sz(16),
+    borderTopRightRadius: sz(16),
+    padding: sz(16),
+    minHeight: sz(300),
     maxHeight: height * 0.8,
   },
   viewersSheetHeader: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: sz(20),
   },
   dragHandle: {
-    width: 40,
-    height: 4,
+    width: sz(40),
+    height: sz(4),
     backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 2,
-    marginBottom: 16,
+    borderRadius: sz(2),
+    marginBottom: sz(16),
   },
   viewersSheetTitle: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: 'bold',
   },
   emptyViewersText: {
     color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: sz(20),
   },
   viewerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: sz(16),
   },
   viewerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 12,
+    width: sz(44),
+    height: sz(44),
+    borderRadius: sz(22),
+    marginRight: sz(12),
   },
   viewerName: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '500',
   }
 });

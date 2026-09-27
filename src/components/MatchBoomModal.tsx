@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { sz } from '@/theme/scale';
 
 interface MatchBoomModalProps {
   visible: boolean;
@@ -94,7 +95,7 @@ export function MatchBoomModal({
 
           {/* Avatars */}
           <View style={styles.avatarsContainer}>
-            <View style={[styles.avatarWrapper, { zIndex: 1, marginRight: -25 }]}>
+            <View style={[styles.avatarWrapper, { zIndex: 1, marginRight: sz(-25) }]}>
               <Image
                 source={{ uri: meAvatar || 'https://picsum.photos/200' }}
                 style={styles.avatar}
@@ -155,23 +156,23 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
     zIndex: 10,
-    marginBottom: 60,
+    marginBottom: sz(60),
   },
   subText: {
     color: '#FFF',
-    fontSize: 22,
+    fontSize: sz(22),
     fontWeight: '800',
-    marginBottom: -5,
+    marginBottom: sz(-5),
   },
   boomText: {
     color: '#FFF',
-    fontSize: 68,
+    fontSize: sz(68),
     fontWeight: '900',
-    letterSpacing: 2,
+    letterSpacing: sz(2),
     textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 10,
-    marginBottom: 40,
+    textShadowOffset: { width: 0, height: sz(4) },
+    textShadowRadius: sz(10),
+    marginBottom: sz(40),
   },
   avatarsContainer: {
     flexDirection: 'row',
@@ -179,17 +180,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarWrapper: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
+    width: sz(130),
+    height: sz(130),
+    borderRadius: sz(65),
     borderWidth: 4,
     borderColor: '#FFF',
     backgroundColor: '#FFF',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: sz(10) },
     shadowOpacity: 0.2,
-    shadowRadius: 15,
+    shadowRadius: sz(15),
     elevation: 10,
   },
   avatar: {
@@ -199,37 +200,37 @@ const styles = StyleSheet.create({
   },
   bottomContainer: {
     position: 'absolute',
-    bottom: 50,
+    bottom: sz(50),
     width: '100%',
-    paddingHorizontal: 40,
+    paddingHorizontal: sz(40),
     alignItems: 'center',
     zIndex: 10,
   },
   button: {
     backgroundColor: '#FFF',
     width: '100%',
-    paddingVertical: 18,
-    borderRadius: 30,
+    paddingVertical: sz(18),
+    borderRadius: sz(30),
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
+    shadowOffset: { width: 0, height: sz(5) },
     shadowOpacity: 0.15,
-    shadowRadius: 10,
+    shadowRadius: sz(10),
     elevation: 5,
-    marginBottom: 20,
+    marginBottom: sz(20),
   },
   buttonText: {
     color: '#888',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
   closeButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: sz(10),
+    paddingHorizontal: sz(20),
   },
   closeButtonText: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '700',
   },
 });

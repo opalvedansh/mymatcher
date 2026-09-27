@@ -10,13 +10,15 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.webnexis.mymatcher1",
-      "buildNumber": "5",
-      "associatedDomains": ["applinks:api.mymatchr.in"],
+      "buildNumber": "27",
+      "associatedDomains": [
+        "applinks:api.mymatchr.in"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Matchr needs camera access to take profile photos.",
-        "NSPhotoLibraryUsageDescription": "Matchr needs photo library access to upload profile photos.",
-        "NSMicrophoneUsageDescription": "Matchr needs microphone access for video features."
+        "NSCameraUsageDescription": "Matchr uses the camera to take profile photos and photos or videos you send in chats.",
+        "NSPhotoLibraryUsageDescription": "Matchr uses your photo library to upload profile photos and to send photos and videos in chats.",
+        "NSMicrophoneUsageDescription": "Matchr uses the microphone to record voice messages and videos you send in chats."
       }
     },
     "android": {
@@ -32,7 +34,10 @@
               "pathPrefix": "/p/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "adaptiveIcon": {
@@ -54,10 +59,11 @@
     },
     "extra": {
       "eas": {
-        "projectId": "30dd21ae-c95f-4436-9c2d-58ab7857bb7d"
-      }
+        "projectId": "8cad3c23-1b16-471b-abc3-5e9ca09b0941"
+      },
+      "router": {}
     },
-    "owner": "vedansh_8125",
+    "owner": "vedansh_2111",
     "plugins": [
       "expo-router",
       "expo-notifications",
@@ -68,7 +74,14 @@
           "iosUrlScheme": "com.googleusercontent.apps.943950919478-qdt1laap0hufg4f5cdh5vhkv7b75f48h"
         }
       ],
-      "expo-image"
+      "expo-image",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Matchr uses the microphone to record voice messages and videos you send in chats."
+        }
+      ],
+      "expo-video"
     ]
   }
 }

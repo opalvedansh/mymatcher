@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { colors } from '@/theme/colors';
+import { sz } from '@/theme/scale';
 
 type Role = 'Brand' | 'Influencer' | null;
 
@@ -29,7 +30,7 @@ export function RoleSelectionScreen({
       <View style={styles.container}>
         {/* Header */}
         <Pressable onPress={onBack} style={styles.backButton}>
-          <AntDesign name="arrow-left" size={24} color={colors.text} />
+          <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -52,7 +53,7 @@ export function RoleSelectionScreen({
             >
               <Text style={[styles.optionText, selectedRole === 'Brand' && styles.optionTextSelected]}>Brand</Text>
               <View style={[styles.checkbox, selectedRole === 'Brand' && styles.checkboxSelected]}>
-                {selectedRole === 'Brand' && <AntDesign name="check" size={14} color="#000000" />}
+                {selectedRole === 'Brand' && <AntDesign name="check" size={sz(14)} color="#000000" />}
               </View>
             </Pressable>
 
@@ -65,7 +66,7 @@ export function RoleSelectionScreen({
             >
               <Text style={[styles.optionText, selectedRole === 'Influencer' && styles.optionTextSelected]}>Influencer</Text>
               <View style={[styles.checkbox, selectedRole === 'Influencer' && styles.checkboxSelected]}>
-                {selectedRole === 'Influencer' && <AntDesign name="check" size={14} color="#000000" />}
+                {selectedRole === 'Influencer' && <AntDesign name="check" size={sz(14)} color="#000000" />}
               </View>
             </Pressable>
           </View>
@@ -96,45 +97,45 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingTop: sz(16),
+    paddingBottom: sz(32),
   },
   backButton: {
-    marginBottom: 24,
-    paddingHorizontal: 20,
+    marginBottom: sz(24),
+    paddingHorizontal: sz(20),
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: sz(20),
+    paddingBottom: sz(40),
   },
   textContainer: {
-    marginBottom: 40,
+    marginBottom: sz(40),
   },
   title: {
     color: colors.text,
-    fontSize: 40,
+    fontSize: sz(40),
     fontWeight: '700',
-    lineHeight: 44,
-    marginBottom: 12,
+    lineHeight: sz(44),
+    marginBottom: sz(12),
   },
   subtitle: {
     color: '#8A8A8A',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: sz(14),
+    lineHeight: sz(20),
     fontWeight: '400',
-    paddingRight: 20,
+    paddingRight: sz(20),
   },
   optionsContainer: {
-    gap: 16,
+    gap: sz(16),
   },
   optionCard: {
     width: '100%',
-    minHeight: 86,
-    paddingHorizontal: 24,
-    borderRadius: 16,
+    minHeight: sz(86),
+    paddingHorizontal: sz(24),
+    borderRadius: sz(16),
     borderWidth: 1.5,
     borderColor: '#262626',
     backgroundColor: '#0A0A0A',
@@ -148,16 +149,16 @@ const styles = StyleSheet.create({
   },
   optionText: {
     color: '#E0E0E0',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
   },
   optionTextSelected: {
     color: colors.primary,
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: sz(24),
+    height: sz(24),
+    borderRadius: sz(12),
     borderWidth: 1.5,
     borderColor: '#444444',
     alignItems: 'center',
@@ -169,14 +170,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(16),
     backgroundColor: colors.background,
   },
   nextButton: {
     backgroundColor: colors.primary,
-    height: 56,
-    borderRadius: 999,
+    height: sz(56),
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
   },
 });

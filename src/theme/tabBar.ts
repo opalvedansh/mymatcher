@@ -1,15 +1,16 @@
 import type { ViewStyle } from 'react-native';
+import { sz, TAB_BAR_EXTRA_BOTTOM } from '@/theme/scale';
 
 // Floating tab bar shared by the brand and influencer tab layouts. Screens that
 // hide it (an open chat) restore this exact style when they are done.
 export const TAB_BAR_STYLE: ViewStyle = {
   backgroundColor: '#FFFFFF',
   borderTopWidth: 0,
-  height: 55,
-  paddingBottom: 5,
-  paddingTop: 5,
-  borderTopLeftRadius: 25,
-  borderTopRightRadius: 25,
+  height: sz(55) + TAB_BAR_EXTRA_BOTTOM,
+  paddingBottom: sz(5) + TAB_BAR_EXTRA_BOTTOM,
+  paddingTop: sz(5),
+  borderTopLeftRadius: sz(25),
+  borderTopRightRadius: sz(25),
   position: 'absolute', // To show rounded corners over content
   elevation: 10, // For Android shadow
   shadowColor: '#000',

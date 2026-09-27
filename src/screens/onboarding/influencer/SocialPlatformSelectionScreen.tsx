@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { colors } from '@/theme/colors';
+import { sz } from '@/theme/scale';
 
 const PLATFORMS = [
   { id: 'instagram', label: 'Instagram', icon: 'instagram' },
@@ -56,7 +57,7 @@ export function SocialPlatformSelectionScreen({
       <View style={styles.container}>
         {/* Header */}
         <Pressable onPress={onBack} style={styles.backButton}>
-          <AntDesign name="arrow-left" size={20} color={colors.text} />
+          <AntDesign name="arrow-left" size={sz(20)} color={colors.text} />
         </Pressable>
 
         <ScrollView 
@@ -83,11 +84,11 @@ export function SocialPlatformSelectionScreen({
                   onPress={() => togglePlatform(platform.id)}
                 >
                   <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                    {isSelected && <AntDesign name="check" size={10} color="#000" />}
+                    {isSelected && <AntDesign name="check" size={sz(10)} color="#000" />}
                   </View>
                   <FontAwesome6
                     name={platform.icon}
-                    size={22}
+                    size={sz(22)}
                     color={isSelected ? colors.primary : colors.text}
                     style={styles.icon}
                   />
@@ -125,36 +126,36 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingTop: sz(16),
+    paddingBottom: sz(32),
   },
   backButton: {
-    marginBottom: 24,
-    paddingHorizontal: 20,
+    marginBottom: sz(24),
+    paddingHorizontal: sz(20),
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: sz(20),
+    paddingBottom: sz(40),
   },
   textContainer: {
-    marginBottom: 32,
+    marginBottom: sz(32),
   },
   title: {
     color: colors.text,
-    fontSize: 40,
+    fontSize: sz(40),
     fontWeight: '700',
-    lineHeight: 44,
-    marginBottom: 12,
+    lineHeight: sz(44),
+    marginBottom: sz(12),
   },
   subtitle: {
     color: '#8A8A8A',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: sz(14),
+    lineHeight: sz(20),
     fontWeight: '400',
-    paddingRight: 10,
+    paddingRight: sz(10),
   },
   gridContainer: {
     flexDirection: 'row',
@@ -164,13 +165,13 @@ const styles = StyleSheet.create({
   gridItem: {
     width: '23%', // 4 columns
     aspectRatio: 1,
-    borderRadius: 16,
+    borderRadius: sz(16),
     borderWidth: 1.5,
     borderColor: '#262626',
     backgroundColor: '#0A0A0A',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: sz(12),
     position: 'relative',
   },
   gridItemSelected: {
@@ -179,11 +180,11 @@ const styles = StyleSheet.create({
   },
   checkbox: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    top: sz(8),
+    right: sz(8),
+    width: sz(18),
+    height: sz(18),
+    borderRadius: sz(9),
     borderWidth: 1.5,
     borderColor: '#444444',
     alignItems: 'center',
@@ -194,26 +195,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   icon: {
-    marginBottom: 6,
-    marginTop: 8,
+    marginBottom: sz(6),
+    marginTop: sz(8),
   },
   gridItemText: {
     color: '#A0A0A0',
-    fontSize: 10,
+    fontSize: sz(10),
     fontWeight: '600',
   },
   gridItemTextSelected: {
     color: colors.primary,
   },
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(16),
     backgroundColor: colors.background,
   },
   nextButton: {
     backgroundColor: colors.primary,
-    height: 56,
-    borderRadius: 999,
+    height: sz(56),
+    borderRadius: sz(999),
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -223,7 +224,7 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: '700',
   },
 });

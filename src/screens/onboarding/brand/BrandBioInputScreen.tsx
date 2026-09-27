@@ -13,6 +13,7 @@ import {
 
 import { colors } from '@/theme/colors';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
+import { sz } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 const DANGER = '#FF6B6B';
@@ -49,7 +50,7 @@ export function BrandBioInputScreen({
                 accessibilityLabel="Back"
                 style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
               >
-                <AntDesign name="arrow-left" size={22} color={colors.text} />
+                <AntDesign name="arrow-left" size={sz(22)} color={colors.text} />
               </Pressable>
               <View style={styles.progressPill}>
                 <Text style={styles.progressText}>Step 2 of 4</Text>
@@ -84,7 +85,7 @@ export function BrandBioInputScreen({
               <View style={styles.inputFooter}>
                 {isOverLimit ? (
                   <View style={styles.limitRow}>
-                    <Ionicons name="alert-circle" size={15} color={DANGER} />
+                    <Ionicons name="alert-circle" size={sz(15)} color={DANGER} />
                     <Text style={styles.limitText}>Trim it to {MAX_CHARS} characters to continue.</Text>
                   </View>
                 ) : (
@@ -119,22 +120,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: '100%',
-    maxWidth: 520,
+    maxWidth: sz(520),
     alignSelf: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 32,
+    paddingHorizontal: sz(24),
+    paddingTop: sz(16),
+    paddingBottom: sz(32),
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: sz(40),
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: sz(44),
+    height: sz(44),
+    borderRadius: sz(22),
     backgroundColor: '#161616',
     alignItems: 'center',
     justifyContent: 'center',
@@ -142,66 +143,66 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
   },
   progressPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingHorizontal: sz(14),
+    paddingVertical: sz(7),
+    borderRadius: sz(20),
     backgroundColor: '#161616',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  progressText: { color: '#BDBDBD', fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
-  textContainer: { marginBottom: 28 },
+  progressText: { color: '#BDBDBD', fontSize: sz(12), fontWeight: '600', letterSpacing: 0.3 },
+  textContainer: { marginBottom: sz(28) },
   title: {
     color: '#FFF',
-    fontSize: 40,
+    fontSize: sz(40),
     fontWeight: '700',
-    lineHeight: 46,
-    letterSpacing: -1.2,
-    marginBottom: 14,
+    lineHeight: sz(46),
+    letterSpacing: sz(-1.2),
+    marginBottom: sz(14),
   },
   titleHighlight: { color: ACCENT },
   subtitle: {
     color: '#9A9A9A',
-    fontSize: 15,
-    lineHeight: 23,
-    paddingRight: 8,
+    fontSize: sz(15),
+    lineHeight: sz(23),
+    paddingRight: sz(8),
   },
   inputCard: {
-    height: 240,
+    height: sz(240),
     backgroundColor: '#111111',
-    borderRadius: 20,
+    borderRadius: sz(20),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 14,
+    paddingHorizontal: sz(20),
+    paddingTop: sz(18),
+    paddingBottom: sz(14),
   },
   inputCardFocused: { borderColor: ACCENT, backgroundColor: '#151515' },
   inputCardError: { borderColor: DANGER },
   input: {
     flex: 1,
     color: '#FFF',
-    fontSize: 16,
-    lineHeight: 25,
+    fontSize: sz(16),
+    lineHeight: sz(25),
     padding: 0,
   },
   inputFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 14,
-    paddingTop: 12,
+    gap: sz(12),
+    marginTop: sz(14),
+    paddingTop: sz(12),
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.1)',
   },
-  limitRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
-  limitText: { color: DANGER, fontSize: 12, flexShrink: 1 },
-  counter: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  limitRow: { flexDirection: 'row', alignItems: 'center', gap: sz(6), flexShrink: 1 },
+  limitText: { color: DANGER, fontSize: sz(12), flexShrink: 1 },
+  counter: { fontSize: sz(13), fontWeight: '600', fontVariant: ['tabular-nums'] },
   nextButton: {
     backgroundColor: ACCENT,
-    height: 58,
-    borderRadius: 29,
+    height: sz(58),
+    borderRadius: sz(29),
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
@@ -215,7 +216,7 @@ const styles = StyleSheet.create({
     boxShadow: '0px 0px 0px rgba(0,0,0,0)',
     elevation: 0,
   },
-  nextButtonText: { color: '#FFF', fontSize: 17, fontWeight: '700', letterSpacing: 0.2 },
+  nextButtonText: { color: '#FFF', fontSize: sz(17), fontWeight: '700', letterSpacing: 0.2 },
   nextButtonTextDisabled: { color: '#6F6F6F' },
   pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
 });

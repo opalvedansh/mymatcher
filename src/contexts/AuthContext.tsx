@@ -77,6 +77,14 @@ interface AuthContextType {
   verifyOtpCode: (email: string, otp: string) => Promise<void>;
   resendOtp: (email: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  verifyPasswordResetCode: (email: string, otp: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
+  // True while the user is mid password-reset. Verifying a recovery code
+  // creates a real session, which would otherwise let AuthGuard navigate them
+  // into the app before they have chosen a new password.
+  passwordRecovery: boolean;
+  beginPasswordRecovery: () => void;
+  endPasswordRecovery: () => void;
   // Onboarding methods
   updateOnboarding: (data: Partial<OnboardingData>) => Promise<void>;
   completeOnboarding: () => Promise<void>;
@@ -100,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Set when the user's backend state couldn't be loaded. Routing must wait on a
   // retry rather than guess, or a transient error looks like lost progress.
   const [userDataError, setUserDataError] = useState<string | null>(null);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   const fetchUserDataPromise = useRef<Promise<void> | null>(null);
   // Onboarding saves fire on every field change, so warn at most once per run.
@@ -280,11 +289,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  // Send a password reset link to the given email address
+  // Send a password reset code to the given email address. The recovery email
+  // carries both a link and a numeric code; we use the code so the reset can
+  // finish inside the app without depending on deep-link configuration.
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) throw error;
   };
+
+  // Exchange a recovery code for a session, which is what authorizes the
+  // updateUser call that follows.
+  const verifyPasswordResetCode = async (email: string, otp: string) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: otp,
+      type: 'recovery',
+    });
+    if (error) throw error;
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+  };
+
+  const beginPasswordRecovery = () => setPasswordRecovery(true);
+  const endPasswordRecovery = () => setPasswordRecovery(false);
 
   const handleNativeOAuth = async (provider: 'google' | 'apple' | 'linkedin_oidc') => {
     const redirectUrl = makeRedirectUri();
@@ -548,6 +578,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verifyOtpCode,
         resendOtp,
         resetPassword,
+        verifyPasswordResetCode,
+        updatePassword,
+        passwordRecovery,
+        beginPasswordRecovery,
+        endPasswordRecovery,
         updateOnboarding,
         completeOnboarding,
       }}

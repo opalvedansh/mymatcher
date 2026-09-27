@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
+import { sz } from '@/theme/scale';
 
 /** Header bell: opens the notifications inbox and shows the unread count. */
 export function NotificationBell({ color = '#FFF' }: { color?: string }) {
@@ -18,7 +19,7 @@ export function NotificationBell({ color = '#FFF' }: { color?: string }) {
       hitSlop={8}
       style={({ pressed }) => [styles.button, pressed && { opacity: 0.7 }]}
     >
-      <Ionicons name="notifications" size={24} color={color} />
+      <Ionicons name="notifications" size={sz(24)} color={color} />
       {count > 0 && (
         <View style={styles.badge} pointerEvents="none">
           <Text style={styles.badgeText}>{count > 9 ? '9+' : count}</Text>
@@ -29,20 +30,20 @@ export function NotificationBell({ color = '#FFF' }: { color?: string }) {
 }
 
 const styles = StyleSheet.create({
-  button: { padding: 2 },
+  button: { padding: sz(2) },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: -6,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 4,
+    top: sz(-4),
+    right: sz(-6),
+    minWidth: sz(18),
+    height: sz(18),
+    borderRadius: sz(9),
+    paddingHorizontal: sz(4),
     backgroundColor: '#FF6B2B',
     borderWidth: 2,
     borderColor: '#121212',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  badgeText: { color: '#FFF', fontSize: 10, fontWeight: '700', lineHeight: 12 },
+  badgeText: { color: '#FFF', fontSize: sz(10), fontWeight: '700', lineHeight: sz(12) },
 });

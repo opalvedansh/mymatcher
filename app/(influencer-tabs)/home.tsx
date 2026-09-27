@@ -26,6 +26,7 @@ import { openSafetyMenu } from '@/components/safetyMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { sharePost as sharePostToOS } from '@/utils/postShare';
 import type { Post } from '@/components/PostCard';
+import { sz, tabBarClearance } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 const PAGE_SIZE = 20;
@@ -139,7 +140,7 @@ const HomePostCard = memo(function HomePostCard({
             <View style={styles.postBrandNameRow}>
               <Text style={styles.postBrandName} numberOfLines={1}>{authorName}</Text>
               {post.author_verified && (
-                <MaterialIcons name="verified" size={16} color={ACCENT} style={{ marginLeft: 4 }} accessibilityLabel="Verified" />
+                <MaterialIcons name="verified" size={sz(16)} color={ACCENT} style={{ marginLeft: sz(4) }} accessibilityLabel="Verified" />
               )}
             </View>
             <Text style={styles.postCategory} numberOfLines={1}>
@@ -160,7 +161,7 @@ const HomePostCard = memo(function HomePostCard({
                 })
               }
             >
-              <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />
+              <Ionicons name="ellipsis-horizontal" size={sz(20)} color="#FFF" />
             </Pressable>
           )}
         </View>
@@ -183,7 +184,7 @@ const HomePostCard = memo(function HomePostCard({
               style={({ pressed }) => [styles.postStat, pressed && styles.pressed]}
             >
               <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-                <Ionicons name={liked ? 'heart' : 'heart-outline'} size={24} color={liked ? '#FF3B30' : '#FFF'} />
+                <Ionicons name={liked ? 'heart' : 'heart-outline'} size={sz(24)} color={liked ? '#FF3B30' : '#FFF'} />
               </Animated.View>
               {post.likes_count > 0 && (
                 <Text style={styles.postStatText}>{fmtCount(post.likes_count)}</Text>
@@ -196,7 +197,7 @@ const HomePostCard = memo(function HomePostCard({
               hitSlop={8}
               style={({ pressed }) => [styles.postStat, pressed && styles.pressed]}
             >
-              <Ionicons name="chatbubble-outline" size={23} color="#FFF" />
+              <Ionicons name="chatbubble-outline" size={sz(23)} color="#FFF" />
               {!!post.comments_count && (
                 <Text style={styles.postStatText}>{fmtCount(post.comments_count)}</Text>
               )}
@@ -208,7 +209,7 @@ const HomePostCard = memo(function HomePostCard({
               hitSlop={8}
               style={({ pressed }) => [styles.postStat, pressed && styles.pressed]}
             >
-              <Ionicons name="paper-plane-outline" size={24} color="#FFF" />
+              <Ionicons name="paper-plane-outline" size={sz(24)} color="#FFF" />
               {!!post.shares_count && (
                 <Text style={styles.postStatText}>{fmtCount(post.shares_count)}</Text>
               )}
@@ -234,8 +235,8 @@ function PostSkeleton() {
         <View style={styles.postHeader}>
           <View style={[styles.postBrandLogo, { backgroundColor: '#262626', borderWidth: 0 }]} />
           <View style={styles.postBrandInfo}>
-            <View style={[styles.skeletonLine, { width: 120 }]} />
-            <View style={[styles.skeletonLine, { width: 80, marginTop: 6 }]} />
+            <View style={[styles.skeletonLine, { width: sz(120) }]} />
+            <View style={[styles.skeletonLine, { width: sz(80), marginTop: sz(6) }]} />
           </View>
         </View>
       </View>
@@ -397,7 +398,7 @@ export default function InfluencerHomeScreen() {
       />
     ) : (
       <View style={[styles.storyAvatar, styles.avatarFallback]}>
-        <Ionicons name="person" size={26} color="#777" />
+        <Ionicons name="person" size={sz(26)} color="#777" />
       </View>
     );
 
@@ -431,7 +432,7 @@ export default function InfluencerHomeScreen() {
         )}
         {item.isMe && (
           <View style={styles.addStoryBadge} pointerEvents="none">
-            <AntDesign name="plus" size={12} color="#111" />
+            <AntDesign name="plus" size={sz(12)} color="#111" />
           </View>
         )}
         <Text style={[styles.storyName, item.isMe && styles.storyNameMe]} numberOfLines={1}>
@@ -481,7 +482,7 @@ export default function InfluencerHomeScreen() {
     </View>
   ) : error ? (
     <View style={styles.emptyState}>
-      <Ionicons name="cloud-offline-outline" size={36} color="#777" />
+      <Ionicons name="cloud-offline-outline" size={sz(36)} color="#777" />
       <Text style={styles.emptyTitle}>Couldn't load the feed</Text>
       <Text style={styles.emptyBody}>Check your connection and try again.</Text>
       <Pressable onPress={retry} accessibilityRole="button" style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
@@ -490,7 +491,7 @@ export default function InfluencerHomeScreen() {
     </View>
   ) : (
     <View style={styles.emptyState}>
-      <Ionicons name="images-outline" size={36} color="#777" />
+      <Ionicons name="images-outline" size={sz(36)} color="#777" />
       <Text style={styles.emptyTitle}>No posts yet</Text>
       <Text style={styles.emptyBody}>Posts from creators and brands will show up here.</Text>
       <Pressable
@@ -559,21 +560,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#121212',
   },
   header: {
-    paddingVertical: 16,
+    paddingVertical: sz(16),
   },
   storiesContent: {
-    paddingHorizontal: 16,
-    gap: 16,
+    paddingHorizontal: sz(16),
+    gap: sz(16),
   },
   storyContainer: {
     alignItems: 'center',
-    width: 76,
+    width: sz(76),
   },
   storyRing: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    padding: 3,
+    width: sz(76),
+    height: sz(76),
+    borderRadius: sz(38),
+    padding: sz(3),
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -585,15 +586,15 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#121212',
-    borderRadius: 35,
-    padding: 3,
+    borderRadius: sz(35),
+    padding: sz(3),
     justifyContent: 'center',
     alignItems: 'center',
   },
   storyAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 35,
+    borderRadius: sz(35),
   },
   avatarFallback: {
     backgroundColor: '#262626',
@@ -602,17 +603,17 @@ const styles = StyleSheet.create({
   },
   avatarFallbackText: {
     color: '#FFF',
-    fontSize: 17,
+    fontSize: sz(17),
     fontWeight: '700',
   },
   addStoryBadge: {
     position: 'absolute',
-    top: 54,
+    top: sz(54),
     right: 0,
     backgroundColor: '#FFF',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: sz(22),
+    height: sz(22),
+    borderRadius: sz(11),
     borderWidth: 2,
     borderColor: '#121212',
     justifyContent: 'center',
@@ -620,27 +621,27 @@ const styles = StyleSheet.create({
   },
   storyName: {
     color: '#E0E0E0',
-    fontSize: 12,
-    marginTop: 8,
+    fontSize: sz(12),
+    marginTop: sz(8),
   },
   storyNameMe: {
     color: '#9A9A9A',
   },
   feedContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 100, // clears the floating tab bar
+    paddingHorizontal: sz(16),
+    paddingBottom: tabBarClearance(100), // clears the floating tab bar
   },
   postBlock: {
     width: '100%',
-    maxWidth: 560,
+    maxWidth: sz(560),
     alignSelf: 'center',
-    marginBottom: 24,
+    marginBottom: sz(24),
   },
   postContainer: {
     width: '100%',
     aspectRatio: 0.85,
     backgroundColor: '#222',
-    borderRadius: 32,
+    borderRadius: sz(32),
     overflow: 'hidden',
   },
   postImage: {
@@ -653,23 +654,23 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 130,
+    height: sz(130),
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    padding: sz(20),
   },
   postBrandLogo: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: sz(44),
+    height: sz(44),
+    borderRadius: sz(22),
     borderWidth: 2,
     borderColor: '#FFF',
   },
   postBrandInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: sz(12),
   },
   postBrandNameRow: {
     flexDirection: 'row',
@@ -677,30 +678,30 @@ const styles = StyleSheet.create({
   },
   postBrandName: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '700',
     flexShrink: 1,
   },
   postCategory: {
     color: 'rgba(255,255,255,0.75)',
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: sz(12),
+    marginTop: sz(2),
   },
   moreButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: sz(36),
+    height: sz(36),
+    borderRadius: sz(18),
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginLeft: sz(8),
   },
   glassContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 110,
+    height: sz(110),
     justifyContent: 'flex-end',
     overflow: 'hidden',
     ...Platform.select({
@@ -718,67 +719,67 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 48,
-    paddingBottom: 18,
-    paddingTop: 10,
+    gap: sz(48),
+    paddingBottom: sz(18),
+    paddingTop: sz(10),
   },
   postStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
+    gap: sz(8),
+    paddingVertical: sz(4),
   },
   postStatText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   caption: {
     color: '#CFCFCF',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 10,
-    paddingHorizontal: 6,
+    fontSize: sz(14),
+    lineHeight: sz(20),
+    marginTop: sz(10),
+    paddingHorizontal: sz(6),
   },
   captionAuthor: {
     color: '#FFF',
     fontWeight: '600',
   },
   skeletonLine: {
-    height: 10,
-    borderRadius: 5,
+    height: sz(10),
+    borderRadius: sz(5),
     backgroundColor: '#262626',
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 64,
-    paddingHorizontal: 32,
+    paddingVertical: sz(64),
+    paddingHorizontal: sz(32),
   },
   emptyTitle: {
     color: '#FFF',
-    fontSize: 17,
+    fontSize: sz(17),
     fontWeight: '600',
-    marginTop: 14,
+    marginTop: sz(14),
   },
   emptyBody: {
     color: '#9A9A9A',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: sz(13),
+    lineHeight: sz(19),
     textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 20,
+    marginTop: sz(6),
+    marginBottom: sz(20),
   },
   secondaryButton: {
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 22,
+    borderRadius: sz(12),
+    paddingVertical: sz(11),
+    paddingHorizontal: sz(22),
   },
   secondaryButtonText: {
     color: '#FFF',
-    fontSize: 15,
+    fontSize: sz(15),
     fontWeight: '600',
   },
   pressed: {

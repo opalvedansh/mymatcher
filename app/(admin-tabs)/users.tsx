@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Alert, Pressable, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Alert, Pressable } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '@/api/client';
 import { colors } from '@/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { sz } from '@/theme/scale';
 
 type User = {
   id: string;
@@ -51,7 +53,7 @@ export default function AdminUsersScreen() {
     if (!role) {
       return (
         <View style={[styles.roleBadge, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
-          <Ionicons name="time" size={12} color="#9CA3AF" />
+          <Ionicons name="time" size={sz(12)} color="#9CA3AF" />
           <Text style={[styles.roleText, { color: '#9CA3AF' }]}>
             PENDING
           </Text>
@@ -62,7 +64,7 @@ export default function AdminUsersScreen() {
     const isBrand = role === 'brand';
     return (
       <View style={[styles.roleBadge, { backgroundColor: isBrand ? 'rgba(244, 114, 182, 0.15)' : 'rgba(96, 165, 250, 0.15)' }]}>
-        <Ionicons name={isBrand ? 'business' : 'star'} size={12} color={isBrand ? '#F472B6' : '#60A5FA'} />
+        <Ionicons name={isBrand ? 'business' : 'star'} size={sz(12)} color={isBrand ? '#F472B6' : '#60A5FA'} />
         <Text style={[styles.roleText, { color: isBrand ? '#F472B6' : '#60A5FA' }]}>
           {role.toUpperCase()}
         </Text>
@@ -123,7 +125,7 @@ export default function AdminUsersScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: sz(50) }} />
         ) : (
           <FlatList
             data={users}
@@ -146,30 +148,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    paddingHorizontal: 24,
-    marginTop: 20,
-    marginBottom: 10,
+    paddingHorizontal: sz(24),
+    marginTop: sz(20),
+    marginBottom: sz(10),
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '800',
     color: colors.primary,
-    letterSpacing: 1.5,
-    marginBottom: 4,
+    letterSpacing: sz(1.5),
+    marginBottom: sz(4),
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: sz(32),
     fontWeight: '900',
     color: '#fff',
     letterSpacing: -0.5,
   },
   list: {
-    paddingHorizontal: 20,
-    paddingBottom: 120,
+    paddingHorizontal: sz(20),
+    paddingBottom: sz(120),
   },
   cardContainer: {
-    marginBottom: 16,
-    borderRadius: 24,
+    marginBottom: sz(16),
+    borderRadius: sz(24),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -178,63 +180,63 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardGradient: {
-    padding: 20,
+    padding: sz(20),
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: sz(20),
   },
   emailContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 12,
+    marginRight: sz(12),
   },
   avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: sz(40),
+    height: sz(40),
+    borderRadius: sz(20),
     backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: sz(12),
   },
   avatarText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: sz(18),
     fontWeight: 'bold',
   },
   email: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: sz(16),
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: sz(4),
   },
   date: {
     color: 'rgba(255,255,255,0.5)',
-    fontSize: 12,
+    fontSize: sz(12),
     fontWeight: '500',
   },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: sz(10),
+    paddingVertical: sz(6),
+    borderRadius: sz(12),
   },
   roleText: {
-    fontSize: 10,
+    fontSize: sz(10),
     fontWeight: '800',
-    marginLeft: 4,
+    marginLeft: sz(4),
     letterSpacing: 0.5,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 16,
+    paddingTop: sz(16),
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.05)',
   },
@@ -243,20 +245,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
+    width: sz(8),
+    height: sz(8),
+    borderRadius: sz(4),
+    marginRight: sz(8),
   },
   statusText: {
     color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
+    fontSize: sz(14),
     fontWeight: '500',
   },
   btn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: sz(16),
+    paddingVertical: sz(8),
+    borderRadius: sz(12),
     borderWidth: 1,
   },
   btnBan: {
@@ -272,7 +274,7 @@ const styles = StyleSheet.create({
   },
   btnText: {
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: sz(13),
   },
   btnBanText: {
     color: '#EF4444',
