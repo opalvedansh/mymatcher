@@ -250,7 +250,17 @@ async function sendLikeNotification(likedUserId, likerId) {
  * Triggers when a chat message is received.
  * Looks up the sender's name in a UNION query then sends via sendBulkNotifications.
  */
-async function sendChatNotification(receiverId, senderId, matchId = null) {
+// Push text per message kind. Never the message itself: it would otherwise pass
+// in plaintext through Expo/Apple/Google and show on the lock screen.
+const CHAT_PUSH_BODY = {
+  text: 'Tap to read',
+  image: '📷 Photo',
+  video: '🎥 Video',
+  audio: '🎤 Voice message',
+  document: '📄 Document',
+};
+
+async function sendChatNotification(receiverId, senderId, matchId = null, { kind = 'text' } = {}) {
   try {
     // Fetch sender name — single query
     const { rows } = await db.query(
@@ -263,21 +273,28 @@ async function sendChatNotification(receiverId, senderId, matchId = null) {
     );
     const senderName = rows[0]?.name || 'Someone';
 
-    // The body stays generic: message text would otherwise pass in plaintext
-    // through Expo/Apple/Google and show on the lock screen.
     const title = `New message from ${senderName}`;
+    const body = CHAT_PUSH_BODY[kind] || CHAT_PUSH_BODY.text;
     await recordNotifications([{
       userId: receiverId,
       actorId: senderId,
       type: 'new_message',
       matchId,
       title,
-      body: 'Tap to read',
+      body,
     }]);
+    // A muted chat still counts as unread; it just doesn't buzz the phone.
+    if (matchId) {
+      const { rows: muted } = await db.query(
+        'SELECT 1 FROM chat_member_state WHERE match_id = $1 AND user_id = $2 AND muted_until > now()',
+        [matchId, receiverId]
+      );
+      if (muted.length) return;
+    }
     await sendBulkNotifications([{
       userId: receiverId,
       title,
-      body:   'Tap to read',
+      body,
       data:   { type: 'new_message', senderId, matchId },
     }]);
   } catch (err) {

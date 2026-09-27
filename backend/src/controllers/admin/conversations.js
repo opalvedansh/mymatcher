@@ -119,7 +119,7 @@ async function getTimeline(req, res, next) {
     }
 
     const { rows } = await db.query(
-      `SELECT id, sender_id, created_at, read_at, length(content) AS cipher_length
+      `SELECT id, sender_id, kind, created_at, read_at, length(content) AS cipher_length
          FROM messages
         WHERE ${where.join(' AND ')}
         ORDER BY created_at DESC, id DESC
@@ -133,6 +133,7 @@ async function getTimeline(req, res, next) {
       data: data.map((m) => ({
         id: m.id,
         sender_id: m.sender_id,
+        kind: m.kind,
         created_at: m.created_at,
         read_at: m.read_at,
         // Ciphertext length, not plaintext: AES-GCM plus base64 makes this a
@@ -175,7 +176,7 @@ async function getMessages(req, res, next) {
     }
 
     const { rows } = await db.query(
-      `SELECT id, sender_id, content, created_at, read_at
+      `SELECT id, sender_id, content, kind, deleted_at, created_at, read_at
          FROM messages WHERE ${where.join(' AND ')}
         ORDER BY created_at DESC, id DESC
         LIMIT $${params.push(limit + 1)}`,
@@ -211,13 +212,13 @@ async function getMessages(req, res, next) {
 
     res.json({
       match_id: matchId,
-      data: data.map((m) => ({
+      data: await Promise.all(data.map(async (m) => ({
         id: m.id,
         sender_id: m.sender_id,
         created_at: m.created_at,
         read_at: m.read_at,
-        content: safeDecrypt(m.content),
-      })),
+        content: await safeDecrypt(m.content, m.kind, m.deleted_at),
+      }))),
       next_cursor: hasMore ? encodeCursor(data[data.length - 1].created_at, data[data.length - 1].id) : null,
     });
   } catch (err) {

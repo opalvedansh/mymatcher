@@ -1,21 +1,21 @@
 const socketIo = require('socket.io');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const Redis = require('ioredis');
-const { Filter } = require('bad-words');
 const { verifySupabaseToken } = require('./utils/verifyToken');
 const db = require('./config/db');
 const logger = require('./config/logger');
 const notificationService = require('./services/notificationService');
-const { encrypt, decrypt } = require('./utils/encryption');
+const chat = require('./services/chat');
 const realtime = require('./realtime');
 
-const contentFilter = new Filter();
-
-const MAX_MESSAGE_LENGTH = 2000;
-const MAX_CLIENT_ID_LENGTH = 64;
-// Token bucket per connection: bursts of 20 messages, refilling at 2 per second.
-const MESSAGE_BURST = 20;
-const MESSAGE_REFILL_PER_SEC = 2;
+// Token buckets per connection. Actions that write a message (send, edit,
+// delete, react, forward) share one: bursts of 20, refilling at 2 per second.
+// Read and delivery receipts arrive in bursts whenever a batch of messages
+// does, so they get their own, larger bucket and never block a send.
+const BUCKETS = {
+  write: { burst: 20, perSec: 2 },
+  receipt: { burst: 60, perSec: 10 },
+};
 // How often each chat instance re-checks its connected users for bans and
 // expired tokens.
 const SWEEP_INTERVAL_MS = Number(process.env.SOCKET_SWEEP_INTERVAL_MS) || 5 * 60 * 1000;
@@ -40,10 +40,11 @@ function allowOrigin(origin, cb) {
   return cb(null, false);
 }
 
-function takeToken(socket) {
+function takeToken(socket, kind = 'write') {
+  const { burst, perSec } = BUCKETS[kind];
   const now = Date.now();
-  const bucket = socket.data.bucket;
-  bucket.tokens = Math.min(MESSAGE_BURST, bucket.tokens + ((now - bucket.at) / 1000) * MESSAGE_REFILL_PER_SEC);
+  const bucket = socket.data.buckets[kind];
+  bucket.tokens = Math.min(burst, bucket.tokens + ((now - bucket.at) / 1000) * perSec);
   bucket.at = now;
   if (bucket.tokens < 1) return false;
   bucket.tokens -= 1;
@@ -58,6 +59,18 @@ function reply(ack, payload) {
 async function isBanned(userId) {
   const { rows } = await db.query('SELECT banned FROM users WHERE id = $1', [userId]);
   return rows[0]?.banned === true;
+}
+
+/** Every socket in the conversation plus both people's other devices (and the chat list). */
+function toConversation(matchId, userIds) {
+  return io.to([realtime.matchRoom(matchId), ...userIds.map(realtime.userRoom)]);
+}
+
+const presenceRoom = (userId) => `presence_${userId}`;
+
+async function isOnline(userId) {
+  const sockets = await io.in(realtime.userRoom(userId)).fetchSockets();
+  return sockets.length > 0;
 }
 
 /** Disconnects banned users and (when enforced) expired tokens on this instance. */
@@ -134,7 +147,10 @@ function initSocket(server) {
       }
       socket.data.userId = verified.sub;
       socket.data.tokenExp = verified.exp;
-      socket.data.bucket = { tokens: MESSAGE_BURST, at: Date.now() };
+      socket.data.buckets = {
+        write: { tokens: BUCKETS.write.burst, at: Date.now() },
+        receipt: { tokens: BUCKETS.receipt.burst, at: Date.now() },
+      };
       // Kept for existing handlers and tests that read socket.user.
       socket.user = { id: verified.sub };
       next();
@@ -152,6 +168,17 @@ function initSocket(server) {
     // User joins a personal room (for direct notifications)
     socket.join(realtime.userRoom(userId));
 
+    io.to(presenceRoom(userId)).emit('presence', { userId, online: true, last_seen_at: null });
+
+    // Messages that waited for this device are delivered now: tell the senders.
+    chat.deliverPending(userId)
+      .then((groups) => {
+        for (const g of groups) {
+          toConversation(g.match_id, [g.sender_id]).emit('messages_delivered', { matchId: g.match_id, at: g.at });
+        }
+      })
+      .catch((err) => logger.error({ err: err.message }, '[Socket] delivery catch-up failed'));
+
     // Checks membership (cached across instances) and joins the match room.
     // Returns the other participant, or null when the user may not chat there.
     async function enterMatch(matchId) {
@@ -162,12 +189,42 @@ function initSocket(server) {
       return members[0] === userId ? members[1] : members[0];
     }
 
+    // Loads a message and admits the user to its conversation.
+    async function enterMessage(messageId) {
+      const row = await chat.getMessageRow(messageId);
+      if (!row) return null;
+      const otherId = await enterMatch(row.match_id);
+      return otherId ? { row, otherId } : null;
+    }
+
+    /**
+     * Wraps a handler: rate limit, then run it, turning ChatError into
+     * { ok: false, error: code } and anything else into server_error.
+     */
+    function handle(event, bucket, fn) {
+      socket.on(event, async (data, ack) => {
+        if (bucket && !takeToken(socket, bucket)) {
+          if (typeof ack !== 'function') socket.emit('error', { message: 'You are sending messages too fast' });
+          return reply(ack, { ok: false, error: 'rate_limited' });
+        }
+        try {
+          reply(ack, await fn(data || {}));
+        } catch (err) {
+          if (err instanceof chat.ChatError) return reply(ack, { ok: false, error: err.code });
+          logger.error({ err: err.message, event }, '[Socket] handler error');
+          // Clients without acks only learn about failures this way.
+          if (typeof ack !== 'function') socket.emit('error', { message: 'Failed to send message' });
+          reply(ack, { ok: false, error: 'server_error' });
+        }
+      });
+    }
+
     // Join a specific match's chat room
     socket.on('join_match', async (matchId, ack) => {
       try {
         const otherId = await enterMatch(matchId);
         if (!otherId) {
-          socket.emit('error', { message: 'Match not found or unauthorized' });
+          if (typeof ack !== 'function') socket.emit('error', { message: 'Match not found or unauthorized' });
           return reply(ack, { ok: false, error: 'not_found' });
         }
         reply(ack, { ok: true });
@@ -175,6 +232,10 @@ function initSocket(server) {
         logger.error({ err: err.message }, '[Socket] join_match error');
         reply(ack, { ok: false, error: 'server_error' });
       }
+    });
+
+    socket.on('leave_match', (matchId) => {
+      if (typeof matchId === 'string') socket.leave(realtime.matchRoom(matchId));
     });
 
     // Lets clients keep a long-lived connection past the hourly token expiry.
@@ -189,93 +250,146 @@ function initSocket(server) {
       }
     });
 
-    // Handle incoming messages.
-    // Payload: { matchId, content, clientId? }. With a clientId, retries of the
-    // same message are stored once and acked with the original.
-    socket.on('send_message', async (data, ack) => {
-      const { matchId, content, clientId } = data || {};
-      if (typeof content !== 'string' || !content.trim()) {
-        return reply(ack, { ok: false, error: 'empty' });
-      }
-      if (content.length > MAX_MESSAGE_LENGTH) {
-        return reply(ack, { ok: false, error: 'too_long' });
-      }
-      if (clientId !== undefined && (typeof clientId !== 'string' || !clientId || clientId.length > MAX_CLIENT_ID_LENGTH)) {
-        return reply(ack, { ok: false, error: 'bad_client_id' });
-      }
-      if (!takeToken(socket)) {
-        socket.emit('error', { message: 'You are sending messages too fast' });
-        return reply(ack, { ok: false, error: 'rate_limited' });
-      }
+    // Payload: { matchId, content?, clientId?, kind?, attachment?, replyToId? }.
+    // With a clientId, retries of the same message are stored once and acked
+    // with the original.
+    handle('send_message', 'write', async (data) => {
+      const receiverId = await enterMatch(data.matchId);
+      if (!receiverId) return { ok: false, error: 'not_found' };
 
-      try {
-        const receiverId = await enterMatch(matchId);
-        if (!receiverId) {
-          socket.emit('error', { message: 'Match not found or unauthorized' });
-          return reply(ack, { ok: false, error: 'not_found' });
-        }
+      const { message, duplicate } = await chat.createMessage({ matchId: data.matchId, senderId: userId, input: data });
+      if (duplicate) return { ok: true, message, duplicate: true };
 
-        // Apply content moderation (profanity filter)
-        let safeContent = content.trim();
-        try {
-          safeContent = contentFilter.clean(safeContent);
-        } catch (e) {
-          logger.warn({ err: e.message }, '[Socket] Content moderation failed');
-        }
-
-        const encryptedContent = await encrypt(safeContent);
-
-        const { rows: msgRows } = await db.query(
-          `INSERT INTO messages (match_id, sender_id, content, client_msg_id)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (sender_id, client_msg_id) WHERE client_msg_id IS NOT NULL DO NOTHING
-           RETURNING *`,
-          [matchId, userId, encryptedContent, clientId ?? null]
-        );
-
-        if (!msgRows.length) {
-          // A retry of a message that was already stored and delivered.
-          const { rows: existing } = await db.query(
-            'SELECT * FROM messages WHERE sender_id = $1 AND client_msg_id = $2',
-            [userId, clientId]
-          );
-          const original = existing[0];
-          if (!original) return reply(ack, { ok: false, error: 'server_error' });
-          original.content = await decrypt(original.content);
-          return reply(ack, { ok: true, message: original, duplicate: true });
-        }
-
-        const newMessage = msgRows[0];
-        newMessage.content = await decrypt(newMessage.content);
-
-        // Broadcast to everyone in the match room (including sender to confirm)
-        io.to(realtime.matchRoom(matchId)).emit('receive_message', newMessage);
-        reply(ack, { ok: true, message: newMessage });
-
-        // Push notification in the background
-        notificationService.sendChatNotification(receiverId, userId, matchId)
-          .catch(err => logger.error({ err: err.message }, '[Socket] Push notification failed'));
-      } catch (err) {
-        logger.error({ err: err.message }, '[Socket] send_message error');
-        socket.emit('error', { message: 'Failed to send message' });
-        reply(ack, { ok: false, error: 'server_error' });
-      }
+      toConversation(data.matchId, [userId, receiverId]).emit('receive_message', message);
+      notificationService.sendChatNotification(receiverId, userId, data.matchId, { kind: message.kind })
+        .catch(err => logger.error({ err: err.message }, '[Socket] Push notification failed'));
+      return { ok: true, message };
     });
 
-    // Typing indicators only reach rooms the user has been admitted to.
+    // { messageId, content }
+    handle('edit_message', 'write', async ({ messageId, content }) => {
+      const found = await enterMessage(messageId);
+      if (!found) return { ok: false, error: 'not_found' };
+      const message = await chat.editMessage(found.row, userId, content);
+      toConversation(found.row.match_id, [userId, found.otherId]).emit('message_updated', message);
+      return { ok: true, message };
+    });
+
+    // { messageId, scope: 'everyone' } or { matchId, messageIds, scope: 'me' }
+    handle('delete_message', 'write', async ({ messageId, messageIds, matchId, scope }) => {
+      if (scope === 'me') {
+        if (!(await enterMatch(matchId))) return { ok: false, error: 'not_found' };
+        const hidden = await chat.hideForMe(matchId, userId, messageIds ?? messageId);
+        // The user's other devices hide them too.
+        socket.to(realtime.userRoom(userId)).emit('messages_hidden', { matchId, ids: hidden });
+        return { ok: true, ids: hidden };
+      }
+      const found = await enterMessage(messageId);
+      if (!found) return { ok: false, error: 'not_found' };
+      const message = await chat.deleteForEveryone(found.row, userId);
+      toConversation(found.row.match_id, [userId, found.otherId]).emit('message_updated', message);
+      return { ok: true, message };
+    });
+
+    // { messageId, emoji } — a falsy emoji removes the reaction.
+    handle('react_message', 'write', async ({ messageId, emoji }) => {
+      const found = await enterMessage(messageId);
+      if (!found) return { ok: false, error: 'not_found' };
+      const reactions = await chat.setReaction(found.row, userId, emoji);
+      toConversation(found.row.match_id, [userId, found.otherId])
+        .emit('message_reactions', { matchId: found.row.match_id, messageId: found.row.id, reactions });
+      return { ok: true, reactions };
+    });
+
+    // { messageId, matchIds: [...] } — copies a message into other chats.
+    handle('forward_message', 'write', async ({ messageId, matchIds }) => {
+      if (!Array.isArray(matchIds) || !matchIds.length || matchIds.length > chat.MAX_FORWARD_TARGETS) {
+        return { ok: false, error: 'bad_targets' };
+      }
+      const found = await enterMessage(messageId);
+      if (!found) return { ok: false, error: 'not_found' };
+
+      const receivers = new Map();
+      for (const targetId of new Set(matchIds)) {
+        const otherId = await enterMatch(targetId);
+        if (!otherId) return { ok: false, error: 'not_found' };
+        receivers.set(targetId, otherId);
+      }
+      const messages = await chat.forwardMessage(found.row, userId, [...receivers.keys()]);
+      for (const message of messages) {
+        const receiverId = receivers.get(message.match_id);
+        toConversation(message.match_id, [userId, receiverId]).emit('receive_message', message);
+        notificationService.sendChatNotification(receiverId, userId, message.match_id, { kind: message.kind })
+          .catch(err => logger.error({ err: err.message }, '[Socket] Push notification failed'));
+      }
+      return { ok: true, messages };
+    });
+
+    // { matchId } — the user has seen everything in this conversation.
+    handle('mark_read', 'receipt', async ({ matchId }) => {
+      const otherId = await enterMatch(matchId);
+      if (!otherId) return { ok: false, error: 'not_found' };
+      const { count, at } = await chat.markRead(matchId, userId);
+      if (count) toConversation(matchId, [otherId, userId]).emit('messages_read', { matchId, readerId: userId, at });
+      return { ok: true, count };
+    });
+
+    // { messageIds } — this device has received these messages.
+    handle('mark_delivered', 'receipt', async ({ messageIds }) => {
+      const groups = await chat.markDelivered(userId, messageIds);
+      for (const g of groups) {
+        toConversation(g.match_id, [g.sender_id]).emit('messages_delivered', { matchId: g.match_id, at: g.at });
+      }
+      return { ok: true };
+    });
+
+    // Online / last seen for someone this user is matched with.
+    handle('watch_presence', 'receipt', async ({ userId: otherId }) => {
+      if (typeof otherId !== 'string' || !otherId || otherId === userId) return { ok: false, error: 'bad_user' };
+      const { rows } = await db.query(
+        `SELECT u.last_seen_at FROM users u
+          WHERE u.id = $2 AND EXISTS (
+            SELECT 1 FROM matches m WHERE m.status = 'active'
+               AND ((m.brand_id = $1 AND m.influencer_id = $2) OR (m.brand_id = $2 AND m.influencer_id = $1)))`,
+        [userId, otherId]
+      );
+      if (!rows.length) return { ok: false, error: 'not_found' };
+      socket.join(presenceRoom(otherId));
+      return { ok: true, online: await isOnline(otherId), last_seen_at: rows[0].last_seen_at };
+    });
+
+    socket.on('unwatch_presence', (data) => {
+      if (typeof data?.userId === 'string') socket.leave(presenceRoom(data.userId));
+    });
+
+    // Typing ("typing…") and recording ("recording audio…") indicators only
+    // reach rooms the user has been admitted to.
     socket.on('typing', (data) => {
-      const { matchId, isTyping } = data || {};
+      const { matchId, isTyping, kind } = data || {};
       if (typeof matchId !== 'string') return;
       const room = realtime.matchRoom(matchId);
       if (!socket.rooms.has(room)) return;
       socket.to(room).emit('typing', {
+        matchId,
         userId,
         isTyping: isTyping === true,
+        kind: kind === 'audio' ? 'audio' : 'text',
       });
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       logger.debug({ userId }, '[Socket] disconnected');
+      try {
+        // Another device (or a reconnect) may still be online.
+        if (await isOnline(userId)) return;
+        const { rows } = await db.query(
+          'UPDATE users SET last_seen_at = now() WHERE id = $1 RETURNING last_seen_at',
+          [userId]
+        );
+        io.to(presenceRoom(userId)).emit('presence', { userId, online: false, last_seen_at: rows[0]?.last_seen_at ?? null });
+      } catch (err) {
+        logger.warn({ err: err.message }, '[Socket] presence update failed');
+      }
     });
   });
 

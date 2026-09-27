@@ -331,6 +331,8 @@ export interface SystemHealth {
   build: {
     commit: string; started_at: string; uptime_s: number; node_env: string;
     node_version: string; service: string; sockets_enabled: boolean; workers_enabled: boolean;
+    /** 'disabled': ENCRYPTION_KEY is missing and new chat messages are stored as plaintext. */
+    chat_encryption?: 'configured' | 'development_key' | 'disabled';
   };
   database: { ok: boolean; latency_ms: number; error?: string; pool?: Record<string, number> };
   redis: { ok: boolean; latency_ms: number; error?: string; configured?: boolean; status?: string };

@@ -1,5 +1,19 @@
 const db = require('../config/db');
-const { decrypt } = require('../utils/encryption');
+const logger = require('../config/logger');
+const chat = require('../services/chat');
+const realtime = require('../realtime');
+const { createUploadTarget, ChatStorageError } = require('../utils/chatStorage');
+
+/** The other participant when `userId` is in this active match, else null. */
+async function otherMember(matchId, userId) {
+  const { rows } = await db.query(
+    `SELECT brand_id, influencer_id FROM matches
+      WHERE id = $1 AND (brand_id = $2 OR influencer_id = $2) AND status = 'active'`,
+    [matchId, userId]
+  );
+  if (!rows.length) return null;
+  return rows[0].brand_id === userId ? rows[0].influencer_id : rows[0].brand_id;
+}
 
 /**
  * GET /api/chat/:matchId/messages
@@ -13,71 +27,86 @@ async function getMessages(req, res, next) {
     const limit = parseInt(req.query.limit, 10) || 50;
     const cursor = req.query.cursor || null;
 
-    // 1. Verify user is part of the match
-    const { rows: matchRows } = await db.query(
-      `SELECT id FROM matches 
-       WHERE id = $1 AND (brand_id = $2 OR influencer_id = $2) AND status = 'active'`,
-      [matchId, userId]
-    );
-
-    if (!matchRows.length) {
+    const otherId = await otherMember(matchId, userId);
+    if (!otherId) {
       return res.status(403).json({ error: 'Match not found or access denied' });
     }
 
-    // 2. Fetch messages ordered by time descending (newest first)
-    // We use cursor-based pagination
-    let query = `
-      SELECT id, sender_id, content, created_at, read_at
-      FROM messages
-      WHERE match_id = $1
-    `;
-    const params = [matchId];
+    const { messages, nextCursor } = await chat.listMessages(matchId, userId, { limit, cursor });
 
-    if (cursor) {
-      query += ` AND created_at < $2`;
-      params.push(cursor);
-      query += ` ORDER BY created_at DESC LIMIT $3`;
-      params.push(limit);
-    } else {
-      query += ` ORDER BY created_at DESC LIMIT $2`;
-      params.push(limit);
+    // Opening the conversation reads it. The sender sees blue ticks at once.
+    const { count, at } = await chat.markRead(matchId, userId);
+    if (count) {
+      realtime.emitToUser(otherId, 'messages_read', { matchId, readerId: userId, at });
+      realtime.emitToUser(userId, 'messages_read', { matchId, readerId: userId, at });
     }
-
-    const { rows } = await db.query(query, params);
-
-    // 3. Mark received messages as read
-    const unreadIds = rows
-      .filter(m => m.sender_id !== userId && !m.read_at)
-      .map(m => m.id);
-
-    if (unreadIds.length > 0) {
-      await db.query(
-        `UPDATE messages SET read_at = now() WHERE id = ANY($1::uuid[])`,
-        [unreadIds]
-      );
-      // The inbox item for this conversation is read once the chat is opened.
-      await db.query(
-        `UPDATE notifications SET read_at = now()
-         WHERE user_id = $1 AND match_id = $2 AND type = 'new_message' AND read_at IS NULL`,
-        [userId, matchId]
-      );
-    }
-
-    // 4. Decrypt messages before sending to client
-    const decryptedRows = await Promise.all(
-      rows.map(async (m) => {
-        m.content = await decrypt(m.content);
-        return m;
-      })
-    );
 
     res.json({
-      data: decryptedRows,
-      next_cursor: rows.length === limit ? rows[rows.length - 1].created_at : null
+      data: messages,
+      next_cursor: nextCursor,
+      // Only the first page carries it; older pages don't need it again.
+      ...(cursor ? {} : { state: await chat.getMemberState(matchId, userId) }),
     });
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { getMessages };
+/**
+ * POST /api/chat/:matchId/uploads
+ * Body: { kind: 'image'|'video'|'audio'|'document', mime, size, name? }
+ * Returns a one-time signed URL to PUT the file to, and the path to send.
+ */
+async function createUpload(req, res, next) {
+  try {
+    const { matchId } = req.params;
+    const { id: userId } = req.user;
+    if (!(await otherMember(matchId, userId))) {
+      return res.status(403).json({ error: 'Match not found or access denied' });
+    }
+    const { kind, mime, size, name } = req.body;
+    const target = await createUploadTarget(userId, { kind, mime, size, name });
+    res.status(201).json({ path: target.path, upload_url: target.uploadUrl, max_bytes: target.maxBytes });
+  } catch (err) {
+    if (err instanceof ChatStorageError) {
+      const status = err.code === 'storage_unavailable' ? 503 : err.code === 'too_large' ? 413 : 422;
+      if (status === 503) logger.error({ err: err.message }, '[chat] upload target failed');
+      return res.status(status).json({ error: err.message, code: err.code });
+    }
+    next(err);
+  }
+}
+
+/** POST /api/chat/:matchId/clear — "Clear chat" for the signed-in user only. */
+async function clearChat(req, res, next) {
+  try {
+    const { matchId } = req.params;
+    const { id: userId } = req.user;
+    if (!(await otherMember(matchId, userId))) {
+      return res.status(403).json({ error: 'Match not found or access denied' });
+    }
+    const clearedAt = await chat.clearChat(matchId, userId);
+    realtime.emitToUser(userId, 'chat_cleared', { matchId, at: clearedAt });
+    res.json({ cleared_at: clearedAt });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** PUT /api/chat/:matchId/mute — Body: { duration: '8h'|'1w'|'always'|null } */
+async function muteChat(req, res, next) {
+  try {
+    const { matchId } = req.params;
+    const { id: userId } = req.user;
+    if (!(await otherMember(matchId, userId))) {
+      return res.status(403).json({ error: 'Match not found or access denied' });
+    }
+    const mutedUntil = await chat.setMute(matchId, userId, req.body.duration ?? null);
+    res.json({ muted_until: mutedUntil });
+  } catch (err) {
+    if (err instanceof chat.ChatError) return res.status(422).json({ error: err.code });
+    next(err);
+  }
+}
+
+module.exports = { getMessages, createUpload, clearChat, muteChat };

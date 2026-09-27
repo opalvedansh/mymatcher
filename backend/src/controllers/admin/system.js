@@ -4,6 +4,7 @@ const db = require('../../config/db');
 const redisClient = require('../../config/redis');
 const { healthBody } = require('../../lifecycle');
 const { getQueueStats } = require('../../config/queue');
+const { encryptionStatus } = require('../../utils/encryption');
 
 /**
  * Every probe is wrapped. A health endpoint that 500s when a dependency is
@@ -88,6 +89,9 @@ async function getSystem(req, res, next) {
         service: 'api',
         sockets_enabled: process.env.ENABLE_SOCKETS !== 'false',
         workers_enabled: process.env.RUN_WORKERS !== 'false',
+        // 'disabled' means ENCRYPTION_KEY is missing and new chat messages
+        // are stored as plaintext.
+        chat_encryption: encryptionStatus(),
       },
       database,
       redis,

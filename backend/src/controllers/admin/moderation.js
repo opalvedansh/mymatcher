@@ -4,6 +4,8 @@ const { endSessions } = require('../../utils/sessions');
 const { invalidateCache } = require('../../middleware/cacheMiddleware');
 const { recordFromRequest } = require('../../services/adminAudit');
 const { decrypt } = require('../../utils/encryption');
+const { openAttachment } = require('../../services/chat');
+const { removeObjects } = require('../../utils/chatStorage');
 const { onlyUuids, encodeCursor, decodeCursor, clampLimit } = require('../../utils/adminQuery');
 
 const CONTEXT_WINDOW = 5;
@@ -210,11 +212,17 @@ async function applyReportAction(client, { report, action, reason, adminId }) {
       effects.push({ type: 'story_deleted', id: report.target_id, applied: rowCount > 0 });
     } else if (report.target_type === 'message') {
       // The row stays so the conversation does not develop holes; the content
-      // is replaced. There is no soft-delete column on messages today.
+      // and any attachment are replaced by a plain notice.
+      const { rows: [old] } = await client.query(
+        `SELECT attachment FROM messages WHERE id = $1::uuid`,
+        [report.target_id]
+      );
       const { rowCount } = await client.query(
-        `UPDATE messages SET content = $2 WHERE id = $1::uuid`,
+        `UPDATE messages SET content = $2, kind = 'text', attachment = NULL WHERE id = $1::uuid`,
         [report.target_id, '[removed by moderation]']
       );
+      const attachment = old?.attachment ? await openAttachment({ attachment: old.attachment }) : null;
+      if (attachment?.path) await removeObjects([attachment.path]);
       effects.push({ type: 'message_redacted', id: report.target_id, applied: rowCount > 0 });
     } else {
       throw invalid('delete_content does not apply to a user report; use ban_target');
@@ -383,12 +391,12 @@ async function getMessageContext(req, res, next) {
           WHERE m.match_id = t.match_id AND m.created_at > t.created_at
           ORDER BY m.created_at ASC LIMIT $2
        )
-       SELECT id, match_id, sender_id, content, created_at, false AS is_target FROM before
+       SELECT id, match_id, sender_id, content, kind, deleted_at, created_at, false AS is_target FROM before
        UNION ALL
-       SELECT m.id, m.match_id, m.sender_id, m.content, m.created_at, true FROM messages m
+       SELECT m.id, m.match_id, m.sender_id, m.content, m.kind, m.deleted_at, m.created_at, true FROM messages m
         WHERE m.id = $1::uuid
        UNION ALL
-       SELECT id, match_id, sender_id, content, created_at, false FROM after
+       SELECT id, match_id, sender_id, content, kind, deleted_at, created_at, false FROM after
        ORDER BY created_at`,
       [onlyUuids([report.target_id])[0] ?? null, CONTEXT_WINDOW]
     );
@@ -413,26 +421,37 @@ async function getMessageContext(req, res, next) {
       report_id: report.id,
       match_id: rows[0].match_id,
       window: CONTEXT_WINDOW,
-      messages: rows.map((m) => ({
+      messages: await Promise.all(rows.map(async (m) => ({
         id: m.id,
         sender_id: m.sender_id,
         created_at: m.created_at,
         is_target: m.is_target,
-        content: safeDecrypt(m.content),
-      })),
+        content: await safeDecrypt(m.content, m.kind, m.deleted_at),
+      }))),
     });
   } catch (err) {
     next(err);
   }
 }
 
-/** A message encrypted under a rotated key must not 500 the whole queue. */
-function safeDecrypt(content) {
+/**
+ * A message encrypted under a rotated key must not 500 the whole queue.
+ * Attachment messages say what they were ("[photo]"); the file itself is
+ * never exposed here.
+ */
+async function safeDecrypt(content, kind = 'text', deletedAt = null) {
+  if (deletedAt) return '[deleted by sender]';
+  let text;
   try {
-    return decrypt(content);
+    text = await decrypt(content);
   } catch {
     return '[could not decrypt]';
   }
+  if (kind && kind !== 'text') {
+    const label = { image: '[photo]', video: '[video]', audio: '[voice message]', document: '[document]' }[kind] || '[attachment]';
+    return text ? `${label} ${text}` : label;
+  }
+  return text;
 }
 
 module.exports = {

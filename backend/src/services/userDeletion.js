@@ -2,6 +2,7 @@ const db = require('../config/db');
 const logger = require('../config/logger');
 const { getSupabaseAdmin } = require('../config/supabaseAdmin');
 const { UPLOAD_BUCKET } = require('../utils/storage');
+const { removeUserChatMedia } = require('../utils/chatStorage');
 const { endSessions } = require('../utils/sessions');
 
 /**
@@ -39,6 +40,7 @@ async function hardDeleteUser(userId, { actorId, reason } = {}) {
   const admin = getSupabaseAdmin();
 
   await removeUserUploads(admin, userId);
+  await removeUserChatMedia(admin, userId);
 
   // Cascades to profiles, swipes, matches, messages, posts, likes, stories,
   // story views, ratings and blocks. Reports keep a NULL reporter (021).

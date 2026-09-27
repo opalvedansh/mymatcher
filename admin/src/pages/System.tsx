@@ -48,6 +48,22 @@ export default function System() {
           />
         </div>
 
+        {h.build.chat_encryption === 'disabled' && (
+          <div className="panel"><div className="panel-body">
+            <div className="consequence">
+              <AlertTriangle size={14} />
+              <div>
+                <b>Chat messages are being stored without encryption.</b>
+                <div>
+                  <code className="mono">ENCRYPTION_KEY</code> is not set on this service. Set it to the output of
+                  <code className="mono"> openssl rand -hex 32</code> on every service that runs chat, then redeploy.
+                  Messages sent before that stay readable.
+                </div>
+              </div>
+            </div>
+          </div></div>
+        )}
+
         {h.migrations.up_to_date === false && (
           <div className="panel"><div className="panel-body">
             <div className="consequence">
@@ -78,6 +94,10 @@ export default function System() {
                 <dd>{h.build.sockets_enabled ? 'In this process' : 'Separate chat service'}</dd>
                 <dt>Workers</dt>
                 <dd>{h.build.workers_enabled ? 'In this process' : 'Separate worker service'}</dd>
+                <dt>Chat encryption</dt>
+                <dd style={h.build.chat_encryption === 'disabled' ? { color: 'var(--warn)' } : undefined}>
+                  {{ configured: 'On', development_key: 'Development key', disabled: 'Off: ENCRYPTION_KEY missing' }[h.build.chat_encryption ?? 'configured']}
+                </dd>
               </dl>
             </div>
           </div>

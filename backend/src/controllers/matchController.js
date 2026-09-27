@@ -1,12 +1,17 @@
 const db = require('../config/db');
 const realtime = require('../realtime');
 const { decrypt } = require('../utils/encryption');
+const chat = require('../services/chat');
 
 /**
  * Shared query — returns full match details including both profiles.
  * Uses explicit column selection (no p.*) to avoid data leaks.
+ *
+ * `viewer` is the placeholder holding the signed-in user's id: the inbox
+ * preview skips what they deleted for themselves or cleared, and the unread
+ * count and mute state are theirs.
  */
-const MATCH_QUERY = `
+const matchQuery = (viewer) => `
   SELECT
     m.id            AS match_id,
     m.status,
@@ -47,19 +52,57 @@ const MATCH_QUERY = `
     msg.content     AS last_message,
     msg.created_at  AS last_message_at,
     msg.sender_id   AS last_message_sender,
-    msg.read_at     AS last_message_read_at
+    msg.read_at     AS last_message_read_at,
+    msg.delivered_at AS last_message_delivered_at,
+    msg.kind        AS last_message_kind,
+    msg.attachment  AS last_message_attachment,
+    msg.deleted_at  AS last_message_deleted_at,
+
+    (SELECT count(*)::int FROM messages um
+      WHERE um.match_id = m.id AND um.sender_id <> ${viewer} AND um.read_at IS NULL
+        AND um.deleted_at IS NULL
+        AND um.created_at > COALESCE(cs.cleared_at, '-infinity'::timestamptz)
+        AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = ${viewer} AND h.message_id = um.id)
+    )               AS unread_count,
+    CASE WHEN cs.muted_until > now() THEN cs.muted_until END AS muted_until
 
   FROM matches m
   JOIN brand_profiles       bp ON bp.user_id = m.brand_id
   JOIN influencer_profiles  ip ON ip.user_id = m.influencer_id
+  LEFT JOIN chat_member_state cs ON cs.match_id = m.id AND cs.user_id = ${viewer}
   LEFT JOIN LATERAL (
-    SELECT content, created_at, sender_id, read_at
-    FROM messages 
-    WHERE match_id = m.id 
-    ORDER BY created_at DESC 
+    SELECT content, created_at, sender_id, read_at, delivered_at, kind, attachment, deleted_at
+    FROM messages lm
+    WHERE lm.match_id = m.id
+      AND lm.created_at > COALESCE(cs.cleared_at, '-infinity'::timestamptz)
+      AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.user_id = ${viewer} AND h.message_id = lm.id)
+    ORDER BY created_at DESC
     LIMIT 1
   ) msg ON true
 `;
+
+/**
+ * Turns the last-message columns into what the chat list shows: the text,
+ * or for an attachment its caption or a label ("Photo", or a file name).
+ * The attachment itself never leaves the server here.
+ */
+async function withInboxPreview(row) {
+  const { last_message_attachment: attachment, last_message_kind: kind, last_message_deleted_at: deletedAt } = row;
+  delete row.last_message_attachment;
+  if (!row.last_message_at) return row;
+  if (deletedAt) {
+    row.last_message = '';
+    return row;
+  }
+  const text = row.last_message ? await decrypt(row.last_message) : '';
+  row.last_message = text;
+  if (kind && kind !== 'text') {
+    const att = attachment ? await chat.openAttachment({ attachment }) : null;
+    row.last_message_label = kind === 'document' ? (att?.name || 'Document') : chat.describeKind(kind);
+    row.last_message_duration_ms = att?.duration_ms ?? null;
+  }
+  return row;
+}
 
 // ─── GET /api/matches ────────────────────────────────────────────
 async function getMatches(req, res, next) {
@@ -70,7 +113,7 @@ async function getMatches(req, res, next) {
     const limit = parseInt(req.query.limit, 10) || 50;
     const cursor = req.query.cursor || null;
 
-    let query = `${MATCH_QUERY}
+    let query = `${matchQuery('$1')}
        WHERE ${column} = $1
          AND m.status = 'active'`;
     
@@ -87,14 +130,7 @@ async function getMatches(req, res, next) {
     const { rows } = await db.query(query, params);
 
     // Decrypt the last message for each match
-    const decryptedRows = await Promise.all(
-      rows.map(async (row) => {
-        if (row.last_message) {
-          row.last_message = await decrypt(row.last_message);
-        }
-        return row;
-      })
-    );
+    const decryptedRows = await Promise.all(rows.map(withInboxPreview));
 
     res.json({
       data: decryptedRows,
@@ -154,7 +190,7 @@ async function getMatchById(req, res, next) {
     const { id: userId } = req.user;
 
     const { rows } = await db.query(
-      `${MATCH_QUERY}
+      `${matchQuery('$2')}
        WHERE m.id = $1
          AND (m.brand_id = $2 OR m.influencer_id = $2)`,
       [matchId, userId]
@@ -164,7 +200,7 @@ async function getMatchById(req, res, next) {
       return res.status(404).json({ error: 'Match not found or access denied' });
     }
 
-    res.json(rows[0]);
+    res.json(await withInboxPreview(rows[0]));
   } catch (err) {
     next(err);
   }
