@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.webnexis.mymatcher1",
-      "buildNumber": "27",
+      "buildNumber": "30",
       "associatedDomains": [
         "applinks:api.mymatchr.in"
       ],
@@ -41,7 +41,7 @@
         }
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0F0F0F",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
