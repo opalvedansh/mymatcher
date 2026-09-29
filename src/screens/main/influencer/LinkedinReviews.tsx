@@ -178,8 +178,8 @@ export function LinkedinReviews({
   const counterColor = quoteLength > QUOTE_MAX ? DANGER : quoteLength > QUOTE_MAX - 60 ? '#FFB27A' : '#8A8A8A';
   const canSubmit = quoteLength > 0 && !!draft.name.trim() && !!draft.url.trim();
 
-  const contentWidth = Math.min(width, 560) - 40; // profile content has 20px side padding
-  const cardWidth = reviews.length > 1 ? Math.min(contentWidth - 28, 340) : contentWidth;
+  const contentWidth = Math.min(width, 560) - sz(40); // profile content has 20px side padding
+  const cardWidth = reviews.length > 1 ? Math.min(contentWidth - sz(28), sz(340)) : contentWidth;
   const firstName = ownerName.split(' ')[0] || 'the creator';
 
   const openForm = (review?: LinkedinReview) => {
@@ -285,7 +285,8 @@ export function LinkedinReviews({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          snapToInterval={cardWidth + 12}
+          // Must match the gap below or each snap drifts off the card edge.
+          snapToInterval={cardWidth + sz(12)}
           decelerationRate="fast"
           contentContainerStyle={{ gap: sz(12) }}
           scrollEnabled={reviews.length > 1}

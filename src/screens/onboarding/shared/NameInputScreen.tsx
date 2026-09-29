@@ -2,19 +2,22 @@ import { useState, useEffect } from 'react';
 import { AntDesign, Feather } from '@expo/vector-icons';
 import {
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   View,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import api from '@/api/client';
 import { colors } from '@/theme/colors';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 const fetchInstagramUsers = async (query: string): Promise<string[]> => {
   if (!query || query.length < 3) return [];
@@ -31,41 +34,69 @@ const fetchInstagramUsers = async (query: string): Promise<string[]> => {
 
 export function NameInputScreen({
   role,
+  initialName,
+  initialInstagramId,
   onBack,
   onNext,
 }: {
   role: 'Brand' | 'Influencer';
+  initialName?: string;
+  initialInstagramId?: string;
   onBack?: () => void;
   onNext?: (name: string, instagramId?: string) => void;
 }) {
-  const [name, setName] = useState('');
-  const [instagramId, setInstagramId] = useState('');
+  const [name, setName] = useState(initialName ?? '');
+  const [instagramId, setInstagramId] = useState(initialInstagramId ?? '');
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [hasSelected, setHasSelected] = useState(false);
+  // A saved handle was picked last time; don't reopen suggestions for it.
+  const [hasSelected, setHasSelected] = useState(!!initialInstagramId);
 
   useEffect(() => {
     if (hasSelected || !instagramId || instagramId.length < 3) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
-    
+
+    // Replies can land out of order; only the latest query may write results.
+    let cancelled = false;
     setIsSearching(true);
     const timeout = setTimeout(async () => {
       const results = await fetchInstagramUsers(instagramId);
+      if (cancelled) return;
       setSearchResults(results);
       setIsSearching(false);
-    }, 1500);
+    }, 400);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+      setIsSearching(false);
+    };
   }, [instagramId, hasSelected]);
+
+  const canContinue = name.trim() !== '';
+  const submit = () => {
+    if (!canContinue) return;
+    tapFeedback();
+    Keyboard.dismiss();
+    onNext?.(name, instagramId);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <DismissKeyboard>
         <View style={styles.container}>
         {/* Header */}
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
@@ -91,11 +122,7 @@ export function NameInputScreen({
             selectionColor={colors.primary}
             autoCapitalize="words"
             autoCorrect={false}
-            onSubmitEditing={() => {
-              if (name.trim() !== '') {
-                onNext?.(name, instagramId);
-              }
-            }}
+            onSubmitEditing={submit}
           />
         </View>
 
@@ -133,8 +160,9 @@ export function NameInputScreen({
                 {searchResults.map((item, index) => (
                   <Pressable
                     key={index}
-                    style={styles.dropdownItem}
+                    style={({ pressed }) => [styles.dropdownItem, pressed && styles.dropdownItemPressed]}
                     onPress={() => {
+                      tapFeedback('selection');
                       setInstagramId(item);
                       setHasSelected(true);
                       setSearchResults([]);
@@ -152,23 +180,20 @@ export function NameInputScreen({
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.nextButton,
-              name.trim() === '' && styles.nextButtonDisabled,
+              !canContinue && styles.nextButtonDisabled,
+              pressed && styles.pressed,
             ]}
-            disabled={name.trim() === ''}
-            onPress={() => {
-              if (name.trim() !== '') {
-                Keyboard.dismiss();
-                onNext?.(name, instagramId);
-              }
-            }}
+            disabled={!canContinue}
+            onPress={submit}
           >
             <Text style={styles.nextButtonText}>Next</Text>
           </Pressable>
         </View>
         </View>
       </DismissKeyboard>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -250,6 +275,9 @@ const styles = StyleSheet.create({
     fontSize: sz(18),
     fontWeight: '700',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
+  dropdownItemPressed: { backgroundColor: '#222222' },
   dropdownContainer: {
     backgroundColor: '#1A1A1A',
     borderRadius: sz(12),

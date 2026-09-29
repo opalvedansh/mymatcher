@@ -2,15 +2,16 @@ import { useState } from 'react';
 import { AntDesign, FontAwesome6 } from '@expo/vector-icons';
 import {
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 const PLATFORMS = [
   { id: 'instagram', label: 'Instagram', icon: 'instagram' },
@@ -30,13 +31,17 @@ const PLATFORMS = [
 ] as const;
 
 export function BrandPlatformSelectionScreen({
+  initialPlatforms,
   onBack,
   onNext,
 }: {
+  initialPlatforms?: string[];
   onBack?: () => void;
   onNext?: (platforms: string[]) => void;
 }) {
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set());
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(
+    () => new Set((initialPlatforms ?? []).filter((id) => PLATFORMS.some((p) => p.id === id)).slice(0, 3)),
+  );
 
   const togglePlatform = (id: string) => {
     const newSelected = new Set(selectedPlatforms);
@@ -48,6 +53,7 @@ export function BrandPlatformSelectionScreen({
       }
       newSelected.add(id);
     }
+    tapFeedback('selection');
     setSelectedPlatforms(newSelected);
   };
 
@@ -55,7 +61,13 @@ export function BrandPlatformSelectionScreen({
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Header */}
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(20)} color={colors.text} />
         </Pressable>
 
@@ -79,7 +91,7 @@ export function BrandPlatformSelectionScreen({
               return (
                 <Pressable
                   key={platform.id}
-                  style={[styles.gridItem, isSelected && styles.gridItemSelected]}
+                  style={({ pressed }) => [styles.gridItem, isSelected && styles.gridItemSelected, pressed && styles.chipPressed]}
                   onPress={() => togglePlatform(platform.id)}
                 >
                   <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
@@ -103,12 +115,16 @@ export function BrandPlatformSelectionScreen({
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.nextButton,
               selectedPlatforms.size === 0 && styles.nextButtonDisabled,
+              pressed && styles.pressed,
             ]}
             disabled={selectedPlatforms.size === 0}
-            onPress={() => onNext?.(Array.from(selectedPlatforms))}
+            onPress={() => {
+              tapFeedback();
+              onNext?.(Array.from(selectedPlatforms));
+            }}
           >
             <Text style={styles.nextButtonText}>Next</Text>
           </Pressable>
@@ -226,4 +242,7 @@ const styles = StyleSheet.create({
     fontSize: sz(18),
     fontWeight: '700',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
+  chipPressed: { transform: [{ scale: 0.96 }], opacity: 0.85 },
 });

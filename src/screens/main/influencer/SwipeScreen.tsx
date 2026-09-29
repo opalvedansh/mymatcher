@@ -1,27 +1,15 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
-  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
-  interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
-import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getFeed, recordSwipe } from '@/api';
 import type { BrandProfile } from '@/api/types';
 import { MatchrLogo } from '@/components/MatchrLogo';
 import { MatchBoomModal } from '@/components/MatchBoomModal';
@@ -29,12 +17,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { showAlert } from '@/components/ActionSheet';
 import { NotificationBell } from '@/components/NotificationBell';
 import { sz, tabBarClearance } from '@/theme/scale';
+import { SwipeDeck, type SwipeDeckHandle, type SwipeDir } from '@/features/swipe/SwipeDeck';
+import { useSwipeQueue } from '@/features/swipe/useSwipeQueue';
 
 
 const ACCENT = '#FF6B2B';
-const PAGE_SIZE = 20;
-// How many upcoming card photos to pull into the cache ahead of the user.
-const PREFETCH_AHEAD = 3;
 
 type CardItem = {
   id: string;
@@ -183,177 +170,48 @@ const CardContent = ({ item }: { item: CardItem }) => (
 );
 
 // ─── Main Screen ──────────────────────────────────────────────────
+const cardPhoto = (p: BrandProfile) => toCardItem(p).image;
+const renderBrandCard = (p: BrandProfile) => <CardContent item={toCardItem(p)} />;
+const brandKey = (p: BrandProfile) => p.user_id;
+const brandLabel = (p: BrandProfile) => p.name || 'Brand';
+
 export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewProfile?: (id: string) => void, onNavigateToMessages?: () => void }) {
   const { onboardingData } = useAuth();
-  const { width } = useWindowDimensions();
-  const [brands, setBrands] = useState<BrandProfile[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const { deck, loading, error, loadingMore, loadFeed, commit } = useSwipeQueue<BrandProfile>(cardPhoto);
   const [matchData, setMatchData] = useState<{ name: string; avatarUrl: string | null } | null>(null);
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const nextCursorRef = useRef<{ score: number | null, id: string | null }>({ score: null, id: null });
-  const loadingMoreRef = useRef(false);
-  const busyRef = useRef(false);
+  const deckRef = useRef<SwipeDeckHandle>(null);
+  // Stable elements, so the deck's memoised cards don't re-render.
+  const likeStamp = useMemo(() => (
+    <View style={[ss.stamp, ss.likeStamp]}>
+      <Text style={ss.likeStampTxt}>LIKE</Text>
+    </View>
+  ), []);
+  const nopeStamp = useMemo(() => (
+    <View style={[ss.stamp, ss.nopeStamp]}>
+      <Text style={ss.nopeStampTxt}>PASS</Text>
+    </View>
+  ), []);
 
-  // ── Load feed ───────────────────────────────────────────────────
-  const loadFeed = useCallback(async () => {
+  const handleSwipe = useCallback(async (profile: BrandProfile, dir: SwipeDir) => {
+    // The match screen shows the logo; start loading it while the swipe saves.
+    const logo = isValidUrl(profile.logo_url) ? profile.logo_url : null;
+    if (dir === 'right' && logo) Image.prefetch(logo, { cachePolicy: 'memory-disk' }).catch(() => {});
     try {
-      setLoading(true);
-      setError(false);
-      // No cursor on the first page; the server hands back the next one.
-      const res = await getFeed(PAGE_SIZE);
-      setBrands(res.data as BrandProfile[]);
-      setCurrentIndex(0);
-      nextCursorRef.current = { score: res.next_cursor_score, id: res.next_cursor_id };
-    } catch (e) {
-      console.warn('[API] getFeed failed:', e);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { loadFeed(); }, [loadFeed]);
-
-  const loadMore = useCallback(async () => {
-    const { score, id } = nextCursorRef.current;
-    if (loadingMoreRef.current || !id) return;
-    loadingMoreRef.current = true;
-    try {
-      const res = await getFeed(PAGE_SIZE, score ?? undefined, id);
-      nextCursorRef.current = { score: res.next_cursor_score, id: res.next_cursor_id };
-      const page = res.data as BrandProfile[];
-      setBrands(prev => {
-        const seen = new Set(prev.map(b => b.user_id));
-        return [...prev, ...page.filter(b => !seen.has(b.user_id))];
-      });
-    } catch {/* the next swipe retries */} finally {
-      loadingMoreRef.current = false;
-    }
-  }, []);
-
-  // ── Warm upcoming card photos ───────────────────────────────────
-  // Only the top card is mounted, so without this every swipe reveals a card
-  // whose photo has not started downloading yet. Prefetching the next few keeps
-  // the deck feeling instant; failures are ignored because the <Image> below
-  // still requests the photo normally.
-  useEffect(() => {
-    const urls = brands
-      .slice(currentIndex + 1, currentIndex + 1 + PREFETCH_AHEAD)
-      .map((b) => (isValidUrl(b.cover_url) ? b.cover_url : isValidUrl(b.logo_url) ? b.logo_url : null))
-      .filter((u): u is string => !!u);
-    if (urls.length) Image.prefetch(urls, { cachePolicy: 'memory-disk' }).catch(() => {});
-  }, [brands, currentIndex]);
-
-  // ── Swipe handler ───────────────────────────────────────────────
-  const handleSwipe = useCallback(async (dir: 'left' | 'right') => {
-    busyRef.current = false;
-    const profile = brands[currentIndex];
-    if (!profile) return;
-
-    const prevIndex = currentIndex;
-    setCurrentIndex(p => p + 1);
-    translateX.value = 0;
-    translateY.value = 0;
-
-    // Fetch the next page while a few cards are still left.
-    if (brands.length - (currentIndex + 1) <= 3) loadMore();
-
-    try {
-      const res = await recordSwipe(profile.user_id, dir === 'right' ? 'like' : 'reject');
-      const responseData = (res as any).data || res;
-      if (dir === 'right' && responseData.matched) {
-        const rawUrl = profile.logo_url ?? profile.cover_url;
-        setMatchData({ name: profile.name ?? 'This brand', avatarUrl: isValidUrl(rawUrl) ? rawUrl : null });
+      const res = await commit(profile, dir);
+      if (dir === 'right' && res.matched) {
+        setMatchData({ name: profile.name ?? 'This brand', avatarUrl: logo ?? cardPhoto(profile) });
       }
     } catch (e) {
       console.warn('[API] recordSwipe failed:', e);
-      setCurrentIndex(prevIndex);
       showAlert('Swipe not saved', 'We brought the card back. Check your connection and try again.');
     }
-  }, [brands, currentIndex, translateX, translateY, loadMore]);
+  }, [commit]);
 
-  const panGesture = Gesture.Pan()
-    .onUpdate((event) => {
-      translateX.value = event.translationX;
-      translateY.value = event.translationY;
-    })
-    .onEnd((event) => {
-      const SWIPE_VELOCITY = 500;
-      const SWIPE_THRESHOLD = width * 0.3;
-
-      if (event.translationX > SWIPE_THRESHOLD || event.velocityX > SWIPE_VELOCITY) {
-        translateX.value = withTiming(width + 200, { duration: 250 }, () => {
-          runOnJS(handleSwipe)('right');
-        });
-        translateY.value = withTiming(event.translationY + (event.velocityY * 0.2), { duration: 250 });
-      } else if (event.translationX < -SWIPE_THRESHOLD || event.velocityX < -SWIPE_VELOCITY) {
-        translateX.value = withTiming(-width - 200, { duration: 250 }, () => {
-          runOnJS(handleSwipe)('left');
-        });
-        translateY.value = withTiming(event.translationY + (event.velocityY * 0.2), { duration: 250 });
-      } else {
-        translateX.value = withSpring(0, { damping: 15, stiffness: 200 });
-        translateY.value = withSpring(0, { damping: 15, stiffness: 200 });
-      }
-    });
-
-  // Opening the profile is its own gesture rather than a Pressable: a Pressable
-  // under the pan still fires onPress when a swipe lifts off, so swiping right
-  // opened the brand's profile. Exclusive only lets the tap through when the
-  // pan never started.
-  const tapGesture = Gesture.Tap()
-    .maxDistance(10)
-    .runOnJS(true)
-    .onEnd((_event, success) => {
-      const profile = brands[currentIndex];
-      if (success && profile && !busyRef.current) onViewProfile?.(profile.user_id);
-    });
-  const cardGesture = Gesture.Exclusive(panGesture, tapGesture);
-
-  const animatedCardStyle = useAnimatedStyle(() => {
-    const rotate = interpolate(
-      translateX.value,
-      [-width / 2, 0, width / 2],
-      [-15, 0, 15],
-      Extrapolation.CLAMP
-    );
-    return {
-      transform: [
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-        { rotate: `${rotate}deg` },
-      ],
-    };
-  });
-
-  const likeOpacityStyle = useAnimatedStyle(() => {
-    return {
-      opacity: interpolate(translateX.value, [20, 100], [0, 1], Extrapolation.CLAMP),
-    };
-  });
-
-  const nopeOpacityStyle = useAnimatedStyle(() => {
-    return {
-      opacity: interpolate(translateX.value, [-100, -20], [1, 0], Extrapolation.CLAMP),
-    };
-  });
-
-  const forceSwipe = (dir: 'left' | 'right') => {
-    // Ignore repeat taps while a card is already flying off.
-    if (busyRef.current) return;
-    busyRef.current = true;
-    const x = dir === 'right' ? width + 200 : -width - 200;
-    translateX.value = withTiming(x, { duration: 250 }, () => {
-      runOnJS(handleSwipe)(dir);
-    });
-    translateY.value = withTiming(0, { duration: 250 });
-  };
+  const openProfile = useCallback((p: BrandProfile) => onViewProfile?.(p.user_id), [onViewProfile]);
 
   const renderStack = () => {
-    if (loading) {
+    // A page still on its way shows the skeleton, not "you've seen everyone".
+    if (loading || (deck.length === 0 && loadingMore)) {
       return (
         <View style={[card.wrapper, card.skeleton]} accessibilityLabel="Finding brands">
           <View style={card.infoPanel}>
@@ -378,7 +236,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
         </View>
       );
     }
-    if (currentIndex >= brands.length) {
+    if (deck.length === 0) {
       return (
         <View style={ss.empty}>
           <View style={ss.emptyIcon}>
@@ -392,48 +250,19 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
         </View>
       );
     }
-
-    // Only the top two cards are mounted, so the rest don't load images yet.
-    return brands
-      .slice(currentIndex, currentIndex + 2)
-      .map((profile, offset) => {
-        const isTop = offset === 0;
-        const item = toCardItem(profile);
-        return (
-          <GestureDetector key={profile.user_id} gesture={isTop ? cardGesture : Gesture.Pan().enabled(false)}>
-            <Animated.View
-              style={[
-                ss.cardWrapper,
-                isTop
-                  ? [animatedCardStyle, { zIndex: 10 }]
-                  : { zIndex: 1, transform: [{ scale: 0.97 }], top: sz(6) },
-              ]}
-            >
-              <View
-                style={{ flex: 1 }}
-                accessible
-                accessibilityRole="button"
-                accessibilityLabel={item.name}
-                accessibilityHint="Swipe right to like, left to pass"
-                onAccessibilityTap={() => isTop && onViewProfile?.(profile.user_id)}
-              >
-                <CardContent item={item} />
-                {isTop && (
-                  <>
-                    <Animated.View style={[ss.stamp, ss.likeStamp, likeOpacityStyle]} pointerEvents="none">
-                      <Text style={ss.likeStampTxt}>LIKE</Text>
-                    </Animated.View>
-                    <Animated.View style={[ss.stamp, ss.nopeStamp, nopeOpacityStyle]} pointerEvents="none">
-                      <Text style={ss.nopeStampTxt}>PASS</Text>
-                    </Animated.View>
-                  </>
-                )}
-              </View>
-            </Animated.View>
-          </GestureDetector>
-        );
-      })
-      .reverse();
+    return (
+      <SwipeDeck
+        ref={deckRef}
+        items={deck}
+        keyOf={brandKey}
+        labelOf={brandLabel}
+        renderCard={renderBrandCard}
+        likeStamp={likeStamp}
+        nopeStamp={nopeStamp}
+        onSwipe={handleSwipe}
+        onOpen={openProfile}
+      />
+    );
   };
 
 
@@ -460,10 +289,10 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
       <View style={ss.stackArea}>
         {renderStack()}
 
-        {!loading && !error && currentIndex < brands.length && (
+        {!loading && !error && deck.length > 0 && (
           <View style={ss.actionRow} pointerEvents="box-none">
             <Pressable
-              onPress={() => forceSwipe('left')}
+              onPress={() => deckRef.current?.swipe('left')}
               accessibilityRole="button"
               accessibilityLabel="Pass"
               style={({ pressed }) => [ss.btnPass, pressed && ss.pressed]}
@@ -471,7 +300,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
               <Ionicons name="close" size={sz(28)} color="#111" />
             </Pressable>
             <Pressable
-              onPress={() => forceSwipe('right')}
+              onPress={() => deckRef.current?.swipe('right')}
               accessibilityRole="button"
               accessibilityLabel="Like"
               style={({ pressed }) => [ss.btnLike, pressed && ss.pressed]}
@@ -487,6 +316,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
         visible={!!matchData}
         meAvatar={onboardingData?.photos?.[0] || null}
         themAvatar={matchData?.avatarUrl || null}
+        themName={matchData?.name}
         onClose={() => setMatchData(null)}
         onIntroduce={() => {
           setMatchData(null);

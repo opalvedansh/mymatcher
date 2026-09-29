@@ -389,3 +389,22 @@ export interface NotificationsResponse {
   data: AppNotification[];
   next_before: string | null;
 }
+
+// ── Post ──────────────────────────────────────────────────────────
+
+export interface Post {
+  id: string;
+  user_id: string;
+  image_url: string;
+  caption?: string | null;
+  likes_count: number;
+  // Optional: posts returned by older endpoints predate these counters.
+  comments_count?: number;
+  shares_count?: number;
+  created_at: string;
+  author_name?: string;
+  author_avatar?: string;
+  author_categories?: string[];
+  author_verified?: boolean;
+  liked_by_me?: boolean;
+}

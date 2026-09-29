@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 
 import { AntDesign, FontAwesome, Ionicons } from '@expo/vector-icons';
 import {
@@ -6,7 +6,6 @@ import {
   Alert,
   Keyboard,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,11 +14,15 @@ import {
   useWindowDimensions,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
+
+type SignInProvider = 'google' | 'apple' | 'linkedin';
 
 type AuthMode =
   | 'login'
@@ -47,27 +50,31 @@ function AuthButton({
   width,
   onPress,
   loading,
+  disabled,
 }: {
   label: string;
   variant: 'primary' | 'secondary';
   width: number;
   onPress?: () => void;
   loading?: boolean;
+  disabled?: boolean;
 }) {
   const isPrimary = variant === 'primary';
 
   return (
     <Pressable
       onPress={onPress}
-      disabled={loading}
-      style={[
+      disabled={loading || disabled}
+      accessibilityState={{ busy: !!loading, disabled: !!(loading || disabled) }}
+      style={({ pressed }) => [
         styles.button,
         isPrimary ? styles.primaryButton : styles.secondaryButton,
         {
           width: '100%',
           minHeight: isPrimary ? sz(64) : sz(56),
         },
-        loading && styles.buttonDisabled,
+        (loading || disabled) && styles.buttonDisabled,
+        pressed && styles.pressed,
       ]}
     >
       {loading ? (
@@ -89,13 +96,30 @@ function AuthButton({
 function SocialButton({
   children,
   onPress,
+  loading,
+  disabled,
+  label,
 }: {
   children: ReactNode;
   onPress?: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+  label: string;
 }) {
   return (
-    <Pressable style={styles.socialButton} onPress={onPress}>
-      {children}
+    <Pressable
+      onPress={onPress}
+      disabled={loading || disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ busy: !!loading, disabled: !!(loading || disabled) }}
+      style={({ pressed }) => [
+        styles.socialButton,
+        disabled && !loading && styles.buttonDisabled,
+        pressed && styles.socialPressed,
+      ]}
+    >
+      {loading ? <ActivityIndicator color={colors.background} /> : children}
     </Pressable>
   );
 }
@@ -224,12 +248,20 @@ function EmailAuthForm({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        // Scrolls the focused field above the keyboard on small iPhones.
+        automaticallyAdjustKeyboardInsets
       >
         <DismissKeyboard>
         <View style={styles.emailContainer}>
           <View style={[styles.emailContent, { width: contentWidth }]}>
             {/* Back Button */}
-            <Pressable onPress={onBack} style={styles.backButton}>
+            <Pressable
+              onPress={onBack}
+              hitSlop={sz(12)}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+            >
               <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
             </Pressable>
 
@@ -309,7 +341,7 @@ function EmailAuthForm({
 
             {/* Submit Button */}
             <Pressable
-              style={[styles.submitButton, loading && styles.buttonDisabled]}
+              style={({ pressed }) => [styles.submitButton, loading && styles.buttonDisabled, pressed && styles.pressed]}
               onPress={() => { Keyboard.dismiss(); handleSubmit(); }}
               disabled={loading}
             >
@@ -418,12 +450,20 @@ function OtpVerificationForm({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        // Scrolls the focused field above the keyboard on small iPhones.
+        automaticallyAdjustKeyboardInsets
       >
         <DismissKeyboard>
           <View style={styles.emailContainer}>
             <View style={[styles.emailContent, { width: contentWidth }]}>
               {/* Back Button */}
-              <Pressable onPress={onBack} style={styles.backButton}>
+              <Pressable
+              onPress={onBack}
+              hitSlop={sz(12)}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+            >
                 <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
               </Pressable>
 
@@ -480,7 +520,7 @@ function OtpVerificationForm({
 
               {/* Verify Button */}
               <Pressable
-                style={[styles.submitButton, loading && styles.buttonDisabled]}
+                style={({ pressed }) => [styles.submitButton, loading && styles.buttonDisabled, pressed && styles.pressed]}
                 onPress={handleVerify}
                 disabled={loading}
               >
@@ -558,12 +598,20 @@ function ForgotPasswordForm({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        // Scrolls the focused field above the keyboard on small iPhones.
+        automaticallyAdjustKeyboardInsets
       >
         <DismissKeyboard>
           <View style={styles.emailContainer}>
             <View style={[styles.emailContent, { width: contentWidth }]}>
               {/* Back Button */}
-              <Pressable onPress={onBack} style={styles.backButton}>
+              <Pressable
+              onPress={onBack}
+              hitSlop={sz(12)}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+            >
                 <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
               </Pressable>
 
@@ -603,7 +651,7 @@ function ForgotPasswordForm({
 
               {/* Submit Button */}
               <Pressable
-                style={[styles.submitButton, loading && styles.buttonDisabled]}
+                style={({ pressed }) => [styles.submitButton, loading && styles.buttonDisabled, pressed && styles.pressed]}
                 onPress={() => { Keyboard.dismiss(); handleSubmit(); }}
                 disabled={loading}
               >
@@ -667,6 +715,8 @@ function NewPasswordForm({ onDone }: { onDone: () => void }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        // Scrolls the focused field above the keyboard on small iPhones.
+        automaticallyAdjustKeyboardInsets
       >
         <DismissKeyboard>
           <View style={styles.emailContainer}>
@@ -714,7 +764,7 @@ function NewPasswordForm({ onDone }: { onDone: () => void }) {
               </View>
 
               <Pressable
-                style={[styles.submitButton, loading && styles.buttonDisabled]}
+                style={({ pressed }) => [styles.submitButton, loading && styles.buttonDisabled, pressed && styles.pressed]}
                 onPress={() => { Keyboard.dismiss(); handleSubmit(); }}
                 disabled={loading}
               >
@@ -747,7 +797,11 @@ function AuthPage({
   const titleSize = sz(48);
   const subtitleSize = sz(18);
   const topSpacing = Math.max(height * 0.20, sz(140));
-  const [loading, setLoading] = useState(false);
+  // One sign-in at a time: two OAuth sheets racing each other can leave the
+  // session from whichever finishes last. The ref blocks a second tap before
+  // the disabled state has rendered.
+  const [pending, setPending] = useState<SignInProvider | null>(null);
+  const pendingRef = useRef<SignInProvider | null>(null);
   const [error, setError] = useState('');
 
   const isLogin = mode === 'login';
@@ -756,47 +810,27 @@ function AuthPage({
   const footerLead = isLogin ? "Don't have an account?" : 'Already have an account?';
   const footerAction = isLogin ? 'SignUp' : 'Login';
 
-  const handleGoogleSignIn = async () => {
+  const runSignIn = async (provider: SignInProvider, signIn: () => Promise<unknown>, name: string) => {
+    if (pendingRef.current) return;
+    pendingRef.current = provider;
+    setPending(provider);
     setError('');
-    setLoading(true);
+    tapFeedback();
     try {
-      await signInWithGoogle();
+      await signIn();
     } catch (err: any) {
       if (err?.code !== 'auth/popup-closed-by-user') {
-        setError(err?.message || 'Google sign-in failed');
+        setError(err?.message || `${name} sign-in failed`);
       }
     } finally {
-      setLoading(false);
+      pendingRef.current = null;
+      setPending(null);
     }
   };
 
-  const handleAppleSignIn = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      await signInWithApple();
-    } catch (err: any) {
-      if (err?.code !== 'auth/popup-closed-by-user') {
-        setError(err?.message || 'Apple sign-in failed');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLinkedInSignIn = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      await signInWithLinkedIn();
-    } catch (err: any) {
-      if (err?.code !== 'auth/popup-closed-by-user') {
-        setError(err?.message || 'LinkedIn sign-in failed');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleGoogleSignIn = () => runSignIn('google', signInWithGoogle, 'Google');
+  const handleAppleSignIn = () => runSignIn('apple', signInWithApple, 'Apple');
+  const handleLinkedInSignIn = () => runSignIn('linkedin', signInWithLinkedIn, 'LinkedIn');
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -838,37 +872,47 @@ function AuthPage({
                 variant="primary"
                 width={contentWidth}
                 onPress={handleGoogleSignIn}
-                loading={loading}
+                loading={pending === 'google'}
+                disabled={pending !== null}
               />
               <AuthButton
                 label="I'll use email or phone instead"
                 variant="secondary"
                 width={contentWidth}
-                onPress={() =>
-                  onSwitchMode(isLogin ? 'email_login' : 'email_signup')
-                }
+                disabled={pending !== null}
+                onPress={() => {
+                  tapFeedback();
+                  onSwitchMode(isLogin ? 'email_login' : 'email_signup');
+                }}
               />
             </View>
 
             <Text style={styles.separator}>Or</Text>
 
             <View style={styles.socialRow}>
-              <SocialButton onPress={handleLinkedInSignIn}>
+              <SocialButton
+                label="Continue with LinkedIn"
+                onPress={handleLinkedInSignIn}
+                loading={pending === 'linkedin'}
+                disabled={pending !== null}
+              >
                 <FontAwesome
                   name="linkedin-square"
                   size={sz(24)}
                   color={colors.background}
                 />
               </SocialButton>
-              <SocialButton onPress={handleAppleSignIn}>
+              <SocialButton
+                label="Continue with Apple"
+                onPress={handleAppleSignIn}
+                loading={pending === 'apple'}
+                disabled={pending !== null}
+              >
                 <FontAwesome
                   name="apple"
                   size={sz(24)}
                   color={colors.background}
                 />
-              </SocialButton>
-              <SocialButton>
-                <FontAwesome name="facebook" size={sz(22)} color={colors.background} />
               </SocialButton>
             </View>
 
@@ -1242,4 +1286,7 @@ const styles = StyleSheet.create({
   },
 
   // ── Forgot sent confirmation ────────────────────────────────────
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
+  socialPressed: { transform: [{ scale: 0.94 }], opacity: 0.85 },
 });

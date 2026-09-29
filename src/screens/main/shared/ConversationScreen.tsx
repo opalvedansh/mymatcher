@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { memo, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -82,24 +82,37 @@ function matchedLabel(iso: string) {
   return label === 'Today' || label === 'Yesterday' ? `Matched ${label.toLowerCase()}` : `Matched on ${label}`;
 }
 
+// Every socket event rebuilds the rows; parse each message's date only once.
+// Keyed by the message object, so an edited copy is parsed afresh.
+const parsed = new WeakMap<ChatMessage, { date: Date; time: number; day: string }>();
+function timeOf(m: ChatMessage) {
+  let p = parsed.get(m);
+  if (!p) {
+    const date = new Date(m.created_at);
+    p = { date, time: date.getTime(), day: `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` };
+    parsed.set(m, p);
+  }
+  return p;
+}
+
 // Adds day separators and the unread divider, and marks where runs of
 // messages from one sender start and end. Oldest first.
 function buildRows(messages: ChatMessage[], myId: string | undefined, firstUnreadId: string | null): Row[] {
   const rows: Row[] = [];
   messages.forEach((message, i) => {
-    const prev = messages[i - 1];
-    const next = messages[i + 1];
-    const at = new Date(message.created_at);
-    if (!prev || !sameDay(new Date(prev.created_at), at)) {
-      rows.push({ kind: 'day', key: `day-${message.created_at}`, label: dayLabel(at) });
+    const prev = messages[i - 1] ? timeOf(messages[i - 1]) : null;
+    const next = messages[i + 1] ? timeOf(messages[i + 1]) : null;
+    const at = timeOf(message);
+    if (!prev || prev.day !== at.day) {
+      // Keyed by the calendar day: the first message's timestamp changes when
+      // it is confirmed, which would remount the separator.
+      rows.push({ kind: 'day', key: `day-${at.day}`, label: dayLabel(at.date) });
     }
     if (message.id === firstUnreadId) rows.push({ kind: 'unread', key: 'unread' });
-    const joinsPrev = !!prev && prev.sender_id === message.sender_id
-      && sameDay(new Date(prev.created_at), at)
-      && at.getTime() - new Date(prev.created_at).getTime() < GROUP_GAP_MS;
-    const joinsNext = !!next && next.sender_id === message.sender_id
-      && sameDay(new Date(next.created_at), at)
-      && new Date(next.created_at).getTime() - at.getTime() < GROUP_GAP_MS;
+    const joinsPrev = !!prev && messages[i - 1].sender_id === message.sender_id
+      && prev.day === at.day && at.time - prev.time < GROUP_GAP_MS;
+    const joinsNext = !!next && messages[i + 1].sender_id === message.sender_id
+      && next.day === at.day && next.time - at.time < GROUP_GAP_MS;
     rows.push({
       kind: 'message',
       // The client id survives the optimistic copy being replaced, so the
@@ -135,7 +148,7 @@ function tooBig(file: LocalFile) {
 
 type HeaderMenu = null | 'main' | 'mute';
 
-export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar, chatVerified, matchedAt, onBack }: Props) {
+function ConversationScreenImpl({ matchId, otherUserId, chatName, chatAvatar, chatVerified, matchedAt, onBack }: Props) {
   const { user, onboardingData } = useAuth();
   const myId = user?.id;
   const role = onboardingData?.role?.toLowerCase() as 'brand' | 'influencer' | undefined;
@@ -183,6 +196,16 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
     setNewWhileAway(0);
   }, []);
 
+  // Set when sending: scrolling before the new row exists can stop short
+  // once maintainVisibleContentPosition shifts for it, so wait for the rows.
+  const wantLatest = useRef(false);
+  useEffect(() => {
+    if (!wantLatest.current) return;
+    wantLatest.current = false;
+    const frame = requestAnimationFrame(scrollToLatest);
+    return () => cancelAnimationFrame(frame);
+  }, [listRows, scrollToLatest]);
+
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const up = e.nativeEvent.contentOffset.y > 320;
     scrolledUp.current = up;
@@ -222,10 +245,10 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
       setEditing(null);
       return;
     }
+    wantLatest.current = true;
     chat.sendText(text, replyTo);
     setReplyTo(null);
-    scrollToLatest();
-  }, [chat, editing, replyTo, scrollToLatest]);
+  }, [chat, editing, replyTo]);
 
   const sendFiles = useCallback((files: LocalFile[], caption: string) => {
     const big = files.find(tooBig);
@@ -233,10 +256,10 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
       showAlert('File too large', `${big.kind === 'image' ? 'Photos' : big.kind === 'video' ? 'Videos' : 'Files'} can be up to ${MAX_BYTES[big.kind] / MB} MB.`);
       return;
     }
+    wantLatest.current = true;
     chat.sendFiles(files, caption, replyTo);
     setReplyTo(null);
-    scrollToLatest();
-  }, [chat, replyTo, scrollToLatest]);
+  }, [chat, replyTo]);
 
   const choose = useCallback(async (choice: AttachmentChoice) => {
     try {
@@ -715,6 +738,10 @@ export function ConversationScreen({ matchId, otherUserId, chatName, chatAvatar,
     </VoicePlaybackProvider>
   );
 }
+
+// The chat list above re-renders on every socket event for any chat; this one
+// only needs to when its own props change.
+export const ConversationScreen = memo(ConversationScreenImpl);
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#121212' },

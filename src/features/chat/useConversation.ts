@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
+import { useFocusEffect } from 'expo-router';
 import { getMessages } from '@/api';
 import { socketService } from '@/api/socket';
 import type { ChatMemberState, ChatMessage, ChatMessageKind, ChatReplyPreview } from '@/api/types';
@@ -42,7 +43,24 @@ interface PendingSend {
 }
 
 const isTemp = (m: ChatMessage) => m.id.startsWith('temp-');
-const byTime = (a: ChatMessage, b: ChatMessage) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0);
+// Unconfirmed messages carry this device's clock, which may be skewed from the
+// server's; keeping them after confirmed ones stops a just-sent bubble jumping.
+const byTime = (a: ChatMessage, b: ChatMessage) => {
+  const ta = isTemp(a);
+  if (ta !== isTemp(b)) return ta ? 1 : -1;
+  return a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0;
+};
+
+/** Array.map that hands back the same array when nothing changed, so a no-op event doesn't rebuild the thread. */
+export function mapSame<T>(list: T[], fn: (item: T) => T): T[] {
+  let out: T[] | null = null;
+  for (let i = 0; i < list.length; i++) {
+    const next = fn(list[i]);
+    if (!out && next !== list[i]) out = list.slice(0, i);
+    if (out) out.push(next);
+  }
+  return out ?? list;
+}
 
 /** Keeps this device's own copy of a file on screen after the server copy replaces it. */
 function withLocal(old: ChatMessage | undefined, next: ChatMessage): ChatMessage {
@@ -170,27 +188,49 @@ export function useConversation({ matchId, myId, otherUserId }: { matchId: strin
   }, [matchId]);
 
   // ── Read receipts ────────────────────────────────────────────────
+  // Tabs stay mounted (and may be frozen), so focus comes from the focus/blur
+  // events rather than a render: a blurred tab's render may never commit.
+  const focused = useRef(false);
+  // A reconnect while out of sight: fetching history marks it read on the
+  // server, so the catch-up waits until the chat is on screen again.
+  const staleWhileAway = useRef(false);
+  const visible = useCallback(() => focused.current && AppState.currentState === 'active', []);
+
   const readTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markReadSoon = useCallback(() => {
     if (readTimer.current) clearTimeout(readTimer.current);
     readTimer.current = setTimeout(() => {
       // Only what the person can actually see counts as read.
-      if (AppState.currentState !== 'active') return;
+      if (!visible()) return;
       socketService.markRead(matchId);
     }, 400);
-  }, [matchId]);
+  }, [matchId, visible]);
+
+  // Coming back into view: catch up and read what arrived meanwhile.
+  const onVisible = useCallback(() => {
+    if (!visible()) return;
+    if (staleWhileAway.current) {
+      staleWhileAway.current = false;
+      refreshLatest();
+    }
+    const unread = messagesRef.current.some((m) => m.sender_id !== myId && !m.read_at && !m.deleted_at);
+    if (unread) markReadSoon();
+  }, [markReadSoon, myId, refreshLatest, visible]);
+
+  useFocusEffect(useCallback(() => {
+    focused.current = true;
+    onVisible();
+    return () => { focused.current = false; };
+  }, [onVisible]));
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') return;
-      const unread = messagesRef.current.some((m) => m.sender_id !== myId && !m.read_at && !m.deleted_at);
-      if (unread) markReadSoon();
+      if (state === 'active') onVisible();
     });
-    return () => {
-      sub.remove();
-      if (readTimer.current) clearTimeout(readTimer.current);
-    };
-  }, [markReadSoon, myId]);
+    return () => sub.remove();
+  }, [onVisible]);
+
+  useEffect(() => () => { if (readTimer.current) clearTimeout(readTimer.current); }, []);
 
   // ── Live updates ─────────────────────────────────────────────────
   useEffect(() => {
@@ -198,7 +238,7 @@ export function useConversation({ matchId, myId, otherUserId }: { matchId: strin
     socketService.joinMatch(matchId);
 
     const typingExpiry: { timer: ReturnType<typeof setTimeout> | null } = { timer: null };
-    const markOwn = (at: string, field: 'delivered_at' | 'read_at') => setMessages((prev) => prev.map((m) => {
+    const markOwn = (at: string, field: 'delivered_at' | 'read_at') => setMessages((prev) => mapSame(prev, (m) => {
       if (m.sender_id !== myId || isTemp(m) || m.created_at > at || m[field]) return m;
       return field === 'read_at'
         ? { ...m, read_at: at, delivered_at: m.delivered_at ?? at }
@@ -221,7 +261,7 @@ export function useConversation({ matchId, myId, otherUserId }: { matchId: strin
       }),
       socketService.on('message_reactions', ({ matchId: id, messageId, reactions }) => {
         if (id !== matchId) return;
-        setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, reactions } : m)));
+        setMessages((prev) => mapSame(prev, (m) => (m.id === messageId ? { ...m, reactions } : m)));
       }),
       socketService.on('messages_delivered', ({ matchId: id, at }) => {
         if (id === matchId) markOwn(at, 'delivered_at');
@@ -229,7 +269,7 @@ export function useConversation({ matchId, myId, otherUserId }: { matchId: strin
       socketService.on('messages_read', ({ matchId: id, readerId, at }) => {
         if (id !== matchId) return;
         if (readerId === myId) {
-          setMessages((prev) => prev.map((m) => (m.sender_id !== myId && !m.read_at && m.created_at <= at ? { ...m, read_at: at } : m)));
+          setMessages((prev) => mapSame(prev, (m) => (m.sender_id !== myId && !m.read_at && m.created_at <= at ? { ...m, read_at: at } : m)));
         } else {
           markOwn(at, 'read_at');
         }
@@ -237,7 +277,7 @@ export function useConversation({ matchId, myId, otherUserId }: { matchId: strin
       socketService.on('messages_hidden', ({ matchId: id, ids }) => {
         if (id !== matchId) return;
         const hidden = new Set(ids);
-        setMessages((prev) => prev.filter((m) => !hidden.has(m.id)));
+        setMessages((prev) => (prev.some((m) => hidden.has(m.id)) ? prev.filter((m) => !hidden.has(m.id)) : prev));
       }),
       socketService.on('chat_cleared', ({ matchId: id, at }) => {
         if (id === matchId) setMessages((prev) => prev.filter((m) => isTemp(m) || m.created_at > at));
@@ -256,7 +296,8 @@ export function useConversation({ matchId, myId, otherUserId }: { matchId: strin
         if (closedId === matchId) setClosed(true);
       }),
       socketService.onReconnect(() => {
-        refreshLatest();
+        if (visible()) refreshLatest();
+        else staleWhileAway.current = true;
         // Anything that failed for want of a connection goes out now.
         for (const [clientId, p] of pending.current) {
           if (p.errorCode && TRANSIENT.has(p.errorCode)) deliverRef.current(clientId);
@@ -274,7 +315,7 @@ export function useConversation({ matchId, myId, otherUserId }: { matchId: strin
       socketService.leaveMatch(matchId);
       socketService.unwatchPresence(otherUserId);
     };
-  }, [matchId, myId, otherUserId, markReadSoon, refreshLatest]);
+  }, [matchId, myId, otherUserId, markReadSoon, refreshLatest, visible]);
 
   // ── Sending ──────────────────────────────────────────────────────
   const deliver = useCallback(async (clientId: string) => {

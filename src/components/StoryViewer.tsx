@@ -1,26 +1,34 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Modal,
   Pressable,
-  Dimensions,
-  Animated,
-  SafeAreaView,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   Alert,
+  FlatList,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { Image } from 'expo-image';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { recordStoryView, getStoryViewers } from '@/api';
 import { openSafetyMenu } from '@/components/safetyMenu';
 import { sz } from '@/theme/scale';
-
-const { width, height } = Dimensions.get('window');
 
 type StoryItem = {
   id: string;
@@ -38,94 +46,151 @@ type StoryGroup = {
 interface StoryViewerProps {
   visible: boolean;
   stories: StoryGroup[];
+  /**
+   * Read once, on mount. Callers remount the viewer (`key`) for every open so
+   * the first frame already shows the right group.
+   */
   initialGroupIndex?: number;
   onClose: () => void;
 }
 
 const STORY_DURATION = 5000; // 5 seconds per story
 
+/** Nearest group at or after `from` (stepping by `dir`) that has something to show. */
+function findGroup(stories: StoryGroup[], from: number, dir: 1 | -1): number {
+  for (let i = from; i >= 0 && i < stories.length; i += dir) {
+    if (stories[i]?.items?.length) return i;
+  }
+  return -1;
+}
+
 export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }: StoryViewerProps) {
-  const [currentGroupIndex, setCurrentGroupIndex] = useState(initialGroupIndex);
-  const [currentItemIndex, setCurrentItemIndex] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const [replyText, setReplyText] = useState('');
+  const { width, height } = useWindowDimensions();
+
+  // Seeded from props rather than reset in an effect: an effect runs after the
+  // first paint, which flashed the previously viewed group and recorded a view
+  // on it before snapping to the tapped one.
+  const [groupIndex, setGroupIndex] = useState(() => Math.max(0, findGroup(stories, Math.max(0, initialGroupIndex), 1)));
+  const [itemIndex, setItemIndex] = useState(0);
+  // The timer only runs once the photo is on screen; a slow load shouldn't eat
+  // the five seconds.
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+  const [failedId, setFailedId] = useState<string | null>(null);
+  const [restartTick, setRestartTick] = useState(0);
+
+  // Each reason to pause is tracked on its own so, say, closing the viewers
+  // sheet doesn't resume a story the user had paused with the button.
+  const [userPaused, setUserPaused] = useState(false);
+  const [held, setHeld] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const [showViewers, setShowViewers] = useState(false);
-  const [viewersList, setViewersList] = useState<any[]>([]);
-  
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  const isPaused = useRef(false);
 
-  useEffect(() => {
-    if (visible && stories.length > 0) {
-      const currentGroup = stories[currentGroupIndex];
-      const currentItem = currentGroup?.items[currentItemIndex];
-      if (currentGroup && currentItem && !currentGroup.isMe) {
-        recordStoryView(currentItem.id).catch(console.error);
-      }
-    }
-  }, [visible, currentGroupIndex, currentItemIndex, stories]);
+  const [replyText, setReplyText] = useState('');
+  const [viewersList, setViewersList] = useState<any[] | null>(null);
 
-  useEffect(() => {
-    if (visible) {
-      setCurrentGroupIndex(initialGroupIndex);
-      setCurrentItemIndex(0);
-    }
-  }, [visible, initialGroupIndex]);
+  const progress = useSharedValue(0);
 
-  useEffect(() => {
-    if (visible && stories.length > 0) {
-      startAnimation();
-    } else {
-      progressAnim.setValue(0);
-    }
-    return () => {
-      progressAnim.stopAnimation();
-    };
-  }, [currentGroupIndex, currentItemIndex, visible]);
+  const group = stories[groupIndex];
+  const item = group?.items[itemIndex];
+  const itemId = item?.id;
+  const loaded = !!itemId && loadedId === itemId;
+  const paused = userPaused || held || inputFocused || showViewers;
 
-  const startAnimation = () => {
-    progressAnim.setValue(0);
-    Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: STORY_DURATION,
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished && !isPaused.current) {
-        goToNext();
-      }
-    });
+  // Empty the bar before the index changes: the next story's bar otherwise
+  // renders one frame full, before the run effect below resets it.
+  const resetBar = () => {
+    cancelAnimation(progress);
+    progress.value = 0;
   };
 
   const goToNext = () => {
-    const currentGroup = stories[currentGroupIndex];
-    if (!currentGroup) return;
-
-    if (currentItemIndex < currentGroup.items.length - 1) {
-      setCurrentItemIndex(prev => prev + 1);
-    } else {
-      if (currentGroupIndex < stories.length - 1) {
-        setCurrentGroupIndex(prev => prev + 1);
-        setCurrentItemIndex(0);
-      } else {
-        onClose();
-      }
+    if (!group) return;
+    resetBar();
+    if (itemIndex < group.items.length - 1) {
+      setItemIndex(itemIndex + 1);
+      return;
     }
+    const next = findGroup(stories, groupIndex + 1, 1);
+    if (next === -1) {
+      onClose();
+      return;
+    }
+    setGroupIndex(next);
+    setItemIndex(0);
   };
 
   const goToPrev = () => {
-    if (currentItemIndex > 0) {
-      setCurrentItemIndex(prev => prev - 1);
-    } else {
-      if (currentGroupIndex > 0) {
-        const prevGroup = stories[currentGroupIndex - 1];
-        setCurrentGroupIndex(prevGroupIndex => prevGroupIndex - 1);
-        setCurrentItemIndex(prevGroup.items.length - 1);
-      } else {
-        progressAnim.setValue(0);
-        startAnimation();
-      }
+    resetBar();
+    if (itemIndex > 0) {
+      setItemIndex(itemIndex - 1);
+      return;
     }
+    const prev = findGroup(stories, groupIndex - 1, -1);
+    if (prev === -1) {
+      setRestartTick((t) => t + 1);
+      return;
+    }
+    setGroupIndex(prev);
+    setItemIndex(stories[prev].items.length - 1);
   };
+
+  // The finish callback crosses from the UI thread, so it reaches the latest
+  // render through refs instead of a stale closure.
+  const itemIdRef = useRef(itemId);
+  itemIdRef.current = itemId;
+  const goToNextRef = useRef(goToNext);
+  goToNextRef.current = goToNext;
+  const onTimerDone = useCallback((finishedId: string) => {
+    // A tap can land in the same frame the bar fills; don't skip two stories.
+    if (finishedId === itemIdRef.current) goToNextRef.current();
+  }, []);
+
+  // Runs the bar on the UI thread. Pausing cancels it where it stands, and
+  // resuming finishes only the time that was left.
+  const runKey = `${itemId}:${restartTick}`;
+  const runKeyRef = useRef<string | null>(null);
+  const runStartedRef = useRef(false);
+  useEffect(() => {
+    // New story (or a restart of the first one): empty bar.
+    if (runKeyRef.current !== runKey) {
+      runKeyRef.current = runKey;
+      runStartedRef.current = false;
+      cancelAnimation(progress);
+      progress.value = 0;
+    }
+    if (!visible || !loaded || paused || !itemId) return;
+    // Writes reach the UI thread asynchronously, so a fresh run can't read
+    // back the reset above; only a resume reads where the bar stopped.
+    const from = runStartedRef.current ? progress.value : 0;
+    runStartedRef.current = true;
+    const id = itemId;
+    progress.value = withTiming(
+      1,
+      { duration: Math.max(0, STORY_DURATION * (1 - from)), easing: Easing.linear },
+      (finished) => {
+        if (finished) runOnJS(onTimerDone)(id);
+      },
+    );
+    return () => cancelAnimation(progress);
+  }, [runKey, visible, loaded, paused, itemId, progress, onTimerDone]);
+
+  // Counted once the photo is actually showing, once per story per open.
+  const viewedRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!visible || !loaded || !itemId || group?.isMe || viewedRef.current.has(itemId)) return;
+    viewedRef.current.add(itemId);
+    recordStoryView(itemId).catch(console.error);
+  }, [visible, loaded, itemId, group?.isMe]);
+
+  // Warm the cache for what comes next so tapping forward doesn't wait on
+  // the network.
+  useEffect(() => {
+    if (!visible || !group) return;
+    const urls = group.items.slice(itemIndex + 1, itemIndex + 3).map((i) => i.media_url);
+    const nextGroup = stories[findGroup(stories, groupIndex + 1, 1)];
+    if (nextGroup) urls.push(nextGroup.items[0].media_url);
+    if (urls.length) Image.prefetch(urls, 'memory-disk').catch(() => {});
+  }, [visible, group, groupIndex, itemIndex, stories]);
 
   const handlePress = (evt: any) => {
     const x = evt.nativeEvent.locationX;
@@ -136,33 +201,10 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
     }
   };
 
-  const handleLongPress = () => {
-    isPaused.current = true;
-    progressAnim.stopAnimation();
-  };
-
-  const handlePressOut = () => {
-    if (isPaused.current) {
-      isPaused.current = false;
-      startAnimation();
-    }
-  };
-
-  const togglePause = () => {
-    if (isPaused.current) {
-      isPaused.current = false;
-      startAnimation();
-    } else {
-      isPaused.current = true;
-      progressAnim.stopAnimation();
-    }
-  };
-
   const handleSendReply = () => {
     if (replyText.trim()) {
-      Alert.alert('Sent', `Your reply to ${stories[currentGroupIndex]?.name} was sent!`);
+      Alert.alert('Sent', `Your reply to ${group?.name} was sent!`);
       setReplyText('');
-      // Resume if we hit send and the keyboard closes
     }
   };
 
@@ -175,53 +217,65 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
   };
 
   const handleOpenViewers = async () => {
+    if (!itemId) return;
+    setViewersList(null);
+    setShowViewers(true);
     try {
-      isPaused.current = true;
-      progressAnim.stopAnimation();
-      
-      const currentItem = stories[currentGroupIndex].items[currentItemIndex];
-      const data = await getStoryViewers(currentItem.id);
-      setViewersList(data);
-      setShowViewers(true);
+      setViewersList(await getStoryViewers(itemId));
     } catch (err) {
       console.error('Failed to get viewers:', err);
+      setShowViewers(false);
       Alert.alert('Error', 'Could not load viewers.');
-      isPaused.current = false;
-      startAnimation();
     }
   };
 
-  const closeViewers = () => {
-    setShowViewers(false);
-    isPaused.current = false;
-    startAnimation();
-  };
+  const closeViewers = () => setShowViewers(false);
 
-  if (!visible || stories.length === 0) return null;
-
-  const currentGroup = stories[currentGroupIndex];
-  if (!currentGroup || currentGroup.items.length === 0) return null;
-  const currentItem = currentGroup.items[currentItemIndex];
+  // Stays mounted while hidden so the Modal can play its fade-out; returning
+  // null here would unmount it mid-animation.
+  if (!group || !item) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView 
-        style={styles.container} 
+      <KeyboardAvoidingView
+        style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.container}>
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={handlePress}
-            onLongPress={handleLongPress}
-            onPressOut={handlePressOut}
+            onLongPress={() => setHeld(true)}
+            onPressOut={() => setHeld(false)}
             delayLongPress={200}
           >
             <Image
-              source={{ uri: currentItem.media_url }}
+              // Remounted per story so onLoad fires even when two stories
+              // share a URL, and the last photo never lingers under the next.
+              key={item.id}
+              recyclingKey={item.id}
+              source={{ uri: item.media_url }}
               style={styles.image}
               contentFit="cover"
+              cachePolicy="memory-disk"
+              onLoad={() => setLoadedId(item.id)}
+              // A broken photo still counts down, or the viewer would hang.
+              onError={() => {
+                setFailedId(item.id);
+                setLoadedId(item.id);
+              }}
             />
+            {!loaded && (
+              <View style={styles.imageStatus} pointerEvents="none">
+                <ActivityIndicator color="rgba(255,255,255,0.7)" />
+              </View>
+            )}
+            {failedId === item.id && (
+              <View style={styles.imageStatus} pointerEvents="none">
+                <Ionicons name="image-outline" size={sz(34)} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.failedText}>Couldn't load this story</Text>
+              </View>
+            )}
           </Pressable>
 
           {/* Top Gradient for header readability */}
@@ -231,55 +285,48 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
             pointerEvents="none"
           />
 
-          <SafeAreaView style={styles.overlay}>
+          <SafeAreaView style={styles.overlay} pointerEvents="box-none">
             {/* Progress Bars */}
             <View style={styles.progressContainer}>
-              {currentGroup.items.map((item, index) => {
-                return (
-                  <View key={item.id} style={styles.progressBarBg}>
-                    <Animated.View
-                      style={[
-                        styles.progressBarFg,
-                        {
-                          width: index === currentItemIndex
-                            ? progressAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: ['0%', '100%'],
-                              })
-                            : index < currentItemIndex
-                            ? '100%'
-                            : '0%',
-                        },
-                      ]}
-                    />
-                  </View>
-                );
-              })}
+              {group.items.map((it, index) => (
+                <View key={it.id} style={styles.progressBarBg}>
+                  {index === itemIndex ? (
+                    <ActiveProgress progress={progress} />
+                  ) : index < itemIndex ? (
+                    <View style={styles.progressBarFg} />
+                  ) : null}
+                </View>
+              ))}
             </View>
 
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.userInfo}>
-                <Image source={{ uri: currentGroup.avatar }} style={styles.avatar} />
-                <Text style={styles.username}>{currentGroup.name}</Text>
+                <Image source={{ uri: group.avatar }} style={styles.avatar} cachePolicy="memory-disk" />
+                <Text style={styles.username}>{group.name}</Text>
                 <Text style={styles.timeElapsed}>2 h</Text>
               </View>
               <View style={styles.headerRight}>
-                <Pressable onPress={togglePause} style={styles.headerIconBtn}>
-                  <Ionicons name={isPaused.current ? "play" : "pause"} size={sz(22)} color="#FFF" />
+                <Pressable
+                  onPress={() => setUserPaused((p) => !p)}
+                  style={styles.headerIconBtn}
+                  accessibilityLabel={userPaused ? 'Play' : 'Pause'}
+                >
+                  <Ionicons name={userPaused ? 'play' : 'pause'} size={sz(22)} color="#FFF" />
                 </Pressable>
-                {!currentGroup.isMe && (
+                {!group.isMe && (
                   <Pressable
                     accessibilityLabel="Report or block"
                     style={styles.headerIconBtn}
                     onPress={() => {
-                      isPaused.current = true;
-                      progressAnim.stopAnimation();
+                      // The menu has no dismiss callback, so leave it paused;
+                      // the play button resumes.
+                      setUserPaused(true);
                       // The story group id is the author's user id.
                       openSafetyMenu({
-                        userId: currentGroup.id,
-                        name: currentGroup.name,
-                        target: { type: 'story', id: currentItem.id },
+                        userId: group.id,
+                        name: group.name,
+                        target: { type: 'story', id: item.id },
                         onBlocked: onClose,
                       });
                     }}
@@ -304,7 +351,7 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
 
             {/* Bottom Bar */}
             <View style={styles.bottomBar}>
-              {currentGroup.isMe ? (
+              {group.isMe ? (
                 <View style={styles.viewersBarContainer}>
                   <Pressable style={styles.viewersBtn} onPress={handleOpenViewers}>
                     <Ionicons name="eye-outline" size={sz(24)} color="#FFF" />
@@ -319,26 +366,18 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                   <View style={styles.inputContainer}>
                     <TextInput
                       style={styles.input}
-                      placeholder={`Reply to ${currentGroup.name}...`}
+                      placeholder={`Reply to ${group.name}...`}
                       placeholderTextColor="#FFF"
                       value={replyText}
                       onChangeText={setReplyText}
                       onSubmitEditing={handleSendReply}
                       returnKeyType="send"
-                      onFocus={() => {
-                        isPaused.current = true;
-                        progressAnim.stopAnimation();
-                        setIsKeyboardVisible(true);
-                      }}
-                      onBlur={() => {
-                        isPaused.current = false;
-                        startAnimation();
-                        setIsKeyboardVisible(false);
-                      }}
+                      onFocus={() => setInputFocused(true)}
+                      onBlur={() => setInputFocused(false)}
                     />
                   </View>
 
-                  {!isKeyboardVisible && (
+                  {!inputFocused && (
                     <View style={styles.actionButtons}>
                       <Pressable style={styles.actionBtn} onPress={handleLike}>
                         <Ionicons name="heart-outline" size={sz(30)} color="#FFF" />
@@ -355,30 +394,44 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
 
           {/* Viewers Bottom Sheet */}
           <Modal visible={showViewers} transparent animationType="slide" onRequestClose={closeViewers}>
-            <Pressable style={styles.viewersModalOverlay} onPress={closeViewers}>
-              <Pressable style={styles.viewersSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.viewersModalOverlay}>
+              <Pressable style={styles.viewersBackdrop} onPress={closeViewers} accessibilityLabel="Close viewers" />
+              {/* A plain View, not a Pressable, so the list below can scroll. */}
+              <View style={[styles.viewersSheet, { maxHeight: height * 0.8 }]}>
                 <View style={styles.viewersSheetHeader}>
                   <View style={styles.dragHandle} />
                   <Text style={styles.viewersSheetTitle}>Viewers</Text>
                 </View>
-                {viewersList.length === 0 ? (
-                  <Text style={styles.emptyViewersText}>No viewers yet.</Text>
+                {viewersList === null ? (
+                  <ActivityIndicator color="rgba(255,255,255,0.6)" style={{ marginTop: sz(20) }} />
                 ) : (
-                  viewersList.map((viewer) => (
-                    <View key={viewer.user_id} style={styles.viewerRow}>
-                      <Image source={{ uri: viewer.avatar }} style={styles.viewerAvatar} />
-                      <Text style={styles.viewerName}>{viewer.name}</Text>
-                    </View>
-                  ))
+                  <FlatList
+                    data={viewersList}
+                    keyExtractor={(viewer) => String(viewer.user_id)}
+                    renderItem={({ item: viewer }) => (
+                      <View style={styles.viewerRow}>
+                        <Image source={{ uri: viewer.avatar }} style={styles.viewerAvatar} cachePolicy="memory-disk" />
+                        <Text style={styles.viewerName}>{viewer.name}</Text>
+                      </View>
+                    )}
+                    ListEmptyComponent={<Text style={styles.emptyViewersText}>No viewers yet.</Text>}
+                    showsVerticalScrollIndicator={false}
+                  />
                 )}
-              </Pressable>
-            </Pressable>
+              </View>
+            </View>
           </Modal>
 
         </View>
       </KeyboardAvoidingView>
     </Modal>
   );
+}
+
+/** The current story's bar, driven on the UI thread. */
+function ActiveProgress({ progress }: { progress: SharedValue<number> }) {
+  const fill = useAnimatedStyle(() => ({ transform: [{ scaleX: progress.value }] }));
+  return <Animated.View style={[styles.progressBarFg, styles.progressBarActive, fill]} />;
 }
 
 const styles = StyleSheet.create({
@@ -389,6 +442,17 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+    backgroundColor: '#000',
+  },
+  imageStatus: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: sz(10),
+  },
+  failedText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: sz(14),
   },
   topGradient: {
     position: 'absolute',
@@ -410,7 +474,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    pointerEvents: 'box-none',
   },
   progressContainer: {
     flexDirection: 'row',
@@ -426,8 +489,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   progressBarFg: {
+    width: '100%',
     height: '100%',
     backgroundColor: '#FFF',
+  },
+  // Scaled from the left edge so it grows like a width change, without the
+  // per-frame layout a width animation costs.
+  progressBarActive: {
+    transformOrigin: 'left',
   },
   header: {
     flexDirection: 'row',
@@ -522,13 +591,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
+  viewersBackdrop: {
+    flex: 1,
+  },
   viewersSheet: {
     backgroundColor: '#1E1E1E',
     borderTopLeftRadius: sz(16),
     borderTopRightRadius: sz(16),
     padding: sz(16),
     minHeight: sz(300),
-    maxHeight: height * 0.8,
   },
   viewersSheetHeader: {
     alignItems: 'center',

@@ -5,12 +5,12 @@ import {
   Text,
   View,
   TouchableOpacity,
-  SafeAreaView,
   Animated,
   Easing,
   Platform,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -28,7 +28,7 @@ export function VerificationModal({ visible, onClose, onVerified }: Verification
   const [permission, requestPermission] = useCameraPermissions();
   const [scanningStatus, setScanningStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [scanLineAnim] = useState(new Animated.Value(0));
+  const [scanLineAnim] = useState(() => new Animated.Value(0));
   const cameraRef = useRef<CameraView>(null);
 
   useEffect(() => {
@@ -39,9 +39,12 @@ export function VerificationModal({ visible, onClose, onVerified }: Verification
     }
   }, [visible]);
 
+  // Runs only while the modal is open and scanning; the cleanup stops the
+  // loop when the scan ends, the modal closes, or the screen unmounts, so it
+  // doesn't keep ticking in the background.
   useEffect(() => {
-    if (scanningStatus === 'scanning') {
-      Animated.loop(
+    if (visible && scanningStatus === 'scanning') {
+      const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(scanLineAnim, {
             toValue: 1,
@@ -56,11 +59,11 @@ export function VerificationModal({ visible, onClose, onVerified }: Verification
             useNativeDriver: true,
           }),
         ])
-      ).start();
-    } else {
-      scanLineAnim.stopAnimation();
+      );
+      loop.start();
+      return () => loop.stop();
     }
-  }, [scanningStatus]);
+  }, [visible, scanningStatus]);
 
   useEffect(() => {
     if (scanningStatus === 'success') {

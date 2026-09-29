@@ -1,26 +1,30 @@
 import { useState } from 'react';
+import { isUsableImage } from '@/contexts/AuthContext';
 import { AntDesign } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
-  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 export function BrandLogoUploadScreen({
+  initialLogo,
   onBack,
   onNext,
 }: {
+  initialLogo?: string;
   onBack?: () => void;
   onNext?: (logo: string) => void;
 }) {
-  const [logo, setLogo] = useState<string | null>(null);
+  const [logo, setLogo] = useState<string | null>(isUsableImage(initialLogo) ? initialLogo : null);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -43,7 +47,13 @@ export function BrandLogoUploadScreen({
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Header */}
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
@@ -58,12 +68,12 @@ export function BrandLogoUploadScreen({
         {/* Upload Container */}
         <View style={styles.uploadContainer}>
           <Pressable 
-            style={styles.uploadBox}
+            style={({ pressed }) => [styles.uploadBox, pressed && styles.slotPressed]}
             onPress={pickImage}
           >
             {logo ? (
               <>
-                <Image source={{ uri: logo }} style={styles.image} />
+                <Image source={{ uri: logo }} style={styles.image} contentFit="cover" transition={150} />
                 <Pressable 
                   style={styles.removeButton}
                   onPress={(e) => {
@@ -83,13 +93,15 @@ export function BrandLogoUploadScreen({
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.nextButton,
               !logo && styles.nextButtonDisabled,
+              pressed && styles.pressed,
             ]}
             disabled={!logo}
             onPress={() => {
               if (logo) {
+                tapFeedback();
                 onNext?.(logo);
               }
             }}
@@ -202,4 +214,7 @@ const styles = StyleSheet.create({
   nextButtonTextDisabled: {
     color: '#8A8A8A',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
+  slotPressed: { opacity: 0.8 },
 });

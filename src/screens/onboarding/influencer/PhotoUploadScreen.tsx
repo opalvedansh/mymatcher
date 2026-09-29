@@ -1,27 +1,31 @@
 import { AntDesign } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
+import { isUsableImage } from '@/contexts/AuthContext';
 import {
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 export function PhotoUploadScreen({
+  initialPhotos,
   onBack,
   onNext,
 }: {
+  initialPhotos?: string[];
   onBack?: () => void;
   onNext?: (photos: string[]) => void;
 }) {
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<string[]>(() => (initialPhotos ?? []).filter(isUsableImage).slice(0, 6));
 
   const pickImage = async (index: number) => {
     // No permissions request is necessary for launching the image library
@@ -53,12 +57,12 @@ export function PhotoUploadScreen({
       slots.push(
         <Pressable 
           key={i} 
-          style={styles.photoSlot} 
+          style={({ pressed }) => [styles.photoSlot, pressed && styles.slotPressed]}
           onPress={() => pickImage(i)}
         >
           {uri ? (
             <>
-              <Image source={{ uri }} style={styles.image} />
+              <Image source={{ uri }} style={styles.image} contentFit="cover" transition={150} />
               <Pressable 
                 style={styles.removeButton}
                 onPress={(e) => {
@@ -82,7 +86,13 @@ export function PhotoUploadScreen({
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Header */}
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
@@ -108,13 +118,15 @@ export function PhotoUploadScreen({
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.nextButton,
-              photos.length === 0 && styles.nextButtonDisabled
+              photos.length === 0 && styles.nextButtonDisabled,
+              pressed && styles.pressed,
             ]}
             onPress={() => {
               const validPhotos = photos.filter(Boolean);
               if (validPhotos.length > 0) {
+                tapFeedback();
                 onNext?.(validPhotos);
               }
             }}
@@ -225,4 +237,7 @@ const styles = StyleSheet.create({
   nextButtonTextDisabled: {
     color: '#8A8A8A',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
+  slotPressed: { opacity: 0.8 },
 });

@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage, uploadStory } from '@/api';
+import { showAlert } from '@/components/ActionSheet';
 import { sz } from '@/theme/scale';
 
 export default function StoryCameraScreen() {
@@ -62,6 +63,7 @@ export default function StoryCameraScreen() {
       }
     } catch (err) {
       console.error('Failed to capture story', err);
+      showAlert('Story not posted', 'Something went wrong while taking or uploading the photo. Please try again.');
     } finally {
       setIsUploading(false); // only needed if router.back() takes time or fails
     }
@@ -82,6 +84,7 @@ export default function StoryCameraScreen() {
         router.back();
       } catch (err) {
         console.error('Failed to upload picked story', err);
+        showAlert('Story not posted', 'Something went wrong while uploading. Please try again.');
         setIsUploading(false);
       }
     }
@@ -124,12 +127,15 @@ export default function StoryCameraScreen() {
 
           {/* Bottom Bar */}
           <View style={styles.bottomBar}>
-            {/* Gallery Picker Thumbnail */}
-            <TouchableOpacity style={styles.galleryButton} onPress={handlePickImage}>
-              <Image 
-                source={{ uri: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&q=80' }} 
-                style={styles.galleryThumbnail} 
-              />
+            {/* Gallery picker */}
+            <TouchableOpacity
+              style={styles.galleryButton}
+              onPress={handlePickImage}
+              disabled={isUploading}
+              accessibilityRole="button"
+              accessibilityLabel="Choose from library"
+            >
+              <Ionicons name="images-outline" size={sz(20)} color="white" />
             </TouchableOpacity>
 
             {/* Capture Button */}
@@ -212,10 +218,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  galleryThumbnail: {
-    width: '100%',
-    height: '100%',
   },
   captureButtonContainer: {
     width: sz(80),

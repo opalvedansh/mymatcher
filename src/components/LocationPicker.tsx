@@ -14,6 +14,7 @@ import { colors } from '@/theme/colors';
 import { getMapAutocomplete, getMapGeocode } from '@/api';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 
 
@@ -41,14 +42,24 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
   const [loading, setLoading] = useState(false);
   const [resolving, setResolving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped on every query change so a slow reply for older text can't
+  // overwrite the suggestions for what's typed now.
+  const requestId = useRef(0);
+  const geocodeId = useRef(0);
+  // Filling the box with a picked place shouldn't search for it again and
+  // reopen the dropdown.
+  const skipNextFetch = useRef(false);
 
   // Fetch autocomplete predictions as user types
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    const id = ++requestId.current;
 
     const trimmed = query.trim();
-    if (!trimmed || trimmed === selected?.name) {
+    if (skipNextFetch.current || !trimmed || trimmed === selected?.name) {
+      skipNextFetch.current = false;
       setPredictions([]);
+      setLoading(false);
       return;
     }
 
@@ -57,11 +68,11 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
       setLoading(true);
       try {
         const res = await getMapAutocomplete(trimmed, '(cities)');
-        setPredictions(res.predictions ?? []);
+        if (id === requestId.current) setPredictions(res.predictions ?? []);
       } catch (err) {
         console.error('[LocationPicker] Autocomplete error:', err);
       } finally {
-        setLoading(false);
+        if (id === requestId.current) setLoading(false);
       }
     }, 350);
 
@@ -72,13 +83,18 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
 
   // Resolve a place_id to lat/lng using the Geocoding API
   const handleSelect = async (prediction: Prediction) => {
+    tapFeedback('selection');
+    const id = ++geocodeId.current;
     setPredictions([]);
+    if (prediction.description !== query) skipNextFetch.current = true;
     setQuery(prediction.description);
     setResolving(true);
 
     try {
       const res = await getMapGeocode(prediction.place_id);
       const result = res.results?.[0];
+      // A later pick (or new typing) supersedes this one.
+      if (id !== geocodeId.current) return;
 
       if (result) {
         const { lat, lng } = result.geometry.location;
@@ -92,11 +108,12 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
     } catch (err) {
       console.error('[LocationPicker] Geocoding error:', err);
     } finally {
-      setResolving(false);
+      if (id === geocodeId.current) setResolving(false);
     }
   };
 
   const handleConfirm = () => {
+    tapFeedback();
     Keyboard.dismiss();
     if (selected) {
       onSelect(selected);
@@ -117,7 +134,13 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
       <View style={styles.container}>
       {/* Back Button */}
       {onBack && (
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
       )}
@@ -141,6 +164,8 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
           placeholderTextColor="#666"
           value={query}
           onChangeText={(t) => {
+            geocodeId.current++;
+            setResolving(false);
             setSelected(null);
             setQuery(t);
           }}
@@ -152,7 +177,7 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
           <ActivityIndicator size="small" color={colors.primary} style={styles.searchSpinner} />
         )}
         {query.length > 0 && !loading && (
-          <Pressable onPress={() => { setQuery(''); setSelected(null); setPredictions([]); }}>
+          <Pressable hitSlop={sz(10)} onPress={() => { setQuery(''); setSelected(null); setPredictions([]); }}>
             <AntDesign name="close" size={sz(16)} color="#666" style={styles.clearIcon} />
           </Pressable>
         )}
@@ -207,7 +232,7 @@ export function LocationPicker({ initialValue, onSelect, onBack }: Props) {
 
       {/* Confirm Button */}
       <Pressable
-        style={[styles.confirmButton, !isReady && styles.confirmButtonDisabled]}
+        style={({ pressed }) => [styles.confirmButton, !isReady && styles.confirmButtonDisabled, pressed && styles.pressed]}
         onPress={handleConfirm}
         disabled={!isReady}
       >
@@ -369,4 +394,6 @@ const styles = StyleSheet.create({
     fontSize: sz(16),
     fontWeight: '700',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
 });

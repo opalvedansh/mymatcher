@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { type User } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
@@ -94,6 +94,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+// Local images picked during this launch. Saved progress can hold a local URI
+// whose upload never finished; after a reload or restart that file (or web
+// blob) is gone, and pre-filling it would show a blank tile that then fails
+// at the final step.
+const pickedThisLaunch = new Set<string>();
+
+/** Whether a saved onboarding image can still be shown and uploaded. */
+export function isUsableImage(uri?: string | null): uri is string {
+  if (!uri) return false;
+  return /^https?:\/\//.test(uri) || pickedThisLaunch.has(uri);
+}
+
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) {
@@ -132,20 +144,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const uploads = useRef(new Map<string, Promise<string>>());
   const completing = useRef<Promise<boolean> | null>(null);
 
+  // Whose data is loaded (or loading). A different user signing in must hold
+  // routing until their data arrives, or AuthGuard sees "signed in, not
+  // onboarded" for a moment and flashes role selection.
+  const userIdRef = useRef<string | null>(null);
+
   // Listen to auth state changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      // ── Safe startup token diagnostics (never logs the actual token) ──
-      const _t = session?.access_token ?? null;
-      console.log(
-        '[AuthContext Startup Debug]',
-        `sessionExists=${!!session}`,
-        `accessTokenExists=${!!_t}`,
-        `tokenType=${_t !== null ? typeof _t : 'null'}`,
-        `tokenLength=${_t?.length ?? 0}`,
-        `jwtPartCount=${_t ? _t.split('.').length : 0}`,
-      );
-      // ──────────────────────────────────────────────────────────
+      if (__DEV__) {
+        // Safe startup token diagnostics (never logs the actual token)
+        const _t = session?.access_token ?? null;
+        console.log(
+          '[AuthContext Startup Debug]',
+          `sessionExists=${!!session}`,
+          `accessTokenExists=${!!_t}`,
+          `tokenLength=${_t?.length ?? 0}`,
+          `jwtPartCount=${_t ? _t.split('.').length : 0}`,
+        );
+      }
+      userIdRef.current = session?.user?.id ?? null;
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchUserData(session.user);
@@ -155,23 +173,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log(`[AuthContext] onAuthStateChange event: ${_event}`);
-
-      // ── Safe auth state change token diagnostics (never logs the actual token) ──
-      const _t2 = session?.access_token ?? null;
-      console.log(
-        '[AuthContext Auth State Debug]',
-        `event=${_event}`,
-        `sessionExists=${!!session}`,
-        `accessTokenExists=${!!_t2}`,
-        `tokenType=${_t2 !== null ? typeof _t2 : 'null'}`,
-        `tokenLength=${_t2?.length ?? 0}`,
-        `jwtPartCount=${_t2 ? _t2.split('.').length : 0}`,
-      );
-      // ──────────────────────────────────────────────────────────────────────
+      if (__DEV__) {
+        const _t2 = session?.access_token ?? null;
+        console.log(
+          '[AuthContext Auth State Debug]',
+          `event=${_event}`,
+          `sessionExists=${!!session}`,
+          `tokenLength=${_t2?.length ?? 0}`,
+        );
+      }
 
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
+      const sameUser = !!currentUser && currentUser.id === userIdRef.current;
+      if (currentUser && !sameUser) setLoading(true);
+      userIdRef.current = currentUser?.id ?? null;
+      // The hourly token refresh hands back a new but identical user object;
+      // keeping the old one spares every useAuth() consumer a re-render.
+      setUser(prev => (sameUser && _event === 'TOKEN_REFRESHED' ? prev : currentUser));
       if (currentUser) {
         // Connect globally so banners and notifications work everywhere
         socketService.connect();
@@ -180,6 +198,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.access_token) {
           socketService.updateToken(session.access_token);
         }
+        // A refreshed token changes nothing about the user's saved state.
+        if (sameUser && _event === 'TOKEN_REFRESHED') return;
         await fetchUserData(currentUser);
       } else {
         // Disconnect socket on sign-out
@@ -203,14 +223,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = async (currentUser: User) => {
     if (fetchUserDataPromise.current) {
-      console.log('[Startup] fetchUserData already in progress. Waiting...');
       return fetchUserDataPromise.current;
     }
 
     fetchUserDataPromise.current = (async () => {
       try {
         setUserDataError(null);
-        console.log('[Startup] Fetching user data and onboarding progress...');
         // Fetch user profile and onboarding state from Backend
         const [dbUser, onboardingProgress] = await Promise.all([
           api.get<any>('/api/auth/me').catch((e) => {
@@ -224,9 +242,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw e;
           })
         ]);
-
-        console.log('[Startup] DB User fetched:', !!dbUser);
-        console.log('[Startup] Onboarding progress fetched:', !!onboardingProgress);
 
         if (dbUser) {
           setOnboardingComplete(!!dbUser.role);
@@ -264,7 +279,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           );
         }
       } finally {
-        console.log('[Startup] Finished fetching user data. Setting loading=false');
         setLoading(false);
         fetchUserDataPromise.current = null;
       }
@@ -524,7 +538,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     scheduleOnboardingSave();
 
     for (const uri of [...(data.photos ?? []), data.logo]) {
-      if (isLocalUri(uri)) startUpload(uri).catch(() => {});
+      if (isLocalUri(uri)) {
+        pickedThisLaunch.add(uri);
+        startUpload(uri).catch(() => {});
+      }
     }
   };
 
@@ -638,34 +655,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // The actions close over `user`, so the value is rebuilt whenever any state
+  // changes, and only then; a re-render of the provider alone reuses it.
+  const value = useMemo<AuthContextType>(() => ({
+    user,
+    loading,
+    onboardingData,
+    onboardingComplete,
+    userDataError,
+    retryUserData,
+    signInWithEmail,
+    signUpWithEmail,
+    signInWithGoogle,
+    signInWithApple,
+    signInWithLinkedIn,
+    signOut,
+    deleteAccount,
+    verifyOtpCode,
+    resendOtp,
+    resetPassword,
+    verifyPasswordResetCode,
+    updatePassword,
+    passwordRecovery,
+    beginPasswordRecovery,
+    endPasswordRecovery,
+    updateOnboarding,
+    completeOnboarding,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [user, loading, onboardingData, onboardingComplete, userDataError, passwordRecovery]);
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        onboardingData,
-        onboardingComplete,
-        userDataError,
-        retryUserData,
-        signInWithEmail,
-        signUpWithEmail,
-        signInWithGoogle,
-        signInWithApple,
-        signInWithLinkedIn,
-        signOut,
-        deleteAccount,
-        verifyOtpCode,
-        resendOtp,
-        resetPassword,
-        verifyPasswordResetCode,
-        updatePassword,
-        passwordRecovery,
-        beginPasswordRecovery,
-        endPasswordRecovery,
-        updateOnboarding,
-        completeOnboarding,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

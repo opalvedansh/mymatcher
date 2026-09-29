@@ -9,14 +9,18 @@ import {
   Pressable,
   Platform,
   RefreshControl,
+  AppState,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { getMatches } from '@/api';
 import { socketService } from '@/api/socket';
 import type { ChatMessage, MatchRecord } from '@/api/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { describeMessage } from '@/features/chat/format';
+import { mapSame } from '@/features/chat/useConversation';
 import { ConversationScreen } from '@/screens/main/shared/ConversationScreen';
 import { Avatar } from '@/components/ChatAvatar';
 import { formatListTime } from '@/utils/relativeTime';
@@ -70,6 +74,27 @@ export function ChatScreen({ onConversationStateChange, initialMatchId, onInitia
   const hasLoaded = useRef(false);
   const selectedRef = useRef<MatchRecord | null>(null);
   selectedRef.current = selectedMatch;
+  // Tabs stay mounted (and frozen when blurred), so focus is tracked from the
+  // focus/blur events rather than from a render.
+  const focusedRef = useRef(false);
+  useFocusEffect(useCallback(() => {
+    focusedRef.current = true;
+    return () => { focusedRef.current = false; };
+  }, []));
+
+  // Android back closes the open chat instead of leaving the tab. Only while
+  // this tab is focused, so back on another tab isn't swallowed here.
+  const chatOpen = !!selectedMatch;
+  useFocusEffect(useCallback(() => {
+    if (!chatOpen) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelectedMatch(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [chatOpen]));
+
+  const closeChat = useCallback(() => setSelectedMatch(null), []);
 
   useEffect(() => {
     onConversationStateChange?.(!!selectedMatch);
@@ -119,31 +144,41 @@ export function ChatScreen({ onConversationStateChange, initialMatchId, onInitia
             return prev;
           }
           const m = prev[i];
-          const unseen = msg.sender_id !== myId && selectedRef.current?.match_id !== msg.match_id;
+          // An open chat only reads what arrives while it is actually on screen.
+          const onScreen = selectedRef.current?.match_id === msg.match_id
+            && focusedRef.current && AppState.currentState === 'active';
+          const unseen = msg.sender_id !== myId && !onScreen;
           const updated = { ...m, ...previewFields(msg), unread_count: unseen ? (m.unread_count ?? 0) + 1 : m.unread_count };
           return [updated, ...prev.slice(0, i), ...prev.slice(i + 1)];
         });
       }),
       socketService.on('message_updated', (msg) => {
         // Only the preview's own message matters here (edited or deleted).
-        setMatches((prev) => prev.map((m) => (m.match_id === msg.match_id && m.last_message_at === msg.created_at && m.last_message_sender === msg.sender_id
+        setMatches((prev) => mapSame(prev, (m) => (m.match_id === msg.match_id && m.last_message_at === msg.created_at && m.last_message_sender === msg.sender_id
           ? { ...m, ...previewFields(msg) }
           : m)));
       }),
+      // Receipts return the same list when nothing changes, so the list and
+      // the open conversation don't re-render for them.
       socketService.on('messages_read', ({ matchId, readerId, at }) => {
-        setMatches((prev) => prev.map((m) => {
+        setMatches((prev) => mapSame(prev, (m) => {
           if (m.match_id !== matchId) return m;
-          if (readerId === myId) return { ...m, unread_count: 0, last_message_read_at: m.last_message_sender !== myId ? at : m.last_message_read_at };
-          return m.last_message_sender === myId ? { ...m, last_message_read_at: at } : m;
+          if (readerId === myId) {
+            const readAt = m.last_message_sender !== myId ? m.last_message_read_at || at : m.last_message_read_at;
+            return m.unread_count === 0 && readAt === m.last_message_read_at ? m : { ...m, unread_count: 0, last_message_read_at: readAt };
+          }
+          return m.last_message_sender === myId && !m.last_message_read_at ? { ...m, last_message_read_at: at } : m;
         }));
       }),
       socketService.on('messages_delivered', ({ matchId, at }) => {
-        setMatches((prev) => prev.map((m) => (m.match_id === matchId && m.last_message_sender === myId && !m.last_message_delivered_at
+        setMatches((prev) => mapSame(prev, (m) => (m.match_id === matchId && m.last_message_sender === myId && !m.last_message_delivered_at
           ? { ...m, last_message_delivered_at: at }
           : m)));
       }),
       socketService.on('chat_cleared', () => load('silent')),
       socketService.on('messages_hidden', () => load('silent')),
+      // Anything missed while the socket was down (e.g. backgrounded).
+      socketService.onReconnect(() => load('silent')),
     ];
     return () => offs.forEach((off) => off());
   }, [user?.id, load]);
@@ -202,7 +237,11 @@ export function ChatScreen({ onConversationStateChange, initialMatchId, onInitia
     return (
       <Pressable
         style={({ pressed }) => [styles.chatItem, pressed && styles.chatItemPressed]}
-        onPress={() => setSelectedMatch(item)}
+        onPress={() => {
+          // The search box stays mounted under the chat; don't leave it holding the keyboard.
+          Keyboard.dismiss();
+          setSelectedMatch(item);
+        }}
         accessibilityRole="button"
         accessibilityLabel={`${name}${unread ? `, ${unreadCount} unread` : ''}`}
       >
@@ -262,18 +301,21 @@ export function ChatScreen({ onConversationStateChange, initialMatchId, onInitia
 
   const renderSeparator = useCallback(() => <View style={styles.separator} />, []);
 
+  let conversation: React.ReactNode = null;
   if (selectedMatch) {
     const person = getMatchPerson(selectedMatch);
-    return (
-      <ConversationScreen
-        matchId={selectedMatch.match_id}
-        otherUserId={person.userId}
-        chatName={person.name ?? 'Chat'}
-        chatAvatar={person.avatar ?? undefined}
-        chatVerified={!!person.verified}
-        matchedAt={selectedMatch.matched_at}
-        onBack={() => setSelectedMatch(null)}
-      />
+    conversation = (
+      <View style={StyleSheet.absoluteFill}>
+        <ConversationScreen
+          matchId={selectedMatch.match_id}
+          otherUserId={person.userId}
+          chatName={person.name ?? 'Chat'}
+          chatAvatar={person.avatar ?? undefined}
+          chatVerified={!!person.verified}
+          matchedAt={selectedMatch.matched_at}
+          onBack={closeChat}
+        />
+      </View>
     );
   }
 
@@ -333,41 +375,52 @@ export function ChatScreen({ onConversationStateChange, initialMatchId, onInitia
     );
   }
 
+  // The list stays mounted under an open chat, so coming back keeps its
+  // scroll position and search instead of remounting from the top.
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle} accessibilityRole="header">Chat</Text>
-        <NotificationBell />
-      </View>
-
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={sz(18)} color="#8A8A8A" />
-          <TextInput
-            style={[styles.searchInput, webNoOutline]}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search chats"
-            placeholderTextColor="#8A8A8A"
-            returnKeyType="search"
-            onSubmitEditing={Keyboard.dismiss}
-            autoCorrect={false}
-            accessibilityLabel="Search chats"
-          />
-          {query.length > 0 && (
-            <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
-              <Ionicons name="close-circle" size={sz(18)} color="#8A8A8A" />
-            </Pressable>
-          )}
+    <View style={styles.root}>
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={['top']}
+        accessibilityElementsHidden={!!selectedMatch}
+        importantForAccessibility={selectedMatch ? 'no-hide-descendants' : 'auto'}
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitle} accessibilityRole="header">Chat</Text>
+          <NotificationBell />
         </View>
-      </View>
 
-      {body}
-    </SafeAreaView>
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search" size={sz(18)} color="#8A8A8A" />
+            <TextInput
+              style={[styles.searchInput, webNoOutline]}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search chats"
+              placeholderTextColor="#8A8A8A"
+              returnKeyType="search"
+              onSubmitEditing={Keyboard.dismiss}
+              autoCorrect={false}
+              accessibilityLabel="Search chats"
+            />
+            {query.length > 0 && (
+              <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+                <Ionicons name="close-circle" size={sz(18)} color="#8A8A8A" />
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        {body}
+      </SafeAreaView>
+      {conversation}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#121212' },
   safeArea: { flex: 1, backgroundColor: '#121212' },
   header: {
     flexDirection: 'row',

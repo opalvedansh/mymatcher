@@ -1,21 +1,13 @@
-import { useRouter } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
 import { BrandLogoUploadScreen } from '@/screens/onboarding/brand/BrandLogoUploadScreen';
+import { useStepNavigation } from '@/screens/onboarding/useStepNavigation';
 
 export default function Route() {
-  const router = useRouter();
-  const { updateOnboarding, completeOnboarding, onboardingData, signOut } = useAuth();
-
-  const goToStep = async (nextRoute: string, data?: Record<string, any>) => {
-    // Map dashed routes back to underscore step names for the database
-    const stepName = nextRoute.replace(/-/g, '_');
-    await updateOnboarding({ currentStep: stepName, ...data });
-    router.push(`/onboarding/${nextRoute}`);
-  };
+  const { goToStep, goBack, onboardingData } = useStepNavigation('brand-logo-upload');
 
   return (
     <BrandLogoUploadScreen
-      onBack={() => goToStep('brand-bio-input')}
+      initialLogo={onboardingData?.logo}
+      onBack={() => goBack('brand-bio-input')}
       onNext={(logo) => goToStep('brand-campaign-upload', { logo })}
     />
   );

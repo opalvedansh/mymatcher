@@ -15,6 +15,7 @@ interface MatchBoomModalProps {
   visible: boolean;
   meAvatar?: string | null;
   themAvatar?: string | null;
+  themName?: string;
   onClose: () => void;
   onIntroduce: () => void;
 }
@@ -23,6 +24,7 @@ export function MatchBoomModal({
   visible,
   meAvatar,
   themAvatar,
+  themName,
   onClose,
   onIntroduce,
 }: MatchBoomModalProps) {
@@ -32,8 +34,15 @@ export function MatchBoomModal({
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Parents clear the match as they close us; hold on to what was shown so the
+  // avatars don't change mid fade-out.
+  const shown = useRef({ meAvatar, themAvatar, themName });
+  if (visible) shown.current = { meAvatar, themAvatar, themName };
+
   useEffect(() => {
     if (visible) {
+      scaleAnim.setValue(0);
+      fadeAnim.setValue(0);
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
@@ -47,14 +56,10 @@ export function MatchBoomModal({
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
-      scaleAnim.setValue(0);
-      fadeAnim.setValue(0);
     }
-  }, [visible]);
+  }, [visible, scaleAnim, fadeAnim]);
 
-  if (!visible) return null;
-
+  // The Modal stays mounted so its fade-out can play when it closes.
   const RINGS = [1, 2, 3, 4, 5, 6];
   const maxRingSize = Math.max(width, height) * 1.5;
 
@@ -96,16 +101,10 @@ export function MatchBoomModal({
           {/* Avatars */}
           <View style={styles.avatarsContainer}>
             <View style={[styles.avatarWrapper, { zIndex: 1, marginRight: sz(-25) }]}>
-              <Image
-                source={{ uri: meAvatar || 'https://picsum.photos/200' }}
-                style={styles.avatar}
-              />
+              <Avatar uri={shown.current.meAvatar} />
             </View>
             <View style={[styles.avatarWrapper, { zIndex: 2 }]}>
-              <Image
-                source={{ uri: themAvatar || 'https://picsum.photos/201' }}
-                style={styles.avatar}
-              />
+              <Avatar uri={shown.current.themAvatar} initial={shown.current.themName} />
             </View>
           </View>
         </Animated.View>
@@ -136,6 +135,18 @@ export function MatchBoomModal({
         </Animated.View>
       </View>
     </Modal>
+  );
+}
+
+// A missing photo shows an initial, never a stock stranger's face.
+function Avatar({ uri, initial }: { uri?: string | null; initial?: string }) {
+  if (uri) {
+    return <Image source={{ uri }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" transition={150} />;
+  }
+  return (
+    <View style={[styles.avatar, styles.avatarFallback]}>
+      <Text style={styles.avatarInitial}>{(initial?.trim().charAt(0) || '?').toUpperCase()}</Text>
+    </View>
   );
 }
 
@@ -196,7 +207,16 @@ const styles = StyleSheet.create({
   avatar: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+  },
+  avatarFallback: {
+    backgroundColor: '#2A2A2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    color: '#FFF',
+    fontSize: sz(48),
+    fontWeight: '800',
   },
   bottomContainer: {
     position: 'absolute',

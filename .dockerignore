@@ -1,5 +1,5 @@
 # The build context is now the repo root, which contains the Expo app, its
-# node_modules and three xcodebuild logs totalling ~30MB. None of it belongs in
+# node_modules and build logs. None of it belongs in
 # the API image.
 **/node_modules
 **/dist
@@ -14,12 +14,8 @@ src/
 assets/
 ios/
 android/
-App.tsx.backup
 *.log
 xcodebuild*.log
-update_*.py
-generate_routes.js
-test-upload.js
 pnpm-lock.yaml
 package-lock.json
 package.json

@@ -1,6 +1,6 @@
 import { Platform, Share } from 'react-native';
 import { recordPostShare } from '@/api';
-import type { Post } from '@/components/PostCard';
+import type { Post } from '@/api/types';
 
 /**
  * Sharing a post.

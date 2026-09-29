@@ -231,19 +231,32 @@ async function get<T>(path: string, opts: { ttlMs?: number; force?: boolean } = 
  * the conservative choice: it costs a refetch, where the alternative costs
  * correctness. Cleared before the request is issued so a read started while
  * the write is still in flight cannot join a pre-write promise either.
+ *
+ * A caller that knows exactly which reads its write affects can pass
+ * `invalidates` (path prefixes) to clear only those. High-frequency writes
+ * such as swipes use it, so they don't keep every other cache cold.
  */
-function mutate<T>(path: string, options: RequestInit): Promise<T> {
-  responseCache.clear();
-  inFlight.clear();
+function mutate<T>(path: string, options: RequestInit, invalidates?: string[]): Promise<T> {
+  if (invalidates) {
+    for (const prefix of invalidates) {
+      invalidate(prefix);
+      for (const key of inFlight.keys()) if (key.startsWith(prefix)) inFlight.delete(key);
+    }
+  } else {
+    responseCache.clear();
+    inFlight.clear();
+  }
   return request<T>(path, options);
 }
+
+type WriteOpts = { invalidates?: string[] };
 
 // ─── Convenience helpers ──────────────────────────────────────────
 export const api = {
   get,
-  post:   <T>(path: string, body: unknown)    => mutate<T>(path, { method: 'POST',   body: JSON.stringify(body) }),
-  put:    <T>(path: string, body: unknown)    => mutate<T>(path, { method: 'PUT',    body: JSON.stringify(body) }),
-  delete: <T>(path: string)                   => mutate<T>(path, { method: 'DELETE' }),
+  post:   <T>(path: string, body: unknown, opts: WriteOpts = {}) => mutate<T>(path, { method: 'POST',   body: JSON.stringify(body) }, opts.invalidates),
+  put:    <T>(path: string, body: unknown, opts: WriteOpts = {}) => mutate<T>(path, { method: 'PUT',    body: JSON.stringify(body) }, opts.invalidates),
+  delete: <T>(path: string, opts: WriteOpts = {})                => mutate<T>(path, { method: 'DELETE' }, opts.invalidates),
 };
 
 export default api;

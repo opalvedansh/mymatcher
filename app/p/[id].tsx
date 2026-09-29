@@ -5,29 +5,33 @@ import {
   Animated,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { getPost } from '@/api';
-import api from '@/api/client';
+import { syncLike } from '@/utils/likeSync';
 import CommentsSheet from '@/components/CommentsSheet';
 import { openSafetyMenu } from '@/components/safetyMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { sharePost as sharePostToOS } from '@/utils/postShare';
 import { timeAgo } from '@/utils/relativeTime';
-import type { Post } from '@/components/PostCard';
+import type { Post } from '@/api/types';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 const ACCENT = '#FF6B2B';
 const LIKE_RED = '#FF3B30';
 const MUTED = '#9A9A9A';
+// Same crop as the home feed card for this role, so a shared link shows the
+// photo framed the way it was seen in the feed.
+const FEED_ASPECT = { brand: 0.78, influencer: 0.85 };
 
 function fmtCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -46,14 +50,15 @@ function fmtCount(n: number): string {
 export default function PostScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, onboardingData } = useAuth();
+  const imageAspect = onboardingData?.role === 'Brand' ? FEED_ASPECT.brand : FEED_ASPECT.influencer;
 
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [failed, setFailed] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [liking, setLiking] = useState(false);
+  // Latest like request; only that one may roll the heart back.
   const [reduceMotion, setReduceMotion] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
 
@@ -85,25 +90,23 @@ export default function PostScreen() {
     load();
   }, [load]);
 
-  const toggleLike = async () => {
-    if (!post || liking) return;
-    const nextLiked = !post.liked_by_me;
-    const nextCount = Math.max(0, post.likes_count + (nextLiked ? 1 : -1));
-    setPost({ ...post, liked_by_me: nextLiked, likes_count: nextCount });
+  // The heart flips on every tap; syncLike sends them to the server in order.
+  const toggleLike = () => {
+    if (!post) return;
+    const wasLiked = !!post.liked_by_me;
+    const prevCount = post.likes_count;
+    const nextLiked = !wasLiked;
+    const nextCount = Math.max(0, prevCount + (nextLiked ? 1 : -1));
+    setPost((p) => (p ? { ...p, liked_by_me: nextLiked, likes_count: nextCount } : p));
+    tapFeedback();
     if (!reduceMotion) {
       Animated.sequence([
         Animated.spring(heartScale, { toValue: 1.3, useNativeDriver: Platform.OS !== 'web', speed: 40 }),
         Animated.spring(heartScale, { toValue: 1, useNativeDriver: Platform.OS !== 'web', speed: 40 }),
       ]).start();
     }
-    try {
-      setLiking(true);
-      await api.post(`/api/posts/${post.id}/like`, { liked: nextLiked });
-    } catch {
-      setPost((p) => (p ? { ...p, liked_by_me: !nextLiked, likes_count: post.likes_count } : p));
-    } finally {
-      setLiking(false);
-    }
+    syncLike(post.id, wasLiked, nextLiked, (liked) =>
+      setPost((p) => (p ? { ...p, liked_by_me: liked, likes_count: Math.max(0, prevCount + (liked ? 1 : 0) - (wasLiked ? 1 : 0)) } : p)));
   };
 
   const share = async () => {
@@ -193,7 +196,13 @@ export default function PostScreen() {
             </View>
           </Pressable>
 
-          <Image source={{ uri: post.image_url }} style={s.image} contentFit="cover" transition={160} />
+          <Image
+            source={{ uri: post.image_url }}
+            style={[s.image, { aspectRatio: imageAspect }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={160}
+          />
 
           <View style={s.actions}>
             <Pressable
@@ -291,7 +300,7 @@ const s = StyleSheet.create({
   name: { color: '#E0E0E0', fontSize: sz(14), fontWeight: '600', flexShrink: 1 },
   meta: { color: MUTED, fontSize: sz(12), marginTop: 1 },
 
-  image: { width: '100%', aspectRatio: 1, backgroundColor: '#1A1A1A' },
+  image: { width: '100%', backgroundColor: '#1A1A1A' },
 
   actions: { flexDirection: 'row', gap: sz(22), paddingHorizontal: sz(16), paddingTop: sz(14) },
   action: { flexDirection: 'row', alignItems: 'center', gap: sz(6) },

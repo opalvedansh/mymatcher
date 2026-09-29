@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -73,8 +73,6 @@ export default function CommentsSheet({
   currentUserId,
   postAuthorId,
 }: CommentsSheetProps) {
-  const insets = useSafeAreaInsets();
-
   const [comments, setComments] = useState<Pending[]>([]);
   const [replies, setReplies] = useState<Record<string, PostComment[]>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -85,14 +83,29 @@ export default function CommentsSheet({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<PostComment | null>(null);
-  const [sending, setSending] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
 
+  // Rows are memoised, so the callbacks they get must keep their identity.
+  // These refs let those callbacks read the latest values without depending
+  // on them.
+  const postIdRef = useRef(postId);
+  postIdRef.current = postId;
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
+  const repliesRef = useRef(replies);
+  repliesRef.current = replies;
+  const onViewProfileRef = useRef(onViewProfile);
+  onViewProfileRef.current = onViewProfile;
+  // Bumped by every full load, so a slow response for an earlier post (or an
+  // earlier open) can't land in this one.
+  const loadSeqRef = useRef(0);
+
   // ── Drag to dismiss ──────────────────────────────────────────────
   const translateY = useRef(new Animated.Value(0)).current;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const pan = useRef(
     PanResponder.create({
       // Only the grabber claims the gesture, so the list keeps its own scroll.
@@ -106,7 +119,7 @@ export default function CommentsSheet({
             toValue: 600,
             duration: 160,
             useNativeDriver: true,
-          }).start(() => onClose());
+          }).start(() => onCloseRef.current());
         } else {
           Animated.spring(translateY, {
             toValue: 0,
@@ -120,38 +133,53 @@ export default function CommentsSheet({
 
   // ── Load ─────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    if (!postId) return;
+    const id = postIdRef.current;
+    if (!id) return;
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError(null);
     try {
-      const res = await getPostComments(postId, PAGE);
+      const res = await getPostComments(id, PAGE);
+      if (seq !== loadSeqRef.current) return;
       setComments(res.comments);
       setNextBefore(res.next_before);
     } catch {
-      setError('Could not load comments.');
+      if (seq === loadSeqRef.current) setError('Could not load comments.');
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [postId]);
+  }, []);
 
-  useEffect(() => {
+  // Reset for each open in a layout effect, which commits before anything is
+  // drawn: the sheet never shows a frame of the previous post's comments, or
+  // sits off-screen where a drag-to-dismiss left it. Not done on close, which
+  // would empty the list while the sheet is still sliding away.
+  useLayoutEffect(() => {
     if (!visible || !postId) return;
     translateY.setValue(0);
     setComments([]);
     setReplies({});
     setExpanded({});
+    setLoadingReplies({});
     setNextBefore(null);
     setReplyTo(null);
-    setDraft('');
+    setError(null);
     load();
   }, [visible, postId, load, translateY]);
 
   const loadMore = useCallback(async () => {
     if (!postId || !nextBefore || loadingMore) return;
+    const seq = loadSeqRef.current;
     setLoadingMore(true);
     try {
       const res = await getPostComments(postId, PAGE, nextBefore);
-      setComments((prev) => [...prev, ...res.comments]);
+      if (seq !== loadSeqRef.current) return;
+      setComments((prev) => {
+        // A comment posted meanwhile shifts the page boundary, so the next
+        // page can repeat a row already shown.
+        const seen = new Set(prev.map((c) => c.id));
+        return [...prev, ...res.comments.filter((c) => !seen.has(c.id))];
+      });
       setNextBefore(res.next_before);
     } catch {
       // Keep what is already on screen; the footer stays tappable to retry.
@@ -160,24 +188,23 @@ export default function CommentsSheet({
     }
   }, [postId, nextBefore, loadingMore]);
 
-  const toggleReplies = useCallback(
-    async (comment: PostComment) => {
-      const open = expanded[comment.id];
-      setExpanded((prev) => ({ ...prev, [comment.id]: !open }));
-      if (open || replies[comment.id] || !postId) return;
+  const toggleReplies = useCallback(async (comment: PostComment) => {
+    const id = postIdRef.current;
+    const open = expandedRef.current[comment.id];
+    setExpanded((prev) => ({ ...prev, [comment.id]: !open }));
+    if (open || repliesRef.current[comment.id] || !id) return;
 
-      setLoadingReplies((prev) => ({ ...prev, [comment.id]: true }));
-      try {
-        const res = await getCommentReplies(postId, comment.id, PAGE);
-        setReplies((prev) => ({ ...prev, [comment.id]: res.replies }));
-      } catch {
-        setExpanded((prev) => ({ ...prev, [comment.id]: false }));
-      } finally {
-        setLoadingReplies((prev) => ({ ...prev, [comment.id]: false }));
-      }
-    },
-    [expanded, replies, postId]
-  );
+    setLoadingReplies((prev) => ({ ...prev, [comment.id]: true }));
+    try {
+      const res = await getCommentReplies(id, comment.id, PAGE);
+      if (postIdRef.current !== id) return;
+      setReplies((prev) => ({ ...prev, [comment.id]: res.replies }));
+    } catch {
+      setExpanded((prev) => ({ ...prev, [comment.id]: false }));
+    } finally {
+      setLoadingReplies((prev) => ({ ...prev, [comment.id]: false }));
+    }
+  }, []);
 
   // ── Write ────────────────────────────────────────────────────────
   const bumpCount = useCallback(
@@ -187,9 +214,9 @@ export default function CommentsSheet({
     [postId, onCountChange]
   );
 
-  const submit = useCallback(async () => {
-    const body = draft.trim();
-    if (!body || !postId || sending) return;
+  /** Resolves false when the send failed, so the composer restores the text. */
+  const submit = useCallback(async (body: string): Promise<boolean> => {
+    if (!postId) return false;
 
     const parent = replyTo;
     const tempId = `pending-${Date.now()}`;
@@ -207,9 +234,7 @@ export default function CommentsSheet({
       pending: true,
     };
 
-    setDraft('');
     setReplyTo(null);
-    setSending(true);
 
     if (parent) {
       setExpanded((prev) => ({ ...prev, [parent.id]: true }));
@@ -232,6 +257,7 @@ export default function CommentsSheet({
       } else {
         setComments((prev) => prev.map((c) => (c.id === tempId ? comment : c)));
       }
+      return true;
     } catch {
       // Roll back and hand the text back rather than losing it.
       if (parent) {
@@ -243,13 +269,11 @@ export default function CommentsSheet({
         setComments((prev) => prev.filter((c) => c.id !== tempId));
       }
       bumpCount(-1);
-      setDraft(body);
       setReplyTo(parent);
       setError('Comment failed to send. Tap Post to try again.');
-    } finally {
-      setSending(false);
+      return false;
     }
-  }, [draft, postId, sending, replyTo, currentUserId, bumpCount]);
+  }, [postId, replyTo, currentUserId, bumpCount]);
 
   const toggleCommentLike = useCallback(
     async (comment: PostComment, parentId?: string) => {
@@ -314,20 +338,146 @@ export default function CommentsSheet({
     [postId, bumpCount, load]
   );
 
-  const canDelete = (c: PostComment) =>
-    !!currentUserId && (c.user_id === currentUserId || postAuthorId === currentUserId);
+  const startReply = useCallback((target: PostComment) => {
+    setReplyTo(target);
+    inputRef.current?.focus();
+  }, []);
+
+  const viewProfile = useCallback((userId: string) => onViewProfileRef.current?.(userId), []);
+
+  const cancelReply = useCallback(() => setReplyTo(null), []);
+  const clearError = useCallback(() => setError(null), []);
 
   // ── Render ───────────────────────────────────────────────────────
-  const renderComment = (
-    comment: Pending,
-    { isReply = false, parentId }: { isReply?: boolean; parentId?: string } = {}
-  ) => (
-    <View
-      key={comment.id}
-      style={[styles.row, isReply && styles.replyRow, comment.pending && styles.rowPending]}
-    >
+  const renderItem = useCallback(
+    ({ item }: { item: Pending }) => (
+      <CommentRow
+        comment={item}
+        replies={expanded[item.id] ? replies[item.id] : undefined}
+        expanded={!!expanded[item.id]}
+        loadingReplies={!!loadingReplies[item.id]}
+        currentUserId={currentUserId}
+        postAuthorId={postAuthorId}
+        onViewProfile={viewProfile}
+        onReply={startReply}
+        onDelete={remove}
+        onToggleLike={toggleCommentLike}
+        onToggleReplies={toggleReplies}
+      />
+    ),
+    [expanded, replies, loadingReplies, currentUserId, postAuthorId, viewProfile, startReply, remove, toggleCommentLike, toggleReplies]
+  );
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <Pressable style={styles.backdropFill} onPress={onClose} accessibilityLabel="Close comments" />
+
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+          <View {...pan.panHandlers} style={styles.grabArea}>
+            <View style={styles.grabber} />
+            <View style={styles.header}>
+              <Text style={styles.title}>Comments</Text>
+              <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
+                <Ionicons name="close" size={sz(22)} color={MUTED} />
+              </Pressable>
+            </View>
+          </View>
+
+          <KeyboardAvoidingView
+            style={styles.flex}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+          >
+            {loading ? (
+              <CommentSkeletons />
+            ) : error && comments.length === 0 ? (
+              <View style={styles.center}>
+                <Text style={styles.emptyTitle}>{error}</Text>
+                <Pressable onPress={load} style={styles.retry} accessibilityRole="button">
+                  <Text style={styles.retryText}>Try again</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <FlatList
+                data={comments}
+                keyExtractor={keyExtractor}
+                renderItem={renderItem}
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.4}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={comments.length === 0 && styles.flexGrow}
+                ListEmptyComponent={
+                  <View style={styles.center}>
+                    <Ionicons name="chatbubble-outline" size={sz(30)} color={BORDER} />
+                    <Text style={styles.emptyTitle}>No comments yet</Text>
+                    <Text style={styles.emptyBody}>Be the first to say something.</Text>
+                  </View>
+                }
+                ListFooterComponent={
+                  loadingMore ? <ActivityIndicator color={MUTED} style={{ paddingVertical: sz(16) }} /> : null
+                }
+              />
+            )}
+
+            <Composer
+              inputRef={inputRef}
+              replyTo={replyTo}
+              hasError={!!error}
+              onClearError={clearError}
+              onCancelReply={cancelReply}
+              onSubmit={submit}
+            />
+          </KeyboardAvoidingView>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+const keyExtractor = (c: Pending) => c.id;
+
+type CommentRowProps = {
+  comment: Pending;
+  isReply?: boolean;
+  parentId?: string;
+  /** Loaded replies, passed only while the thread is open. */
+  replies?: PostComment[];
+  expanded?: boolean;
+  loadingReplies?: boolean;
+  currentUserId?: string | null;
+  postAuthorId?: string | null;
+  onViewProfile: (userId: string) => void;
+  onReply: (target: PostComment) => void;
+  onDelete: (comment: PostComment, parentId?: string) => void;
+  onToggleLike: (comment: PostComment, parentId?: string) => void;
+  onToggleReplies: (comment: PostComment) => void;
+};
+
+// Memoised: a like, a reply or a page landing re-renders only the rows whose
+// data changed, not every comment in the list.
+const CommentRow = memo(function CommentRow({
+  comment,
+  isReply = false,
+  parentId,
+  replies,
+  expanded,
+  loadingReplies,
+  currentUserId,
+  postAuthorId,
+  onViewProfile,
+  onReply,
+  onDelete,
+  onToggleLike,
+  onToggleReplies,
+}: CommentRowProps) {
+  const canDelete =
+    !!currentUserId && (comment.user_id === currentUserId || postAuthorId === currentUserId);
+
+  return (
+    <View style={[styles.row, isReply && styles.replyRow, comment.pending && styles.rowPending]}>
       <Pressable
-        onPress={() => comment.user_id && onViewProfile?.(comment.user_id)}
+        onPress={() => comment.user_id && onViewProfile(comment.user_id)}
         accessibilityRole="button"
         accessibilityLabel={`View ${comment.author_name || 'profile'}`}
       >
@@ -365,18 +515,16 @@ export default function CommentsSheet({
         <View style={styles.actions}>
           {!comment.pending && (
             <Pressable
-              onPress={() => {
-                setReplyTo(isReply && parentId ? ({ ...comment, id: parentId } as PostComment) : comment);
-                inputRef.current?.focus();
-              }}
+              // Replies stay one level deep: replying to a reply targets its thread.
+              onPress={() => onReply(isReply && parentId ? ({ ...comment, id: parentId } as PostComment) : comment)}
               hitSlop={8}
               accessibilityRole="button"
             >
               <Text style={styles.actionText}>Reply</Text>
             </Pressable>
           )}
-          {canDelete(comment) && !comment.pending && (
-            <Pressable onPress={() => remove(comment, parentId)} hitSlop={8} accessibilityRole="button">
+          {canDelete && !comment.pending && (
+            <Pressable onPress={() => onDelete(comment, parentId)} hitSlop={8} accessibilityRole="button">
               <Text style={[styles.actionText, { color: LIKE_RED }]}>Delete</Text>
             </Pressable>
           )}
@@ -384,11 +532,11 @@ export default function CommentsSheet({
         </View>
 
         {!isReply && comment.replies_count > 0 && (
-          <Pressable onPress={() => toggleReplies(comment)} hitSlop={8} accessibilityRole="button">
+          <Pressable onPress={() => onToggleReplies(comment)} hitSlop={8} accessibilityRole="button">
             <Text style={styles.repliesToggle}>
-              {loadingReplies[comment.id]
+              {loadingReplies
                 ? 'Loading replies…'
-                : expanded[comment.id]
+                : expanded
                   ? 'Hide replies'
                   : `View ${comment.replies_count} ${comment.replies_count === 1 ? 'reply' : 'replies'}`}
             </Text>
@@ -396,15 +544,27 @@ export default function CommentsSheet({
         )}
 
         {!isReply &&
-          expanded[comment.id] &&
-          (replies[comment.id] || []).map((r) =>
-            renderComment(r as Pending, { isReply: true, parentId: comment.id })
-          )}
+          expanded &&
+          (replies || []).map((r) => (
+            <CommentRow
+              key={r.id}
+              comment={r as Pending}
+              isReply
+              parentId={comment.id}
+              currentUserId={currentUserId}
+              postAuthorId={postAuthorId}
+              onViewProfile={onViewProfile}
+              onReply={onReply}
+              onDelete={onDelete}
+              onToggleLike={onToggleLike}
+              onToggleReplies={onToggleReplies}
+            />
+          ))}
       </View>
 
       {!comment.pending && (
         <Pressable
-          onPress={() => toggleCommentLike(comment, parentId)}
+          onPress={() => onToggleLike(comment, parentId)}
           hitSlop={10}
           style={styles.likeBtn}
           accessibilityRole="button"
@@ -421,110 +581,92 @@ export default function CommentsSheet({
       )}
     </View>
   );
+});
+
+/**
+ * The draft lives here, not in the sheet, so each keystroke re-renders this
+ * box and not the comment list above it.
+ */
+function Composer({
+  inputRef,
+  replyTo,
+  hasError,
+  onClearError,
+  onCancelReply,
+  onSubmit,
+}: {
+  inputRef: React.RefObject<TextInput | null>;
+  replyTo: PostComment | null;
+  hasError: boolean;
+  onClearError: () => void;
+  onCancelReply: () => void;
+  onSubmit: (body: string) => Promise<boolean>;
+}) {
+  const insets = useSafeAreaInsets();
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const disabled = !draft.trim() || sending;
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || sending) return;
+    setDraft('');
+    setSending(true);
+    const ok = await onSubmit(body);
+    // Put the text back rather than lose what the person typed, unless they
+    // have already started typing something new.
+    if (!ok) setDraft((current) => current || body);
+    setSending(false);
+  };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <Pressable style={styles.backdropFill} onPress={onClose} accessibilityLabel="Close comments" />
-
-        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
-          <View {...pan.panHandlers} style={styles.grabArea}>
-            <View style={styles.grabber} />
-            <View style={styles.header}>
-              <Text style={styles.title}>Comments</Text>
-              <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
-                <Ionicons name="close" size={sz(22)} color={MUTED} />
-              </Pressable>
-            </View>
-          </View>
-
-          <KeyboardAvoidingView
-            style={styles.flex}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-          >
-            {loading ? (
-              <CommentSkeletons />
-            ) : error && comments.length === 0 ? (
-              <View style={styles.center}>
-                <Text style={styles.emptyTitle}>{error}</Text>
-                <Pressable onPress={load} style={styles.retry} accessibilityRole="button">
-                  <Text style={styles.retryText}>Try again</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <FlatList
-                data={comments}
-                keyExtractor={(c) => c.id}
-                renderItem={({ item }) => renderComment(item)}
-                onEndReached={loadMore}
-                onEndReachedThreshold={0.4}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={comments.length === 0 && styles.flexGrow}
-                ListEmptyComponent={
-                  <View style={styles.center}>
-                    <Ionicons name="chatbubble-outline" size={sz(30)} color={BORDER} />
-                    <Text style={styles.emptyTitle}>No comments yet</Text>
-                    <Text style={styles.emptyBody}>Be the first to say something.</Text>
-                  </View>
-                }
-                ListFooterComponent={
-                  loadingMore ? <ActivityIndicator color={MUTED} style={{ paddingVertical: sz(16) }} /> : null
-                }
-              />
-            )}
-
-            <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, sz(10)) }]}>
-              {replyTo && (
-                <View style={styles.replyBanner}>
-                  <Text style={styles.replyBannerText} numberOfLines={1}>
-                    Replying to {replyTo.author_name || 'someone'}
-                  </Text>
-                  <Pressable onPress={() => setReplyTo(null)} hitSlop={8} accessibilityLabel="Cancel reply">
-                    <Ionicons name="close" size={sz(15)} color={MUTED} />
-                  </Pressable>
-                </View>
-              )}
-              <View style={styles.composerRow}>
-                <TextInput
-                  ref={inputRef}
-                  value={draft}
-                  onChangeText={(t) => {
-                    setDraft(t);
-                    if (error) setError(null);
-                  }}
-                  placeholder={replyTo ? 'Write a reply…' : 'Add a comment…'}
-                  placeholderTextColor={MUTED}
-                  style={styles.input}
-                  multiline
-                  maxLength={2200}
-                  accessibilityLabel="Comment text"
-                />
-                <Pressable
-                  onPress={submit}
-                  disabled={!draft.trim() || sending}
-                  hitSlop={8}
-                  style={({ pressed }) => [
-                    styles.postBtn,
-                    (!draft.trim() || sending) && styles.postBtnOff,
-                    pressed && styles.pressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Post comment"
-                  accessibilityState={{ disabled: !draft.trim() || sending }}
-                >
-                  {sending ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <Text style={styles.postBtnText}>Post</Text>
-                  )}
-                </Pressable>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </Animated.View>
+    <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, sz(10)) }]}>
+      {replyTo && (
+        <View style={styles.replyBanner}>
+          <Text style={styles.replyBannerText} numberOfLines={1}>
+            Replying to {replyTo.author_name || 'someone'}
+          </Text>
+          <Pressable onPress={onCancelReply} hitSlop={8} accessibilityLabel="Cancel reply">
+            <Ionicons name="close" size={sz(15)} color={MUTED} />
+          </Pressable>
+        </View>
+      )}
+      <View style={styles.composerRow}>
+        <TextInput
+          ref={inputRef}
+          value={draft}
+          onChangeText={(t) => {
+            setDraft(t);
+            if (hasError) onClearError();
+          }}
+          placeholder={replyTo ? 'Write a reply…' : 'Add a comment…'}
+          placeholderTextColor={MUTED}
+          style={styles.input}
+          multiline
+          maxLength={2200}
+          accessibilityLabel="Comment text"
+        />
+        <Pressable
+          onPress={send}
+          disabled={disabled}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.postBtn,
+            disabled && styles.postBtnOff,
+            pressed && styles.pressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Post comment"
+          accessibilityState={{ disabled }}
+        >
+          {sending ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <Text style={styles.postBtnText}>Post</Text>
+          )}
+        </Pressable>
       </View>
-    </Modal>
+    </View>
   );
 }
 

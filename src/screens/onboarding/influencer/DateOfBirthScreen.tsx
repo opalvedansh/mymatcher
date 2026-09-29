@@ -2,33 +2,46 @@ import { useState } from 'react';
 import { AntDesign } from '@expo/vector-icons';
 import {
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 export function DateOfBirthScreen({
+  initialDob,
   onBack,
   onNext,
 }: {
+  initialDob?: string;
   onBack?: () => void;
   onNext?: (dob: string) => void;
 }) {
-  const [dob, setDob] = useState('');
+  const [dob, setDob] = useState(initialDob ?? '');
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Lifts the Next button above the keyboard on iOS. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <DismissKeyboard>
         <View style={styles.container}>
         {/* Header */}
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
@@ -59,18 +72,20 @@ export function DateOfBirthScreen({
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.nextButton,
               dob.trim() === '' && styles.nextButtonDisabled,
+              pressed && styles.pressed,
             ]}
             disabled={dob.trim() === ''}
-            onPress={() => { Keyboard.dismiss(); onNext?.(dob); }}
+            onPress={() => { tapFeedback(); Keyboard.dismiss(); onNext?.(dob); }}
           >
             <Text style={styles.nextButtonText}>Next</Text>
           </Pressable>
         </View>
       </View>
       </DismissKeyboard>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -143,4 +158,6 @@ const styles = StyleSheet.create({
     fontSize: sz(18),
     fontWeight: '700',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
 });

@@ -48,7 +48,9 @@ const TICK_LABEL: Record<TickState, string> = {
   read: 'Read',
 };
 
-function Meta({ message, isMe, send, onMedia }: { message: ChatMessage; isMe: boolean; send?: SendState; onMedia?: boolean }) {
+function Meta({ message, clock, isMe, send, onMedia }: {
+  message: ChatMessage; clock: string; isMe: boolean; send?: SendState; onMedia?: boolean;
+}) {
   const ticks = isMe ? tickState(message, send) : null;
   const color = onMedia ? '#FFF' : isMe ? 'rgba(255,255,255,0.82)' : '#9A9A9A';
   const tickColor = ticks === 'read' ? (onMedia ? READ_TICK_ON_DARK : READ_TICK_ON_ACCENT) : ticks === 'failed' ? '#FFD2CC' : color;
@@ -56,22 +58,22 @@ function Meta({ message, isMe, send, onMedia }: { message: ChatMessage; isMe: bo
     <View
       style={[styles.meta, onMedia && styles.metaOnMedia]}
       accessible
-      accessibilityLabel={`${message.edited_at ? 'Edited, ' : ''}${formatClock(message.created_at)}${ticks ? `, ${TICK_LABEL[ticks]}` : ''}`}
+      accessibilityLabel={`${message.edited_at ? 'Edited, ' : ''}${clock}${ticks ? `, ${TICK_LABEL[ticks]}` : ''}`}
     >
       {!!message.edited_at && !message.deleted_at && <Text style={[styles.metaText, { color }]}>Edited</Text>}
-      <Text style={[styles.metaText, { color }]}>{formatClock(message.created_at)}</Text>
+      <Text style={[styles.metaText, { color }]}>{clock}</Text>
       {ticks && <Ionicons name={TICK_ICON[ticks]} size={sz(15)} color={tickColor} />}
     </View>
   );
 }
 
 /** Invisible copy of the meta at the end of the text, so the real one never overlaps it. */
-function MetaSpacer({ message, isMe }: { message: ChatMessage; isMe: boolean }) {
+function MetaSpacer({ message, clock, isMe }: { message: ChatMessage; clock: string; isMe: boolean }) {
   return (
     <Text style={[styles.metaText, styles.spacer]}>
       {'   '}
       {message.edited_at ? 'Edited ' : ''}
-      {formatClock(message.created_at)}
+      {clock}
       {isMe ? '  ' : ''}
     </Text>
   );
@@ -219,6 +221,8 @@ function MessageBubbleImpl(props: MessageBubbleProps) {
   const isVisualMedia = !deleted && (kind === 'image' || kind === 'video');
   const caption = deleted ? '' : message.content;
   const uploading = send?.status === 'uploading' ? send.progress ?? 0 : send?.status === 'sending' ? 1 : undefined;
+  // Formatted once and shared by the meta and its spacer.
+  const clock = formatClock(message.created_at);
 
   const reactions = message.reactions ?? [];
   const reactionGroups = reactions.reduce<Record<string, number>>((acc, r) => {
@@ -236,9 +240,9 @@ function MessageBubbleImpl(props: MessageBubbleProps) {
         <Text style={[styles.messageText, styles.deletedText]}>
           <Ionicons name="ban-outline" size={sz(14)} color={isMe ? 'rgba(255,255,255,0.75)' : '#8A8A8A'} />
           {isMe ? '  You deleted this message' : '  This message was deleted'}
-          <MetaSpacer message={message} isMe={isMe} />
+          <MetaSpacer message={message} clock={clock} isMe={isMe} />
         </Text>
-        <Meta message={message} isMe={isMe} send={send} />
+        <Meta message={message} clock={clock} isMe={isMe} send={send} />
       </View>
     );
   } else if (isVisualMedia) {
@@ -255,7 +259,7 @@ function MessageBubbleImpl(props: MessageBubbleProps) {
           accessibilityLabel={kind === 'video' ? `Video, ${formatDuration(att?.duration_ms)}` : 'Photo'}
         >
           {kind === 'image' && source ? (
-            <Image source={source} style={[styles.mediaImage, size]} contentFit="cover" transition={150} recyclingKey={att?.key} />
+            <Image source={source} style={[styles.mediaImage, size]} contentFit="cover" transition={150} recyclingKey={message.client_msg_id ?? att?.key} />
           ) : (
             <View style={[styles.videoTile, size]}>
               <View style={styles.playCircle}>
@@ -269,15 +273,15 @@ function MessageBubbleImpl(props: MessageBubbleProps) {
               <Text style={styles.videoBadgeText}>{formatDuration(att?.duration_ms)}</Text>
             </View>
           )}
-          {!caption && <Meta message={message} isMe={isMe} send={send} onMedia />}
+          {!caption && <Meta message={message} clock={clock} isMe={isMe} send={send} onMedia />}
           <UploadOverlay send={send} clientId={message.client_msg_id} onRetry={onRetry} onDiscard={onDiscard} />
         </Pressable>
         {!!caption && (
           <View style={[styles.textBlock, { maxWidth: size.width }]}>
             <LinkifiedText text={caption} style={[styles.messageText, textColor]} linkStyle={linkColor}>
-              <MetaSpacer message={message} isMe={isMe} />
+              <MetaSpacer message={message} clock={clock} isMe={isMe} />
             </LinkifiedText>
-            <Meta message={message} isMe={isMe} send={send} />
+            <Meta message={message} clock={clock} isMe={isMe} send={send} />
           </View>
         )}
       </>
@@ -293,7 +297,7 @@ function MessageBubbleImpl(props: MessageBubbleProps) {
           isMe={isMe}
           uploading={uploading}
         />
-        <Meta message={message} isMe={isMe} send={send} />
+        <Meta message={message} clock={clock} isMe={isMe} send={send} />
       </View>
     );
   } else if (kind === 'document') {
@@ -330,10 +334,10 @@ function MessageBubbleImpl(props: MessageBubbleProps) {
         <View style={[styles.textBlock, !caption && styles.docFooter]}>
           {!!caption && (
             <LinkifiedText text={caption} style={[styles.messageText, textColor]} linkStyle={linkColor}>
-              <MetaSpacer message={message} isMe={isMe} />
+              <MetaSpacer message={message} clock={clock} isMe={isMe} />
             </LinkifiedText>
           )}
-          <Meta message={message} isMe={isMe} send={send} />
+          <Meta message={message} clock={clock} isMe={isMe} send={send} />
         </View>
       </>
     );
@@ -341,9 +345,9 @@ function MessageBubbleImpl(props: MessageBubbleProps) {
     body = (
       <View style={styles.textBlock}>
         <LinkifiedText text={message.content} style={[styles.messageText, textColor]} linkStyle={linkColor}>
-          <MetaSpacer message={message} isMe={isMe} />
+          <MetaSpacer message={message} clock={clock} isMe={isMe} />
         </LinkifiedText>
-        <Meta message={message} isMe={isMe} send={send} />
+        <Meta message={message} clock={clock} isMe={isMe} send={send} />
       </View>
     );
   }

@@ -22,8 +22,27 @@ export function formatBytes(bytes?: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }
 
-export const formatClock = (iso: string) =>
-  new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+// toLocaleTimeString with options builds a new Intl formatter on every call,
+// which adds up across a thread of bubbles. Built once, lazily.
+let clockFormat: Intl.DateTimeFormat | null | undefined;
+function getClockFormat() {
+  if (clockFormat === undefined) {
+    try {
+      clockFormat = typeof Intl !== 'undefined' && Intl.DateTimeFormat
+        ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
+        : null;
+    } catch {
+      clockFormat = null;
+    }
+  }
+  return clockFormat;
+}
+
+export const formatClock = (iso: string) => {
+  const date = new Date(iso);
+  const fmt = getClockFormat();
+  return fmt ? fmt.format(date) : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+};
 
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();

@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { AntDesign } from '@expo/vector-icons';
 import {
+  ActivityIndicator,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 const CATEGORIES = [
   { id: 'retail', name: 'Retail & Consumer' },
@@ -29,13 +31,31 @@ const CATEGORIES = [
 ];
 
 export function BrandCategorySelectionScreen({
+  initialCategories,
   onBack,
   onNext,
 }: {
+  initialCategories?: string[];
   onBack?: () => void;
-  onNext?: (categories: string[]) => void;
+  onNext?: (categories: string[]) => void | Promise<void>;
 }) {
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    () => new Set((initialCategories ?? []).filter((id) => CATEGORIES.some((c) => c.id === id)).slice(0, 6)),
+  );
+  // This is the last step: finishing uploads images and creates the profile,
+  // which takes a few seconds; show it's working and block a second tap.
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleFinish = async () => {
+    if (submitting) return;
+    tapFeedback();
+    setSubmitting(true);
+    try {
+      await onNext?.(Array.from(selectedCategories));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const toggleCategory = (id: string) => {
     const newSelected = new Set(selectedCategories);
@@ -47,6 +67,7 @@ export function BrandCategorySelectionScreen({
       }
       newSelected.add(id);
     }
+    tapFeedback('selection');
     setSelectedCategories(newSelected);
   };
 
@@ -54,7 +75,13 @@ export function BrandCategorySelectionScreen({
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Header */}
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
@@ -79,9 +106,10 @@ export function BrandCategorySelectionScreen({
               return (
                 <Pressable
                   key={cat.id}
-                  style={[
+                  style={({ pressed }) => [
                     styles.categoryCard,
                     isSelected && styles.categoryCardSelected,
+                    pressed && styles.cardPressed,
                   ]}
                   onPress={() => toggleCategory(cat.id)}
                 >
@@ -105,14 +133,20 @@ export function BrandCategorySelectionScreen({
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.nextButton,
               selectedCategories.size === 0 && styles.nextButtonDisabled,
+              pressed && styles.pressed,
             ]}
-            disabled={selectedCategories.size === 0}
-            onPress={() => onNext?.(Array.from(selectedCategories))}
+            disabled={selectedCategories.size === 0 || submitting}
+            accessibilityState={{ busy: submitting, disabled: selectedCategories.size === 0 || submitting }}
+            onPress={handleFinish}
           >
-            <Text style={styles.nextButtonText}>Next</Text>
+            {submitting ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <Text style={styles.nextButtonText}>Next</Text>
+            )}
           </Pressable>
         </View>
       </View>
@@ -223,4 +257,7 @@ const styles = StyleSheet.create({
     fontSize: sz(18),
     fontWeight: '700',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
+  cardPressed: { transform: [{ scale: 0.99 }], opacity: 0.85 },
 });

@@ -2,32 +2,50 @@ import { useState } from 'react';
 import { AntDesign } from '@expo/vector-icons';
 import {
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 type Gender = 'Male' | 'Female' | 'Other' | null;
 
+const GENDERS = ['Male', 'Female', 'Other'] as const;
+
 export function GenderSelectionScreen({
+  initialGender,
   onBack,
   onNext,
 }: {
+  initialGender?: string;
   onBack?: () => void;
   onNext?: (gender: Gender) => void;
 }) {
-  const [selectedGender, setSelectedGender] = useState<Gender>(null);
+  const [selectedGender, setSelectedGender] = useState<Gender>(
+    GENDERS.find((g) => g === initialGender) ?? null,
+  );
+
+  const selectGender = (gender: Gender) => {
+    tapFeedback('selection');
+    setSelectedGender(gender);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Header */}
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
@@ -43,11 +61,12 @@ export function GenderSelectionScreen({
           {/* Options */}
           <View style={styles.optionsContainer}>
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.optionCard,
                 selectedGender === 'Male' && styles.optionCardSelected,
+                pressed && styles.cardPressed,
               ]}
-              onPress={() => setSelectedGender('Male')}
+              onPress={() => selectGender('Male')}
             >
               <Text style={[styles.optionText, selectedGender === 'Male' && styles.optionTextSelected]}>Male</Text>
               <View style={[styles.checkbox, selectedGender === 'Male' && styles.checkboxSelected]}>
@@ -56,11 +75,12 @@ export function GenderSelectionScreen({
             </Pressable>
 
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.optionCard,
                 selectedGender === 'Female' && styles.optionCardSelected,
+                pressed && styles.cardPressed,
               ]}
-              onPress={() => setSelectedGender('Female')}
+              onPress={() => selectGender('Female')}
             >
               <Text style={[styles.optionText, selectedGender === 'Female' && styles.optionTextSelected]}>Female</Text>
               <View style={[styles.checkbox, selectedGender === 'Female' && styles.checkboxSelected]}>
@@ -69,11 +89,12 @@ export function GenderSelectionScreen({
             </Pressable>
 
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.optionCard,
                 selectedGender === 'Other' && styles.optionCardSelected,
+                pressed && styles.cardPressed,
               ]}
-              onPress={() => setSelectedGender('Other')}
+              onPress={() => selectGender('Other')}
             >
               <Text style={[styles.optionText, selectedGender === 'Other' && styles.optionTextSelected]}>Other</Text>
               <View style={[styles.checkbox, selectedGender === 'Other' && styles.checkboxSelected]}>
@@ -86,12 +107,16 @@ export function GenderSelectionScreen({
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.nextButton,
               !selectedGender && styles.nextButtonDisabled,
+              pressed && styles.pressed,
             ]}
             disabled={!selectedGender}
-            onPress={() => onNext?.(selectedGender)}
+            onPress={() => {
+              tapFeedback();
+              onNext?.(selectedGender);
+            }}
           >
             <Text style={styles.nextButtonText}>Next</Text>
           </Pressable>
@@ -201,4 +226,7 @@ const styles = StyleSheet.create({
     fontSize: sz(18),
     fontWeight: '700',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
+  cardPressed: { transform: [{ scale: 0.99 }], opacity: 0.85 },
 });

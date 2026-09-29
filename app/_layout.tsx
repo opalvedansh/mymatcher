@@ -1,6 +1,6 @@
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ActionSheetHost } from '@/components/ActionSheet';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider, usePathname, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect, useRef } from 'react';
@@ -9,6 +9,14 @@ import { pushDataOf, pushSupported } from '@/services/pushNotifications';
 import { notificationHref } from '@/services/notificationRoutes';
 import { refreshUnreadNotifications } from '@/hooks/useUnreadNotifications';
 import { setPendingDeepLink, takePendingDeepLink } from '@/services/pendingDeepLink';
+import { colors } from '@/theme/colors';
+
+// Without a dark navigation theme, stack cards and tab scenes paint React
+// Navigation's light grey behind every transition and keyboard resize.
+const NAV_THEME = {
+  ...DarkTheme,
+  colors: { ...DarkTheme.colors, background: colors.background, card: colors.background, primary: colors.primary },
+};
 
 // Owns every auth-driven redirect. This lives in the root layout because it
 // must stay mounted across the sign-in transition — a screen that routes itself
@@ -17,6 +25,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading, onboardingComplete, onboardingData, userDataError, passwordRecovery } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  // Segments are file names ("[id]"); the pathname is the real URL to replay.
+  const pathname = usePathname();
 
   useEffect(() => {
     if (loading) return;
@@ -34,7 +44,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         // A shared post link normally opens with no session. Remember where it
         // was headed so sign-in can finish the trip instead of dropping them
         // on the home feed.
-        setPendingDeepLink('/' + segments.join('/'));
+        // Only shared post links are parked, so signing out from some screen
+        // doesn't replay it for the next account that signs in.
+        if (/^\/p\/[^/]+$/.test(pathname)) setPendingDeepLink(pathname);
         router.replace('/auth/login');
       }
       return;
@@ -69,7 +81,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       const pending = takePendingDeepLink();
       if (pending) router.push(pending as never);
     }
-  }, [user, loading, onboardingComplete, onboardingData, userDataError, passwordRecovery, segments, router]);
+  }, [user, loading, onboardingComplete, onboardingData, userDataError, passwordRecovery, segments, pathname, router]);
 
   return <>{children}</>;
 }
@@ -105,11 +117,12 @@ function PushResponseHandler() {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+      <ThemeProvider value={NAV_THEME}>
       <AuthProvider>
         <AuthGuard>
           <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false }}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
             <Stack.Screen name="story-camera" options={{ presentation: 'fullScreenModal', headerShown: false }} />
             <Stack.Screen name="notifications" options={{ headerShown: false, animation: 'slide_from_right' }} />
             <Stack.Screen name="profile/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
@@ -119,6 +132,7 @@ export default function RootLayout() {
           <PushResponseHandler />
         </AuthGuard>
       </AuthProvider>
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }

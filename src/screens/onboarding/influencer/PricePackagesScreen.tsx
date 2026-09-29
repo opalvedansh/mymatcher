@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { AntDesign } from '@expo/vector-icons';
 import {
+  ActivityIndicator,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 const PACKAGES = [
   { id: 'story', label: 'Story', description: 'A single 15s Instagram/Snapchat story.' },
@@ -20,13 +22,31 @@ const PACKAGES = [
 ];
 
 export function PricePackagesScreen({
+  initialPackages,
   onBack,
   onStart,
 }: {
+  initialPackages?: string[];
   onBack?: () => void;
-  onStart?: (selectedPackages: string[]) => void;
+  onStart?: (selectedPackages: string[]) => void | Promise<void>;
 }) {
-  const [selectedPackages, setSelectedPackages] = useState<Set<string>>(new Set());
+  const [selectedPackages, setSelectedPackages] = useState<Set<string>>(
+    () => new Set((initialPackages ?? []).filter((id) => PACKAGES.some((p) => p.id === id))),
+  );
+  // Finishing uploads photos and creates the profile, which takes a few
+  // seconds; show it's working and block a second tap meanwhile.
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleStart = async () => {
+    if (submitting) return;
+    tapFeedback();
+    setSubmitting(true);
+    try {
+      await onStart?.(Array.from(selectedPackages));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const togglePackage = (id: string) => {
     const newSelected = new Set(selectedPackages);
@@ -35,6 +55,7 @@ export function PricePackagesScreen({
     } else {
       newSelected.add(id);
     }
+    tapFeedback('selection');
     setSelectedPackages(newSelected);
   };
 
@@ -42,7 +63,13 @@ export function PricePackagesScreen({
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Header */}
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(20)} color={colors.text} />
         </Pressable>
 
@@ -66,9 +93,10 @@ export function PricePackagesScreen({
               return (
                 <Pressable
                   key={pkg.id}
-                  style={[
+                  style={({ pressed }) => [
                     styles.packageCard,
                     isSelected && styles.packageCardSelected,
+                    pressed && styles.cardPressed,
                   ]}
                   onPress={() => togglePackage(pkg.id)}
                 >
@@ -93,14 +121,20 @@ export function PricePackagesScreen({
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.startButton,
               selectedPackages.size === 0 && styles.startButtonDisabled,
+              pressed && styles.pressed,
             ]}
-            disabled={selectedPackages.size === 0}
-            onPress={() => onStart?.(Array.from(selectedPackages))}
+            disabled={selectedPackages.size === 0 || submitting}
+            accessibilityState={{ busy: submitting, disabled: selectedPackages.size === 0 || submitting }}
+            onPress={handleStart}
           >
-            <Text style={styles.startButtonText}>Start</Text>
+            {submitting ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <Text style={styles.startButtonText}>Start</Text>
+            )}
           </Pressable>
         </View>
       </View>
@@ -222,4 +256,7 @@ const styles = StyleSheet.create({
     fontSize: sz(18),
     fontWeight: '700',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  backPressed: { opacity: 0.6 },
+  cardPressed: { transform: [{ scale: 0.99 }], opacity: 0.85 },
 });

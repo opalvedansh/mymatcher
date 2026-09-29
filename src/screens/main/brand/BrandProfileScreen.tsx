@@ -1,13 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ImageBackground,
   useWindowDimensions,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
   Keyboard,
@@ -16,13 +14,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMyProfile, updateMyProfile, uploadImage, getProfileById, getMatches, getMatchStats, getMyResponsiveness, requestVerification, recordSwipe } from '@/api';
 import { ApiError } from '@/api/client';
@@ -121,6 +121,602 @@ function formatReplyTime(seconds: number) {
   return `About ${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
+// FontAwesome names for platforms whose id is not already an icon name.
+const PLATFORM_ICONS: Record<string, string> = {
+  x: 'x-twitter',
+  facebook: 'facebook-f',
+  linkedin: 'linkedin-in',
+  reddit: 'reddit-alien',
+};
+
+function formatCampaignDates(days: number) {
+  if (!days) return 'Dates TBD';
+  const start = new Date();
+  const end = new Date();
+  end.setDate(start.getDate() + days);
+
+  const formatDt = (d: Date) => {
+    const day = d.getDate();
+    const month = d.toLocaleString('default', { month: 'short' }).toLowerCase();
+    return `${day}${month}`;
+  };
+  return `${formatDt(start)}-${formatDt(end)}`;
+}
+
+// Empty stays empty: 0 means "not set", and the profile shows Negotiable / Dates TBD.
+const parseDraft = (text: string) => (text === '' ? 0 : parseInt(text, 10));
+const draftOf = (value?: number | null) => (value ? String(value) : '');
+
+/**
+ * Server URLs that start with blob: or file:// point at some other device's
+ * memory and can never load. A local URI this screen just picked is live, so
+ * the optimistic photo shows while the upload runs.
+ */
+const isShowableUrl = (url: string | null | undefined, localPicks: readonly string[]): url is string => {
+  if (!url) return false;
+  if (localPicks.includes(url)) return true;
+  return !(url.startsWith('blob:') || url.startsWith('file://'));
+};
+const NO_LOCAL_PICKS: readonly string[] = [];
+
+type FocusField = 'min' | 'max' | 'days' | 'reels' | 'stories' | 'posts' | 'payDays';
+
+/**
+ * Campaign details sheet. It owns its drafts and focus state so a keystroke
+ * re-renders only the sheet, not the whole profile behind it. The parent
+ * remounts it (via `key`) on each open, which reloads the drafts from `profile`.
+ */
+const CampaignDetailsSheet = memo(function CampaignDetailsSheet({
+  visible,
+  profile,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  profile: BrandProfile;
+  onClose: () => void;
+  onSaved: (profile: BrandProfile) => void;
+}) {
+  const [editBudgetMin, setEditBudgetMin] = useState(() => draftOf(profile.budget_min));
+  const [editBudgetMax, setEditBudgetMax] = useState(() => draftOf(profile.budget_max));
+  const [editDays, setEditDays] = useState(() => draftOf(profile.campaign_days));
+  const [editReels, setEditReels] = useState(() => draftOf(profile.deliverable_reels));
+  const [editStories, setEditStories] = useState(() => draftOf(profile.deliverable_stories));
+  const [editPosts, setEditPosts] = useState(() => draftOf(profile.deliverable_posts));
+  const [editPaymentMode, setEditPaymentMode] = useState<PaymentMode | ''>(() => profile.payment_mode ?? '');
+  const [editPaymentDays, setEditPaymentDays] = useState(() => draftOf(profile.payment_days));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<FocusField | null>(null);
+
+  const draftMin = parseDraft(editBudgetMin);
+  const draftMax = parseDraft(editBudgetMax);
+  const draftDays = parseDraft(editDays);
+  const draftReels = parseDraft(editReels);
+  const draftStories = parseDraft(editStories);
+  const draftPosts = parseDraft(editPosts);
+  const draftPaymentDays = parseDraft(editPaymentDays);
+
+  const budgetError =
+    draftMax > 0 && draftMax < draftMin
+      ? 'The maximum has to be at least the minimum.'
+      : draftMax > MAX_BUDGET || draftMin > MAX_BUDGET
+      ? 'That looks like a typo. Keep it under ₹10,00,00,000.'
+      : null;
+  const daysError = draftDays > MAX_DAYS ? `Keep the campaign to ${MAX_DAYS} days or fewer.` : null;
+  const deliverablesError =
+    draftReels > MAX_DELIVERABLE || draftStories > MAX_DELIVERABLE || draftPosts > MAX_DELIVERABLE
+      ? `Ask for ${MAX_DELIVERABLE} or fewer of each.`
+      : null;
+  const paymentError =
+    draftPaymentDays > MAX_PAYMENT_DAYS ? `Creators expect payment within ${MAX_PAYMENT_DAYS} days at most.` : null;
+  const canSave = !budgetError && !daysError && !deliverablesError && !paymentError && !saving;
+
+  // Hold the budget error back until they leave the fields, so it does not
+  // flash red on the way to typing a valid number.
+  const editingBudget = focusedField === 'min' || focusedField === 'max';
+  const showBudgetError = !!budgetError && !editingBudget;
+
+  const budgetPreview =
+    draftMax > 0
+      ? draftMin > 0
+        ? `Creators see ₹${formatInr(draftMin)} to ₹${formatInr(draftMax)}`
+        : `Creators see up to ₹${formatInr(draftMax)}`
+      : draftMin > 0
+      ? `The budget card reads “Negotiable” until you add a maximum. Your profile still shows ₹${formatInr(draftMin)} as the starting price.`
+      : 'Leave both empty and creators see “Negotiable”.';
+
+  const draftDeliverableTotal = draftReels + draftStories + draftPosts;
+  const deliverablesPreview =
+    draftDeliverableTotal > 0
+      ? 'Creators see this list on your profile.'
+      : 'Leave these empty and the deliverables card stays hidden.';
+
+  const daysPreview =
+    draftDays > 0 && draftDays <= MAX_DAYS
+      ? `Counted from today, so this campaign ends ${formatEndDate(draftDays)}.`
+      : 'Leave it empty and creators see “Dates TBD”.';
+
+  const handleSaveBudget = async () => {
+    if (!canSave) return;
+    Keyboard.dismiss();
+    setSaveError(null);
+    setSaving(true);
+
+    try {
+      const res = await updateMyProfile({
+        budget_min: draftMin,
+        budget_max: draftMax,
+        campaign_days: draftDays,
+        deliverable_reels: draftReels,
+        deliverable_stories: draftStories,
+        deliverable_posts: draftPosts,
+        payment_mode: editPaymentMode,
+        payment_days: draftPaymentDays,
+      });
+      const data = (res as any).data || res;
+      onSaved(data as BrandProfile);
+    } catch (err) {
+      // Stay open with the typed values: Alert.alert does nothing on web.
+      console.error('Failed to save budget:', err);
+      setSaveError('Could not save. Check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const closeEditModal = () => {
+    if (saving) return;
+    Keyboard.dismiss();
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={closeEditModal}>
+      <View style={s.modalOverlay}>
+        <Pressable
+          style={s.modalBackdrop}
+          onPress={closeEditModal}
+          accessibilityLabel="Close campaign details"
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={s.modalSheetWrap}
+        >
+          <View style={s.modalContent}>
+            <View style={s.grabber} />
+
+            <View style={s.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.modalTitle} accessibilityRole="header">Campaign details</Text>
+                <Text style={s.modalSubtitle}>Creators check this before they message you.</Text>
+              </View>
+              <Pressable
+                onPress={closeEditModal}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                // `focused` is real on react-native-web but missing from the typings.
+                style={(state: any) => [
+                  s.modalClose,
+                  webNoOutline,
+                  state.focused && s.modalCloseFocused,
+                  state.pressed && s.pressedSoft,
+                ]}
+              >
+                <Ionicons name="close" size={sz(20)} color="#DDD" />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={s.modalScroll}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={s.fieldGroupLabel}>Budget per collaboration</Text>
+              <View
+                style={[
+                  s.fieldGroup,
+                  (focusedField === 'min' || focusedField === 'max') && s.fieldGroupFocused,
+                  showBudgetError && s.fieldGroupError,
+                ]}
+              >
+                <View style={[s.fieldRow, focusedField === 'min' && s.fieldRowFocused]}>
+                  <Text style={s.fieldRowLabel}>Minimum</Text>
+                  <View style={s.amountWrap}>
+                    <Text style={s.currency}>₹</Text>
+                    <TextInput
+                      style={[s.amountInput, webNoOutline]}
+                      keyboardType="number-pad"
+                      inputMode="numeric"
+                      placeholder="20000"
+                      placeholderTextColor={MUTED}
+                      value={editBudgetMin}
+                      onChangeText={(t) => setEditBudgetMin(onlyDigits(t, 9))}
+                      onFocus={() => setFocusedField('min')}
+                      onBlur={() => setFocusedField(null)}
+                      accessibilityLabel="Minimum budget in rupees"
+                      returnKeyType="next"
+                    />
+                  </View>
+                </View>
+
+                <View style={s.fieldDivider} />
+
+                <View style={[s.fieldRow, focusedField === 'max' && s.fieldRowFocused]}>
+                  <Text style={s.fieldRowLabel}>Maximum</Text>
+                  <View style={s.amountWrap}>
+                    <Text style={s.currency}>₹</Text>
+                    <TextInput
+                      style={[s.amountInput, webNoOutline]}
+                      keyboardType="number-pad"
+                      inputMode="numeric"
+                      placeholder="50000"
+                      placeholderTextColor={MUTED}
+                      value={editBudgetMax}
+                      onChangeText={(t) => setEditBudgetMax(onlyDigits(t, 9))}
+                      onFocus={() => setFocusedField('max')}
+                      onBlur={() => setFocusedField(null)}
+                      accessibilityLabel="Maximum budget in rupees"
+                      returnKeyType="next"
+                    />
+                  </View>
+                </View>
+              </View>
+              {showBudgetError ? (
+                <View style={s.helperRow}>
+                  <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
+                  <Text style={[s.helperText, s.helperTextInline]}>{budgetError}</Text>
+                </View>
+              ) : (
+                <Text style={s.helperText}>{budgetPreview}</Text>
+              )}
+
+              <Text style={[s.fieldGroupLabel, { marginTop: sz(24) }]}>Campaign length</Text>
+              <View
+                style={[
+                  s.fieldGroup,
+                  focusedField === 'days' && s.fieldGroupFocused,
+                  !!daysError && s.fieldGroupError,
+                ]}
+              >
+                <View style={[s.fieldRow, focusedField === 'days' && s.fieldRowFocused]}>
+                  <Text style={s.fieldRowLabel}>Duration</Text>
+                  <View style={s.amountWrap}>
+                    <TextInput
+                      style={[s.amountInput, s.daysInput, webNoOutline]}
+                      keyboardType="number-pad"
+                      inputMode="numeric"
+                      placeholder="15"
+                      placeholderTextColor={MUTED}
+                      value={editDays}
+                      onChangeText={(t) => setEditDays(onlyDigits(t, 3))}
+                      onFocus={() => setFocusedField('days')}
+                      onBlur={() => setFocusedField(null)}
+                      accessibilityLabel="Campaign duration in days"
+                      returnKeyType="done"
+                      onSubmitEditing={Keyboard.dismiss}
+                    />
+                    <Text style={s.unit}>days</Text>
+                  </View>
+                </View>
+              </View>
+              {daysError ? (
+                <View style={s.helperRow}>
+                  <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
+                  <Text style={[s.helperText, s.helperTextInline]}>{daysError}</Text>
+                </View>
+              ) : (
+                <Text style={s.helperText}>{daysPreview}</Text>
+              )}
+
+              <Text style={[s.fieldGroupLabel, { marginTop: sz(24) }]}>Deliverables</Text>
+              <View
+                style={[
+                  s.fieldGroup,
+                  (focusedField === 'reels' || focusedField === 'stories' || focusedField === 'posts') &&
+                    s.fieldGroupFocused,
+                  !!deliverablesError && s.fieldGroupError,
+                ]}
+              >
+                {([
+                  { key: 'reels' as const, label: 'Reels', value: editReels, set: setEditReels },
+                  { key: 'stories' as const, label: 'Stories', value: editStories, set: setEditStories },
+                  { key: 'posts' as const, label: 'Posts', value: editPosts, set: setEditPosts },
+                ]).map((field, i) => (
+                  <React.Fragment key={field.key}>
+                    {i > 0 && <View style={s.fieldDivider} />}
+                    <View style={[s.fieldRow, focusedField === field.key && s.fieldRowFocused]}>
+                      <Text style={s.fieldRowLabel}>{field.label}</Text>
+                      <View style={s.amountWrap}>
+                        <TextInput
+                          style={[s.amountInput, s.daysInput, webNoOutline]}
+                          keyboardType="number-pad"
+                          inputMode="numeric"
+                          placeholder="0"
+                          placeholderTextColor={MUTED}
+                          value={field.value}
+                          onChangeText={(t) => field.set(onlyDigits(t, 2))}
+                          onFocus={() => setFocusedField(field.key)}
+                          onBlur={() => setFocusedField(null)}
+                          accessibilityLabel={`Number of ${field.label.toLowerCase()} you ask for`}
+                          returnKeyType="done"
+                          onSubmitEditing={Keyboard.dismiss}
+                        />
+                      </View>
+                    </View>
+                  </React.Fragment>
+                ))}
+              </View>
+              {deliverablesError ? (
+                <View style={s.helperRow}>
+                  <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
+                  <Text style={[s.helperText, s.helperTextInline]}>{deliverablesError}</Text>
+                </View>
+              ) : (
+                <Text style={s.helperText}>{deliverablesPreview}</Text>
+              )}
+
+              <Text style={[s.fieldGroupLabel, { marginTop: sz(24) }]}>How you pay</Text>
+              <View style={s.modeRow}>
+                {PAYMENT_MODES.map((mode) => {
+                  const on = editPaymentMode === mode.value;
+                  return (
+                    <Pressable
+                      key={mode.value}
+                      // Tapping the chosen one again clears the terms.
+                      onPress={() => setEditPaymentMode(on ? '' : mode.value)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      style={({ pressed }) => [s.modeChip, on && s.modeChipOn, pressed && s.pressedSoft]}
+                    >
+                      <Text style={[s.modeChipTxt, on && s.modeChipTxtOn]}>{mode.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <View
+                style={[
+                  s.fieldGroup,
+                  { marginTop: sz(10) },
+                  focusedField === 'payDays' && s.fieldGroupFocused,
+                  !!paymentError && s.fieldGroupError,
+                ]}
+              >
+                <View style={[s.fieldRow, focusedField === 'payDays' && s.fieldRowFocused]}>
+                  <Text style={s.fieldRowLabel}>Paid within</Text>
+                  <View style={s.amountWrap}>
+                    <TextInput
+                      style={[s.amountInput, s.daysInput, webNoOutline]}
+                      keyboardType="number-pad"
+                      inputMode="numeric"
+                      placeholder="7"
+                      placeholderTextColor={MUTED}
+                      value={editPaymentDays}
+                      onChangeText={(t) => setEditPaymentDays(onlyDigits(t, 2))}
+                      onFocus={() => setFocusedField('payDays')}
+                      onBlur={() => setFocusedField(null)}
+                      accessibilityLabel="Days until payment"
+                      returnKeyType="done"
+                      onSubmitEditing={Keyboard.dismiss}
+                    />
+                    <Text style={s.unit}>days</Text>
+                  </View>
+                </View>
+              </View>
+              {paymentError ? (
+                <View style={s.helperRow}>
+                  <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
+                  <Text style={[s.helperText, s.helperTextInline]}>{paymentError}</Text>
+                </View>
+              ) : (
+                <Text style={s.helperText}>
+                  Shown to creators as your own terms. Matchr does not hold or release payment.
+                </Text>
+              )}
+            </ScrollView>
+
+            {saveError && (
+              <View style={s.saveErrorRow}>
+                <Ionicons name="cloud-offline-outline" size={sz(16)} color={DANGER} />
+                <Text style={s.saveErrorText}>{saveError}</Text>
+              </View>
+            )}
+
+            <Pressable
+              style={({ pressed }) => [
+                s.saveBtn,
+                !canSave && !saving && s.saveBtnDisabled,
+                pressed && canSave && s.pressedSoft,
+              ]}
+              onPress={handleSaveBudget}
+              disabled={!canSave}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSave, busy: saving }}
+            >
+              {saving ? (
+                <View style={s.savingRow}>
+                  <ActivityIndicator color="#FFF" size="small" />
+                  <Text style={s.saveBtnTxt}>Saving</Text>
+                </View>
+              ) : (
+                <Text style={[s.saveBtnTxt, !canSave && s.saveBtnTxtDisabled]}>Save changes</Text>
+              )}
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+});
+
+/**
+ * Business verification sheet. Same idea as CampaignDetailsSheet: typing here
+ * must not re-render the profile. Remounted on each open via `key`.
+ */
+const VerifySheet = memo(function VerifySheet({
+  visible,
+  initialName,
+  onClose,
+  onSubmitted,
+}: {
+  visible: boolean;
+  initialName: string;
+  onClose: () => void;
+  onSubmitted: (res: Awaited<ReturnType<typeof requestVerification>>) => void;
+}) {
+  const [verifyName, setVerifyName] = useState(initialName);
+  const [verifyReg, setVerifyReg] = useState('');
+  const [verifyFocused, setVerifyFocused] = useState<'name' | 'reg' | null>(null);
+  const [verifySubmitting, setVerifySubmitting] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  const canSubmitVerification =
+    verifyName.trim().length >= 2 && verifyReg.trim().length >= 4 && !verifySubmitting;
+
+  const submitVerification = async () => {
+    const businessName = verifyName.trim();
+    const regNumber = verifyReg.trim();
+    if (businessName.length < 2 || regNumber.length < 4 || verifySubmitting) return;
+    Keyboard.dismiss();
+    setVerifyError(null);
+    setVerifySubmitting(true);
+    try {
+      const res = await requestVerification(businessName, regNumber);
+      onSubmitted(res);
+    } catch (err) {
+      console.error('Verification request failed:', err);
+      setVerifyError(
+        err instanceof ApiError && err.status < 500
+          ? err.message
+          : 'Could not send that. Check your connection and try again.',
+      );
+    } finally {
+      setVerifySubmitting(false);
+    }
+  };
+
+  const close = () => {
+    if (!verifySubmitting) onClose();
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={close}
+    >
+      <View style={s.modalOverlay}>
+        <Pressable
+          style={s.modalBackdrop}
+          onPress={close}
+          accessibilityLabel="Close verification"
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={s.modalSheetWrap}
+        >
+          <View style={s.modalContent}>
+            <View style={s.grabber} />
+
+            <View style={s.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.modalTitle} accessibilityRole="header">Get verified</Text>
+                <Text style={s.modalSubtitle}>
+                  We check these against public business records. Usually within two working days.
+                </Text>
+              </View>
+              <Pressable
+                onPress={close}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                style={(state: any) => [
+                  s.modalClose,
+                  webNoOutline,
+                  state.focused && s.modalCloseFocused,
+                  state.pressed && s.pressedSoft,
+                ]}
+              >
+                <Ionicons name="close" size={sz(20)} color="#DDD" />
+              </Pressable>
+            </View>
+
+            <Text style={s.fieldGroupLabel}>Registered business name</Text>
+            <View style={[s.fieldGroup, verifyFocused === 'name' && s.fieldGroupFocused]}>
+              <View style={[s.fieldRow, s.fieldRowText, verifyFocused === 'name' && s.fieldRowFocused]}>
+                <TextInput
+                  style={[s.textInput, webNoOutline]}
+                  placeholder="As it appears on your registration"
+                  placeholderTextColor={MUTED}
+                  value={verifyName}
+                  onChangeText={(t) => setVerifyName(t.slice(0, 120))}
+                  onFocus={() => setVerifyFocused('name')}
+                  onBlur={() => setVerifyFocused(null)}
+                  accessibilityLabel="Registered business name"
+                  returnKeyType="next"
+                />
+              </View>
+            </View>
+
+            <Text style={[s.fieldGroupLabel, { marginTop: sz(20) }]}>GST or company number</Text>
+            <View style={[s.fieldGroup, verifyFocused === 'reg' && s.fieldGroupFocused]}>
+              <View style={[s.fieldRow, s.fieldRowText, verifyFocused === 'reg' && s.fieldRowFocused]}>
+                <TextInput
+                  style={[s.textInput, webNoOutline]}
+                  placeholder="29ABCDE1234F1Z5"
+                  placeholderTextColor={MUTED}
+                  value={verifyReg}
+                  onChangeText={(t) => setVerifyReg(t.toUpperCase().slice(0, 40))}
+                  onFocus={() => setVerifyFocused('reg')}
+                  onBlur={() => setVerifyFocused(null)}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  accessibilityLabel="GST or company registration number"
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                />
+              </View>
+            </View>
+            <Text style={s.helperText}>
+              Only Matchr sees this number. Creators see the business name once you are verified.
+            </Text>
+
+            {verifyError && (
+              <View style={s.saveErrorRow}>
+                <Ionicons name="alert-circle" size={sz(16)} color={DANGER} />
+                <Text style={s.saveErrorText}>{verifyError}</Text>
+              </View>
+            )}
+
+            <Pressable
+              style={({ pressed }) => [
+                s.saveBtn,
+                !canSubmitVerification && !verifySubmitting && s.saveBtnDisabled,
+                pressed && canSubmitVerification && s.pressedSoft,
+              ]}
+              onPress={submitVerification}
+              disabled={!canSubmitVerification}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSubmitVerification, busy: verifySubmitting }}
+            >
+              {verifySubmitting ? (
+                <View style={s.savingRow}>
+                  <ActivityIndicator color="#FFF" size="small" />
+                  <Text style={s.saveBtnTxt}>Sending</Text>
+                </View>
+              ) : (
+                <Text style={[s.saveBtnTxt, !canSubmitVerification && s.saveBtnTxtDisabled]}>
+                  Send for review
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+});
+
 export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: string, onBack?: () => void }) {
   const { width } = useWindowDimensions();
   const router = useRouter();
@@ -130,35 +726,22 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Edit Modal State
+  // Edit sheet: the drafts live in CampaignDetailsSheet. Bumping the session
+  // remounts it so each open starts from the saved profile.
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editBudgetMin, setEditBudgetMin] = useState('');
-  const [editBudgetMax, setEditBudgetMax] = useState('');
-  const [editDays, setEditDays] = useState('');
-  const [editReels, setEditReels] = useState('');
-  const [editStories, setEditStories] = useState('');
-  const [editPosts, setEditPosts] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [focusedField, setFocusedField] = useState<'min' | 'max' | 'days' | 'reels' | 'stories' | 'posts' | 'payDays' | null>(null);
+  const [editSession, setEditSession] = useState(0);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [uploadingCampaign, setUploadingCampaign] = useState(false);
+  // Just-picked local URIs, shown while they upload (see isShowableUrl).
+  const [localPicks, setLocalPicks] = useState<readonly string[]>(NO_LOCAL_PICKS);
   const [savingPick, setSavingPick] = useState(false);
   // Expressing interest from a public profile is the same act as a right swipe.
   const [interested, setInterested] = useState(false);
   const [sendingInterest, setSendingInterest] = useState(false);
 
-  // Payment terms live in the same sheet as budget and deliverables.
-  const [editPaymentMode, setEditPaymentMode] = useState<PaymentMode | ''>('');
-  const [editPaymentDays, setEditPaymentDays] = useState('');
-
   // Business verification: details go to an admin, who grants the badge.
   const [verifyVisible, setVerifyVisible] = useState(false);
-  const [verifyName, setVerifyName] = useState('');
-  const [verifyReg, setVerifyReg] = useState('');
-  const [verifyFocused, setVerifyFocused] = useState<'name' | 'reg' | null>(null);
-  const [verifySubmitting, setVerifySubmitting] = useState(false);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifySession, setVerifySession] = useState(0);
 
   // Matched creators, own profile only: /api/matches always answers for the
   // signed-in user, so there is no way to show someone else's matches here.
@@ -269,6 +852,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
         if (profile) {
           setProfile({ ...profile, photos: newPhotosOptimistic });
         }
+        setLocalPicks(localUris);
         setUploadingCampaign(true);
 
         try {
@@ -285,12 +869,70 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
           Alert.alert('Upload failed', 'Could not upload image. Reverted changes.');
         } finally {
           setUploadingCampaign(false);
+          setLocalPicks(NO_LOCAL_PICKS);
         }
       }
     } catch (err: any) {
       console.error('Failed to pick campaign photo:', err);
     }
   }, [profile]);
+
+  // Only a settled page changes the dots, not every scroll frame. Web has no
+  // momentum events, so there it follows onScroll (a no-op until the page flips).
+  const syncPhotoIndex = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const w = e.nativeEvent.layoutMeasurement.width;
+    if (w > 0) setActivePhotoIndex(Math.round(e.nativeEvent.contentOffset.x / w));
+  }, []);
+
+  const closeEditModal = useCallback(() => setEditModalVisible(false), []);
+  const handleProfileSaved = useCallback((data: BrandProfile) => {
+    setProfile(data);
+    setEditModalVisible(false);
+  }, []);
+
+  const closeVerifyModal = useCallback(() => setVerifyVisible(false), []);
+  const handleVerificationSent = useCallback(
+    (res: Awaited<ReturnType<typeof requestVerification>>) => {
+      setProfile((prev) => (prev ? {
+        ...prev,
+        verification_status: res.verification_status,
+        verification_business_name: res.verification_business_name,
+        verification_note: null,
+      } : prev));
+      setVerifyVisible(false);
+    },
+    [],
+  );
+
+  // Derived lists, memoized so re-renders (dots, picks) do not rebuild them.
+  const photos = profile?.photos;
+  const campaignPhotos = useMemo(
+    () => (photos ?? []).filter((url) => isShowableUrl(url, localPicks)),
+    [photos, localPicks],
+  );
+  const lookingFor = useMemo(() => profile?.campaign_types ?? [], [profile?.campaign_types]);
+  const vibes = useMemo(() => profile?.vibes ?? [], [profile?.vibes]);
+  const campaignTypeChoices = useMemo(
+    () => (publicUserId ? lookingFor : withSaved(CAMPAIGN_TYPES, lookingFor)),
+    [publicUserId, lookingFor],
+  );
+  const vibeChoices = useMemo(
+    () => (publicUserId ? vibes : withSaved(VIBES, vibes)),
+    [publicUserId, vibes],
+  );
+  // What the brand asks for. A line is shown only if they asked for it.
+  const reels = profile?.deliverable_reels ?? 0;
+  const stories = profile?.deliverable_stories ?? 0;
+  const posts = profile?.deliverable_posts ?? 0;
+  const deliverables = useMemo(
+    () =>
+      [
+        { key: 'reels', count: reels, Icon: ReelsIcon, one: 'Reel', many: 'Reels' },
+        { key: 'stories', count: stories, Icon: StoriesIcon, one: 'Story', many: 'Stories' },
+        { key: 'posts', count: posts, Icon: PostIcon, one: 'Post', many: 'Posts' },
+      ].filter((d) => d.count > 0),
+    [reels, stories, posts],
+  );
 
   if (loading) {
     return (
@@ -308,58 +950,30 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
     );
   }
 
-  const isValidUrl = (url?: string | null) => {
-    if (!url) return false;
-    if (url.startsWith('blob:') || url.startsWith('file://')) return false;
-    return true;
-  };
-
   // No stock-photo fallbacks: until the brand uploads its own images, show placeholders.
-  const coverImage = isValidUrl(profile.logo_url) ? (profile.logo_url as string) : (isValidUrl(profile.cover_url) ? (profile.cover_url as string) : null);
-  const logo = isValidUrl(profile.logo_url) ? (profile.logo_url as string) : null;
+  const coverImage = isShowableUrl(profile.logo_url, localPicks)
+    ? profile.logo_url
+    : isShowableUrl(profile.cover_url, localPicks) ? profile.cover_url : null;
+  const logo = isShowableUrl(profile.logo_url, localPicks) ? profile.logo_url : null;
   const name = profile.name || 'Your Brand';
   const categoriesStr = (profile.categories || []).join(' · ') || 'Uncategorized';
   const location = profile.location || 'Location not set';
   const bio = profile.bio || 'Tell creators about your brand...';
-  // Only the campaign types the brand actually picked. Categories are a
-  // different thing and already sit under the brand name in the header.
-  const lookingFor = profile.campaign_types ?? [];
+  // lookingFor: only the campaign types the brand actually picked. Categories
+  // are a different thing and already sit under the brand name in the header.
   const platforms = profile.platforms || [];
 
   const budgetMin = profile.budget_min || 0;
   const budgetMax = profile.budget_max || 0;
   const budgetStr = budgetMax > 0 ? `${budgetMin > 0 ? budgetMin/1000 + 'k-' : ''}${budgetMax/1000}k` : 'Negotiable';
-  
-  const campaignDays = profile.campaign_days || 0;
-  const formatCampaignDates = (days: number) => {
-    if (!days) return 'Dates TBD';
-    const start = new Date();
-    const end = new Date();
-    end.setDate(start.getDate() + days);
-    
-    const formatDt = (d: Date) => {
-      const day = d.getDate();
-      const month = d.toLocaleString('default', { month: 'short' }).toLowerCase();
-      return `${day}${month}`;
-    };
-    return `${formatDt(start)}-${formatDt(end)}`;
-  };
-  const campaignDatesStr = formatCampaignDates(campaignDays);
-  
-  // No fallback list: showing all five as picked would claim the brand chose
-  // them. On your own profile the unpicked ones stay visible but greyed, so
-  // the row doubles as the picker; a visitor sees only what was picked.
-  const vibes = profile.vibes ?? [];
-  const campaignTypeChoices = publicUserId ? lookingFor : withSaved(CAMPAIGN_TYPES, lookingFor);
-  const vibeChoices = publicUserId ? vibes : withSaved(VIBES, vibes);
 
-  // What the brand asks for. A line is shown only if they asked for it.
-  const deliverables = [
-    { key: 'reels', count: profile.deliverable_reels ?? 0, Icon: ReelsIcon, one: 'Reel', many: 'Reels' },
-    { key: 'stories', count: profile.deliverable_stories ?? 0, Icon: StoriesIcon, one: 'Story', many: 'Stories' },
-    { key: 'posts', count: profile.deliverable_posts ?? 0, Icon: PostIcon, one: 'Post', many: 'Posts' },
-  ].filter((d) => d.count > 0);
-  const campaignPhotos = (profile.photos ?? []).filter(isValidUrl);
+  const campaignDays = profile.campaign_days || 0;
+  const campaignDatesStr = formatCampaignDates(campaignDays);
+
+  // Choices (memoized above): no fallback list, since showing all five as
+  // picked would claim the brand chose them. On your own profile the unpicked
+  // ones stay visible but greyed, so the row doubles as the picker; a visitor
+  // sees only what was picked.
 
   const ratingCount = profile.rating_count ?? 0;
   const ratingAvgRaw = profile.rating_avg == null ? null : Number(profile.rating_avg);
@@ -368,84 +982,6 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
 
   const shownMatches = (matches ?? []).slice(0, MAX_SHOWN_MATCHES);
   const extraMatches = matchTotal - shownMatches.length;
-
-  // Empty stays empty: 0 means "not set", and the profile shows Negotiable / Dates TBD.
-  const draftMin = editBudgetMin === '' ? 0 : parseInt(editBudgetMin, 10);
-  const draftMax = editBudgetMax === '' ? 0 : parseInt(editBudgetMax, 10);
-  const draftDays = editDays === '' ? 0 : parseInt(editDays, 10);
-  const draftReels = editReels === '' ? 0 : parseInt(editReels, 10);
-  const draftStories = editStories === '' ? 0 : parseInt(editStories, 10);
-  const draftPosts = editPosts === '' ? 0 : parseInt(editPosts, 10);
-  const draftPaymentDays = editPaymentDays === '' ? 0 : parseInt(editPaymentDays, 10);
-
-  const budgetError =
-    draftMax > 0 && draftMax < draftMin
-      ? 'The maximum has to be at least the minimum.'
-      : draftMax > MAX_BUDGET || draftMin > MAX_BUDGET
-      ? 'That looks like a typo. Keep it under ₹10,00,00,000.'
-      : null;
-  const daysError = draftDays > MAX_DAYS ? `Keep the campaign to ${MAX_DAYS} days or fewer.` : null;
-  const deliverablesError =
-    draftReels > MAX_DELIVERABLE || draftStories > MAX_DELIVERABLE || draftPosts > MAX_DELIVERABLE
-      ? `Ask for ${MAX_DELIVERABLE} or fewer of each.`
-      : null;
-  const paymentError =
-    draftPaymentDays > MAX_PAYMENT_DAYS ? `Creators expect payment within ${MAX_PAYMENT_DAYS} days at most.` : null;
-  const canSave = !budgetError && !daysError && !deliverablesError && !paymentError && !saving;
-
-  // Hold the budget error back until they leave the fields, so it does not
-  // flash red on the way to typing a valid number.
-  const editingBudget = focusedField === 'min' || focusedField === 'max';
-  const showBudgetError = !!budgetError && !editingBudget;
-
-  const budgetPreview =
-    draftMax > 0
-      ? draftMin > 0
-        ? `Creators see ₹${formatInr(draftMin)} to ₹${formatInr(draftMax)}`
-        : `Creators see up to ₹${formatInr(draftMax)}`
-      : draftMin > 0
-      ? `The budget card reads “Negotiable” until you add a maximum. Your profile still shows ₹${formatInr(draftMin)} as the starting price.`
-      : 'Leave both empty and creators see “Negotiable”.';
-
-  const draftDeliverableTotal = draftReels + draftStories + draftPosts;
-  const deliverablesPreview =
-    draftDeliverableTotal > 0
-      ? 'Creators see this list on your profile.'
-      : 'Leave these empty and the deliverables card stays hidden.';
-
-  const daysPreview =
-    draftDays > 0 && draftDays <= MAX_DAYS
-      ? `Counted from today, so this campaign ends ${formatEndDate(draftDays)}.`
-      : 'Leave it empty and creators see “Dates TBD”.';
-
-  const handleSaveBudget = async () => {
-    if (!profile || !canSave) return;
-    Keyboard.dismiss();
-    setSaveError(null);
-    setSaving(true);
-
-    try {
-      const res = await updateMyProfile({
-        budget_min: draftMin,
-        budget_max: draftMax,
-        campaign_days: draftDays,
-        deliverable_reels: draftReels,
-        deliverable_stories: draftStories,
-        deliverable_posts: draftPosts,
-        payment_mode: editPaymentMode,
-        payment_days: draftPaymentDays,
-      });
-      const data = (res as any).data || res;
-      setProfile(data as BrandProfile);
-      setEditModalVisible(false);
-    } catch (err) {
-      // Stay open with the typed values: Alert.alert does nothing on web.
-      console.error('Failed to save budget:', err);
-      setSaveError('Could not save. Check your connection and try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // One request at a time: two quick taps would otherwise race, and the
   // slower answer would overwrite the newer choice.
@@ -492,65 +1028,16 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
     }
   };
 
-  const canSubmitVerification =
-    verifyName.trim().length >= 2 && verifyReg.trim().length >= 4 && !verifySubmitting;
-
   const openVerifyModal = () => {
     if (publicUserId || !profile) return;
-    setVerifyName(profile.verification_business_name || profile.name || '');
-    setVerifyReg('');
-    setVerifyError(null);
-    setVerifyFocused(null);
+    setVerifySession((n) => n + 1);
     setVerifyVisible(true);
-  };
-
-  const submitVerification = async () => {
-    const businessName = verifyName.trim();
-    const regNumber = verifyReg.trim();
-    if (businessName.length < 2 || regNumber.length < 4 || verifySubmitting) return;
-    Keyboard.dismiss();
-    setVerifyError(null);
-    setVerifySubmitting(true);
-    try {
-      const res = await requestVerification(businessName, regNumber);
-      setProfile((prev) => (prev ? {
-        ...prev,
-        verification_status: res.verification_status,
-        verification_business_name: res.verification_business_name,
-        verification_note: null,
-      } : prev));
-      setVerifyVisible(false);
-    } catch (err) {
-      console.error('Verification request failed:', err);
-      setVerifyError(
-        err instanceof ApiError && err.status < 500
-          ? err.message
-          : 'Could not send that. Check your connection and try again.',
-      );
-    } finally {
-      setVerifySubmitting(false);
-    }
   };
 
   const openEditModal = () => {
     if (publicUserId) return;
-    setEditBudgetMin(budgetMin ? String(budgetMin) : '');
-    setEditBudgetMax(budgetMax ? String(budgetMax) : '');
-    setEditDays(campaignDays ? String(campaignDays) : '');
-    setEditReels(profile.deliverable_reels ? String(profile.deliverable_reels) : '');
-    setEditStories(profile.deliverable_stories ? String(profile.deliverable_stories) : '');
-    setEditPosts(profile.deliverable_posts ? String(profile.deliverable_posts) : '');
-    setEditPaymentMode(profile.payment_mode ?? '');
-    setEditPaymentDays(profile.payment_days ? String(profile.payment_days) : '');
-    setSaveError(null);
-    setFocusedField(null);
+    setEditSession((n) => n + 1);
     setEditModalVisible(true);
-  };
-
-  const closeEditModal = () => {
-    if (saving) return;
-    Keyboard.dismiss();
-    setEditModalVisible(false);
   };
 
   const handleChangeLogo = async () => {
@@ -606,7 +1093,18 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
         
         {/* ════ HERO COVER ════ */}
         <View style={s.heroWrapper}>
-          <ImageBackground source={coverImage ? { uri: coverImage } : undefined} resizeMode="cover" style={s.coverBg}>
+          {/* expo-image instead of ImageBackground: cached across visits, and it
+              fades in rather than popping. Drawn first so the gradients sit on top. */}
+          <View style={s.coverBg}>
+            {coverImage && (
+              <Image
+                source={{ uri: coverImage }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+              />
+            )}
             <LinearGradient
               start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
               colors={['rgba(17,17,17,0.7)', 'rgba(17,17,17,0)']}
@@ -625,7 +1123,7 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
               colors={[BG, 'rgba(17,17,17,0)']}
               style={s.heroGradBottom}
             />
-          </ImageBackground>
+          </View>
           
           {/* Circular Logo & Titles overlay */}
           <View style={s.heroContentRow}>
@@ -663,15 +1161,9 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
             <Text style={s.sectionTitle}>Active Platforms</Text>
             <View style={s.tagsWrap}>
               {platforms.map((p: string) => {
-                const iconMap: Record<string, string> = {
-                  x: 'x-twitter',
-                  facebook: 'facebook-f',
-                  linkedin: 'linkedin-in',
-                  reddit: 'reddit-alien'
-                };
                 return (
                   <View key={p} style={[s.tagPill, { flexDirection: 'row', alignItems: 'center', gap: sz(6) }]}>
-                    <FontAwesome6 name={iconMap[p] || p} size={sz(14)} color="#FFF" />
+                    <FontAwesome6 name={PLATFORM_ICONS[p] || p} size={sz(14)} color="#FFF" />
                     <Text style={s.tagTxt}>{p.charAt(0).toUpperCase() + p.slice(1)}</Text>
                   </View>
                 );
@@ -872,12 +1364,9 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            scrollEventThrottle={16}
-            onScroll={(e) => {
-              const x = e.nativeEvent.contentOffset.x;
-              const w = e.nativeEvent.layoutMeasurement.width;
-              if (w > 0) setActivePhotoIndex(Math.round(x / w));
-            }}
+            onMomentumScrollEnd={syncPhotoIndex}
+            scrollEventThrottle={Platform.OS === 'web' ? 16 : undefined}
+            onScroll={Platform.OS === 'web' ? syncPhotoIndex : undefined}
           >
             {campaignPhotos.map((photoUrl, i) => (
               <Image
@@ -1122,396 +1611,26 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
       </ScrollView>
 
       {/* ════ EDIT MODAL ════ */}
-      <Modal visible={editModalVisible} animationType="slide" transparent onRequestClose={closeEditModal}>
-        <View style={s.modalOverlay}>
-          <Pressable
-            style={s.modalBackdrop}
-            onPress={closeEditModal}
-            accessibilityLabel="Close campaign details"
-          />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={s.modalSheetWrap}
-          >
-            <View style={s.modalContent}>
-              <View style={s.grabber} />
-
-              <View style={s.modalHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.modalTitle} accessibilityRole="header">Campaign details</Text>
-                  <Text style={s.modalSubtitle}>Creators check this before they message you.</Text>
-                </View>
-                <Pressable
-                  onPress={closeEditModal}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                  // `focused` is real on react-native-web but missing from the typings.
-                  style={(state: any) => [
-                    s.modalClose,
-                    webNoOutline,
-                    state.focused && s.modalCloseFocused,
-                    state.pressed && s.pressedSoft,
-                  ]}
-                >
-                  <Ionicons name="close" size={sz(20)} color="#DDD" />
-                </Pressable>
-              </View>
-
-              <ScrollView
-                style={s.modalScroll}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                <Text style={s.fieldGroupLabel}>Budget per collaboration</Text>
-                <View
-                  style={[
-                    s.fieldGroup,
-                    (focusedField === 'min' || focusedField === 'max') && s.fieldGroupFocused,
-                    showBudgetError && s.fieldGroupError,
-                  ]}
-                >
-                  <View style={[s.fieldRow, focusedField === 'min' && s.fieldRowFocused]}>
-                    <Text style={s.fieldRowLabel}>Minimum</Text>
-                    <View style={s.amountWrap}>
-                      <Text style={s.currency}>₹</Text>
-                      <TextInput
-                        style={[s.amountInput, webNoOutline]}
-                        keyboardType="number-pad"
-                        inputMode="numeric"
-                        placeholder="20000"
-                        placeholderTextColor={MUTED}
-                        value={editBudgetMin}
-                        onChangeText={(t) => setEditBudgetMin(onlyDigits(t, 9))}
-                        onFocus={() => setFocusedField('min')}
-                        onBlur={() => setFocusedField(null)}
-                        accessibilityLabel="Minimum budget in rupees"
-                        returnKeyType="next"
-                      />
-                    </View>
-                  </View>
-
-                  <View style={s.fieldDivider} />
-
-                  <View style={[s.fieldRow, focusedField === 'max' && s.fieldRowFocused]}>
-                    <Text style={s.fieldRowLabel}>Maximum</Text>
-                    <View style={s.amountWrap}>
-                      <Text style={s.currency}>₹</Text>
-                      <TextInput
-                        style={[s.amountInput, webNoOutline]}
-                        keyboardType="number-pad"
-                        inputMode="numeric"
-                        placeholder="50000"
-                        placeholderTextColor={MUTED}
-                        value={editBudgetMax}
-                        onChangeText={(t) => setEditBudgetMax(onlyDigits(t, 9))}
-                        onFocus={() => setFocusedField('max')}
-                        onBlur={() => setFocusedField(null)}
-                        accessibilityLabel="Maximum budget in rupees"
-                        returnKeyType="next"
-                      />
-                    </View>
-                  </View>
-                </View>
-                {showBudgetError ? (
-                  <View style={s.helperRow}>
-                    <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
-                    <Text style={[s.helperText, s.helperTextInline]}>{budgetError}</Text>
-                  </View>
-                ) : (
-                  <Text style={s.helperText}>{budgetPreview}</Text>
-                )}
-
-                <Text style={[s.fieldGroupLabel, { marginTop: sz(24) }]}>Campaign length</Text>
-                <View
-                  style={[
-                    s.fieldGroup,
-                    focusedField === 'days' && s.fieldGroupFocused,
-                    !!daysError && s.fieldGroupError,
-                  ]}
-                >
-                  <View style={[s.fieldRow, focusedField === 'days' && s.fieldRowFocused]}>
-                    <Text style={s.fieldRowLabel}>Duration</Text>
-                    <View style={s.amountWrap}>
-                      <TextInput
-                        style={[s.amountInput, s.daysInput, webNoOutline]}
-                        keyboardType="number-pad"
-                        inputMode="numeric"
-                        placeholder="15"
-                        placeholderTextColor={MUTED}
-                        value={editDays}
-                        onChangeText={(t) => setEditDays(onlyDigits(t, 3))}
-                        onFocus={() => setFocusedField('days')}
-                        onBlur={() => setFocusedField(null)}
-                        accessibilityLabel="Campaign duration in days"
-                        returnKeyType="done"
-                        onSubmitEditing={Keyboard.dismiss}
-                      />
-                      <Text style={s.unit}>days</Text>
-                    </View>
-                  </View>
-                </View>
-                {daysError ? (
-                  <View style={s.helperRow}>
-                    <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
-                    <Text style={[s.helperText, s.helperTextInline]}>{daysError}</Text>
-                  </View>
-                ) : (
-                  <Text style={s.helperText}>{daysPreview}</Text>
-                )}
-
-                <Text style={[s.fieldGroupLabel, { marginTop: sz(24) }]}>Deliverables</Text>
-                <View
-                  style={[
-                    s.fieldGroup,
-                    (focusedField === 'reels' || focusedField === 'stories' || focusedField === 'posts') &&
-                      s.fieldGroupFocused,
-                    !!deliverablesError && s.fieldGroupError,
-                  ]}
-                >
-                  {([
-                    { key: 'reels' as const, label: 'Reels', value: editReels, set: setEditReels },
-                    { key: 'stories' as const, label: 'Stories', value: editStories, set: setEditStories },
-                    { key: 'posts' as const, label: 'Posts', value: editPosts, set: setEditPosts },
-                  ]).map((field, i) => (
-                    <React.Fragment key={field.key}>
-                      {i > 0 && <View style={s.fieldDivider} />}
-                      <View style={[s.fieldRow, focusedField === field.key && s.fieldRowFocused]}>
-                        <Text style={s.fieldRowLabel}>{field.label}</Text>
-                        <View style={s.amountWrap}>
-                          <TextInput
-                            style={[s.amountInput, s.daysInput, webNoOutline]}
-                            keyboardType="number-pad"
-                            inputMode="numeric"
-                            placeholder="0"
-                            placeholderTextColor={MUTED}
-                            value={field.value}
-                            onChangeText={(t) => field.set(onlyDigits(t, 2))}
-                            onFocus={() => setFocusedField(field.key)}
-                            onBlur={() => setFocusedField(null)}
-                            accessibilityLabel={`Number of ${field.label.toLowerCase()} you ask for`}
-                            returnKeyType="done"
-                            onSubmitEditing={Keyboard.dismiss}
-                          />
-                        </View>
-                      </View>
-                    </React.Fragment>
-                  ))}
-                </View>
-                {deliverablesError ? (
-                  <View style={s.helperRow}>
-                    <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
-                    <Text style={[s.helperText, s.helperTextInline]}>{deliverablesError}</Text>
-                  </View>
-                ) : (
-                  <Text style={s.helperText}>{deliverablesPreview}</Text>
-                )}
-
-                <Text style={[s.fieldGroupLabel, { marginTop: sz(24) }]}>How you pay</Text>
-                <View style={s.modeRow}>
-                  {PAYMENT_MODES.map((mode) => {
-                    const on = editPaymentMode === mode.value;
-                    return (
-                      <Pressable
-                        key={mode.value}
-                        // Tapping the chosen one again clears the terms.
-                        onPress={() => setEditPaymentMode(on ? '' : mode.value)}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: on }}
-                        style={({ pressed }) => [s.modeChip, on && s.modeChipOn, pressed && s.pressedSoft]}
-                      >
-                        <Text style={[s.modeChipTxt, on && s.modeChipTxtOn]}>{mode.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <View
-                  style={[
-                    s.fieldGroup,
-                    { marginTop: sz(10) },
-                    focusedField === 'payDays' && s.fieldGroupFocused,
-                    !!paymentError && s.fieldGroupError,
-                  ]}
-                >
-                  <View style={[s.fieldRow, focusedField === 'payDays' && s.fieldRowFocused]}>
-                    <Text style={s.fieldRowLabel}>Paid within</Text>
-                    <View style={s.amountWrap}>
-                      <TextInput
-                        style={[s.amountInput, s.daysInput, webNoOutline]}
-                        keyboardType="number-pad"
-                        inputMode="numeric"
-                        placeholder="7"
-                        placeholderTextColor={MUTED}
-                        value={editPaymentDays}
-                        onChangeText={(t) => setEditPaymentDays(onlyDigits(t, 2))}
-                        onFocus={() => setFocusedField('payDays')}
-                        onBlur={() => setFocusedField(null)}
-                        accessibilityLabel="Days until payment"
-                        returnKeyType="done"
-                        onSubmitEditing={Keyboard.dismiss}
-                      />
-                      <Text style={s.unit}>days</Text>
-                    </View>
-                  </View>
-                </View>
-                {paymentError ? (
-                  <View style={s.helperRow}>
-                    <Ionicons name="alert-circle" size={sz(14)} color={DANGER} />
-                    <Text style={[s.helperText, s.helperTextInline]}>{paymentError}</Text>
-                  </View>
-                ) : (
-                  <Text style={s.helperText}>
-                    Shown to creators as your own terms. Matchr does not hold or release payment.
-                  </Text>
-                )}
-              </ScrollView>
-
-              {saveError && (
-                <View style={s.saveErrorRow}>
-                  <Ionicons name="cloud-offline-outline" size={sz(16)} color={DANGER} />
-                  <Text style={s.saveErrorText}>{saveError}</Text>
-                </View>
-              )}
-
-              <Pressable
-                style={({ pressed }) => [
-                  s.saveBtn,
-                  !canSave && !saving && s.saveBtnDisabled,
-                  pressed && canSave && s.pressedSoft,
-                ]}
-                onPress={handleSaveBudget}
-                disabled={!canSave}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canSave, busy: saving }}
-              >
-                {saving ? (
-                  <View style={s.savingRow}>
-                    <ActivityIndicator color="#FFF" size="small" />
-                    <Text style={s.saveBtnTxt}>Saving</Text>
-                  </View>
-                ) : (
-                  <Text style={[s.saveBtnTxt, !canSave && s.saveBtnTxtDisabled]}>Save changes</Text>
-                )}
-              </Pressable>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
+      {!publicUserId && (
+        <CampaignDetailsSheet
+          key={editSession}
+          visible={editModalVisible}
+          profile={profile}
+          onClose={closeEditModal}
+          onSaved={handleProfileSaved}
+        />
+      )}
 
       {/* ════ BUSINESS VERIFICATION ════ */}
-      <Modal
-        visible={verifyVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => !verifySubmitting && setVerifyVisible(false)}
-      >
-        <View style={s.modalOverlay}>
-          <Pressable
-            style={s.modalBackdrop}
-            onPress={() => !verifySubmitting && setVerifyVisible(false)}
-            accessibilityLabel="Close verification"
-          />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={s.modalSheetWrap}
-          >
-            <View style={s.modalContent}>
-              <View style={s.grabber} />
-
-              <View style={s.modalHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.modalTitle} accessibilityRole="header">Get verified</Text>
-                  <Text style={s.modalSubtitle}>
-                    We check these against public business records. Usually within two working days.
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => !verifySubmitting && setVerifyVisible(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                  style={(state: any) => [
-                    s.modalClose,
-                    webNoOutline,
-                    state.focused && s.modalCloseFocused,
-                    state.pressed && s.pressedSoft,
-                  ]}
-                >
-                  <Ionicons name="close" size={sz(20)} color="#DDD" />
-                </Pressable>
-              </View>
-
-              <Text style={s.fieldGroupLabel}>Registered business name</Text>
-              <View style={[s.fieldGroup, verifyFocused === 'name' && s.fieldGroupFocused]}>
-                <View style={[s.fieldRow, s.fieldRowText, verifyFocused === 'name' && s.fieldRowFocused]}>
-                  <TextInput
-                    style={[s.textInput, webNoOutline]}
-                    placeholder="As it appears on your registration"
-                    placeholderTextColor={MUTED}
-                    value={verifyName}
-                    onChangeText={(t) => setVerifyName(t.slice(0, 120))}
-                    onFocus={() => setVerifyFocused('name')}
-                    onBlur={() => setVerifyFocused(null)}
-                    accessibilityLabel="Registered business name"
-                    returnKeyType="next"
-                  />
-                </View>
-              </View>
-
-              <Text style={[s.fieldGroupLabel, { marginTop: sz(20) }]}>GST or company number</Text>
-              <View style={[s.fieldGroup, verifyFocused === 'reg' && s.fieldGroupFocused]}>
-                <View style={[s.fieldRow, s.fieldRowText, verifyFocused === 'reg' && s.fieldRowFocused]}>
-                  <TextInput
-                    style={[s.textInput, webNoOutline]}
-                    placeholder="29ABCDE1234F1Z5"
-                    placeholderTextColor={MUTED}
-                    value={verifyReg}
-                    onChangeText={(t) => setVerifyReg(t.toUpperCase().slice(0, 40))}
-                    onFocus={() => setVerifyFocused('reg')}
-                    onBlur={() => setVerifyFocused(null)}
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    accessibilityLabel="GST or company registration number"
-                    returnKeyType="done"
-                    onSubmitEditing={Keyboard.dismiss}
-                  />
-                </View>
-              </View>
-              <Text style={s.helperText}>
-                Only Matchr sees this number. Creators see the business name once you are verified.
-              </Text>
-
-              {verifyError && (
-                <View style={s.saveErrorRow}>
-                  <Ionicons name="alert-circle" size={sz(16)} color={DANGER} />
-                  <Text style={s.saveErrorText}>{verifyError}</Text>
-                </View>
-              )}
-
-              <Pressable
-                style={({ pressed }) => [
-                  s.saveBtn,
-                  !canSubmitVerification && !verifySubmitting && s.saveBtnDisabled,
-                  pressed && canSubmitVerification && s.pressedSoft,
-                ]}
-                onPress={submitVerification}
-                disabled={!canSubmitVerification}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canSubmitVerification, busy: verifySubmitting }}
-              >
-                {verifySubmitting ? (
-                  <View style={s.savingRow}>
-                    <ActivityIndicator color="#FFF" size="small" />
-                    <Text style={s.saveBtnTxt}>Sending</Text>
-                  </View>
-                ) : (
-                  <Text style={[s.saveBtnTxt, !canSubmitVerification && s.saveBtnTxtDisabled]}>
-                    Send for review
-                  </Text>
-                )}
-              </Pressable>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
+      {!publicUserId && (
+        <VerifySheet
+          key={verifySession}
+          visible={verifyVisible}
+          initialName={profile.verification_business_name || profile.name || ''}
+          onClose={closeVerifyModal}
+          onSubmitted={handleVerificationSent}
+        />
+      )}
     </SafeAreaView>
   );
 }

@@ -21,8 +21,12 @@ export default function InfluencerTabsLayout() {
         tabBarActiveTintColor: '#FF6B2B',
         tabBarInactiveTintColor: '#666',
         tabBarShowLabel: false,
+        // Hidden tabs stop re-rendering on context and socket updates.
+        freezeOnBlur: true,
       }}
-      initialRouteName="match"
+      // Sign-in lands on home, so Android back from another tab returns there.
+      initialRouteName="home"
+      backBehavior="initialRoute"
     >
       <Tabs.Screen
         name="match"

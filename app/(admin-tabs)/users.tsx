@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '@/api/client';
 import { colors } from '@/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { sz } from '@/theme/scale';
 
@@ -19,6 +18,8 @@ type User = {
 export default function AdminUsersScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  // Rows with a ban/unban request in flight; their button is disabled.
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   const fetchUsers = async () => {
     try {
@@ -36,16 +37,23 @@ export default function AdminUsersScreen() {
     fetchUsers();
   }, []);
 
+  const setBanned = (userId: string, isBanned: boolean) =>
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_banned: isBanned } : u)));
+
+  // Flips just this row, rather than refetching the whole directory behind a
+  // spinner; a failure puts the row back.
   const toggleBan = async (user: User) => {
+    if (busy[user.id]) return;
+    const wasBanned = user.is_banned;
+    setBanned(user.id, !wasBanned);
+    setBusy((prev) => ({ ...prev, [user.id]: true }));
     try {
-      if (user.is_banned) {
-        await api.post(`/api/admin/users/${user.id}/unban`, {});
-      } else {
-        await api.post(`/api/admin/users/${user.id}/ban`, {});
-      }
-      fetchUsers();
+      await api.post(`/api/admin/users/${user.id}/${wasBanned ? 'unban' : 'ban'}`, {});
     } catch (e: any) {
+      setBanned(user.id, wasBanned);
       Alert.alert('Error', e.message || 'Failed to update user status');
+    } finally {
+      setBusy((prev) => ({ ...prev, [user.id]: false }));
     }
   };
 
@@ -73,46 +81,48 @@ export default function AdminUsersScreen() {
   };
 
   const renderItem = ({ item }: { item: User }) => (
+    // A translucent fill instead of a BlurView: a blur per row is a costly
+    // native view, and over this near-black background it looked the same.
     <View style={styles.cardContainer}>
-      <BlurView intensity={20} tint="dark" style={styles.blurCard}>
-        <LinearGradient
-          colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.01)']}
-          style={styles.cardGradient}
-        >
-          <View style={styles.cardHeader}>
-            <View style={styles.emailContainer}>
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>{item.email.charAt(0).toUpperCase()}</Text>
-              </View>
-              <View>
-                <Text style={styles.email} numberOfLines={1}>{item.email}</Text>
-                <Text style={styles.date}>Joined: {new Date(item.created_at).toLocaleDateString()}</Text>
-              </View>
+      <LinearGradient
+        colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.01)']}
+        style={styles.cardGradient}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.emailContainer}>
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>{item.email.charAt(0).toUpperCase()}</Text>
             </View>
-            {renderRoleBadge(item.role)}
+            <View>
+              <Text style={styles.email} numberOfLines={1}>{item.email}</Text>
+              <Text style={styles.date}>Joined: {new Date(item.created_at).toLocaleDateString()}</Text>
+            </View>
           </View>
-          
-          <View style={styles.cardFooter}>
-            <View style={styles.statusRow}>
-              <View style={[styles.statusDot, { backgroundColor: item.is_banned ? '#EF4444' : '#10B981' }]} />
-              <Text style={styles.statusText}>{item.is_banned ? 'Suspended' : 'Active'}</Text>
-            </View>
+          {renderRoleBadge(item.role)}
+        </View>
 
-            <Pressable 
-              style={({ pressed }) => [
-                styles.btn, 
-                item.is_banned ? styles.btnUnban : styles.btnBan,
-                pressed && styles.btnPressed
-              ]} 
-              onPress={() => toggleBan(item)}
-            >
-              <Text style={[styles.btnText, item.is_banned ? styles.btnUnbanText : styles.btnBanText]}>
-                {item.is_banned ? 'Restore Access' : 'Suspend User'}
-              </Text>
-            </Pressable>
+        <View style={styles.cardFooter}>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, { backgroundColor: item.is_banned ? '#EF4444' : '#10B981' }]} />
+            <Text style={styles.statusText}>{item.is_banned ? 'Suspended' : 'Active'}</Text>
           </View>
-        </LinearGradient>
-      </BlurView>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.btn,
+              item.is_banned ? styles.btnUnban : styles.btnBan,
+              pressed && styles.btnPressed,
+              busy[item.id] && styles.btnPressed,
+            ]}
+            onPress={() => toggleBan(item)}
+            disabled={!!busy[item.id]}
+          >
+            <Text style={[styles.btnText, item.is_banned ? styles.btnUnbanText : styles.btnBanText]}>
+              {item.is_banned ? 'Restore Access' : 'Suspend User'}
+            </Text>
+          </Pressable>
+        </View>
+      </LinearGradient>
     </View>
   );
 
@@ -129,6 +139,7 @@ export default function AdminUsersScreen() {
         ) : (
           <FlatList
             data={users}
+            extraData={busy}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             contentContainerStyle={styles.list}
@@ -175,9 +186,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-  },
-  blurCard: {
-    flex: 1,
+    backgroundColor: 'rgba(24,24,28,0.6)',
   },
   cardGradient: {
     padding: sz(20),

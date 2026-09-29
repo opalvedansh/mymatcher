@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { getUnreadNotificationCount } from '@/api';
@@ -12,7 +13,10 @@ export function refreshUnreadNotifications() {
   listeners.forEach(listener => listener());
 }
 
-/** Unread inbox count for the bell badge. Refreshes on focus, on push, and every minute while focused. */
+/**
+ * Unread inbox count for the bell badge. Refreshes on focus, on push, on
+ * returning to the app, and every minute while focused and in the foreground.
+ */
 export function useUnreadNotifications() {
   const [count, setCount] = useState(0);
 
@@ -33,9 +37,23 @@ export function useUnreadNotifications() {
 
   useFocusEffect(
     useCallback(() => {
-      refresh();
-      const timer = setInterval(refresh, POLL_MS);
-      return () => clearInterval(timer);
+      let timer: ReturnType<typeof setInterval> | null = null;
+      const start = () => {
+        refresh();
+        if (!timer) timer = setInterval(refresh, POLL_MS);
+      };
+      const stop = () => {
+        if (timer) clearInterval(timer);
+        timer = null;
+      };
+      start();
+      // Focus doesn't change when the app is backgrounded, so polling would
+      // carry on there and the badge would be up to a minute stale on return.
+      const sub = AppState.addEventListener('change', (state) => (state === 'active' ? start() : stop()));
+      return () => {
+        stop();
+        sub.remove();
+      };
     }, [refresh]),
   );
 

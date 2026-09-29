@@ -26,8 +26,8 @@ import type {
   ChatUploadTarget,
   MuteDuration,
   NotificationsResponse,
+  Post,
 } from './types';
-import type { Post } from '@/components/PostCard';
 
 // ─── Upload ───────────────────────────────────────────────────────
 
@@ -135,7 +135,11 @@ export function getFeed(limit = 10, cursorScore?: number, cursorId?: string) {
  * Records a swipe. Returns whether a mutual match was created.
  */
 export function recordSwipe(swiped_id: string, direction: SwipeDirection) {
-  return api.post<SwipeResponse>('/api/swipes', { swiped_id, direction });
+  // A swipe changes the feed, swipes and matches, never a profile or stories,
+  // so those caches stay warm while the user swipes through the deck.
+  return api.post<SwipeResponse>('/api/swipes', { swiped_id, direction }, {
+    invalidates: ['/api/feed', '/api/swipes', '/api/matches'],
+  });
 }
 
 export function getMySwipes() {

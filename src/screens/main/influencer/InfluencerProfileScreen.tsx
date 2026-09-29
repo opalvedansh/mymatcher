@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -237,22 +237,304 @@ const COMPANY_CATALOG: { name: string, icon?: string, bg: string, fg?: string }[
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Built once: findCatalogCompany runs for every chip on every render.
+const CATALOG_MATCHERS = COMPANY_CATALOG.map(c => ({
+  company: c,
+  lower: c.name.toLowerCase(),
+  wordRe: new RegExp(`(^|\\s)${escapeRegExp(c.name.toLowerCase())}(\\s|$)`),
+}));
+
 // Matches a catalog brand when its name appears as a whole word ("Apple India"),
 // so short names like "Meta" don't light up on unrelated companies.
 function findCatalogCompany(company: string) {
   const lower = company.trim().toLowerCase();
-  return COMPANY_CATALOG.find(c => c.name.toLowerCase() === lower)
-    || COMPANY_CATALOG.find(c => new RegExp(`(^|\\s)${escapeRegExp(c.name.toLowerCase())}(\\s|$)`).test(lower));
+  return (CATALOG_MATCHERS.find(m => m.lower === lower)
+    || CATALOG_MATCHERS.find(m => m.wordRe.test(lower)))?.company;
 }
 
+// A logo depends only on the name, so reuse it instead of rebuilding per render.
+const companyLogoCache = new Map<string, { bg: string, icon: React.ReactNode }>();
+
 function companyLogo(company: string): { bg: string, icon: React.ReactNode } {
+  const cached = companyLogoCache.get(company);
+  if (cached) return cached;
   const known = findCatalogCompany(company);
   const fg = known?.fg || '#FFF';
-  if (known?.icon) return { bg: known.bg, icon: <FontAwesome6 name={known.icon as any} size={sz(14)} color={fg} /> };
-  return {
-    bg: known?.bg || '#FF6B2B',
-    icon: <Text style={{ color: fg, fontSize: sz(10), fontWeight: '700' }}>{company.trim().substring(0, 2).toUpperCase()}</Text>,
+  const logo = known?.icon
+    ? { bg: known.bg, icon: <FontAwesome6 name={known.icon as any} size={sz(14)} color={fg} /> }
+    : {
+      bg: known?.bg || '#FF6B2B',
+      icon: <Text style={{ color: fg, fontSize: sz(10), fontWeight: '700' }}>{company.trim().substring(0, 2).toUpperCase()}</Text>,
+    };
+  companyLogoCache.set(company, logo);
+  return logo;
+}
+
+const PLATFORMS_DB: Record<string, { label: string, bg: string, icon: React.ReactNode }> = {
+  instagram: { label: 'Instagram', bg: '#E1306C', icon: <FontAwesome6 name="instagram" size={sz(16)} color="#FFF" /> },
+  youtube: { label: 'YouTube', bg: '#FF0000', icon: <FontAwesome6 name="youtube" size={sz(16)} color="#FFF" /> },
+  tiktok: { label: 'TikTok', bg: '#000000', icon: <FontAwesome6 name="tiktok" size={sz(16)} color="#FFF" /> },
+  x: { label: 'X', bg: '#000000', icon: <FontAwesome6 name="x-twitter" size={sz(16)} color="#FFF" /> },
+  twitter: { label: 'Twitter', bg: '#1DA1F2', icon: <FontAwesome6 name="twitter" size={sz(16)} color="#FFF" /> },
+  reddit: { label: 'Reddit', bg: '#FF6B2B', icon: <FontAwesome6 name="reddit-alien" size={sz(16)} color="#FFF" /> },
+  pinterest: { label: 'Pinterest', bg: '#E60023', icon: <FontAwesome6 name="pinterest" size={sz(16)} color="#FFF" /> },
+  facebook: { label: 'Facebook', bg: '#1877F2', icon: <FontAwesome6 name="facebook-f" size={sz(16)} color="#FFF" /> },
+  linkedin: { label: 'LinkedIn', bg: '#0A66C2', icon: <FontAwesome6 name="linkedin-in" size={sz(16)} color="#FFF" /> },
+  snapchat: { label: 'Snapchat', bg: '#FFFC00', icon: <FontAwesome6 name="snapchat" size={sz(16)} color="#000" /> },
+  threads: { label: 'Threads', bg: '#000000', icon: <FontAwesome6 name="threads" size={sz(16)} color="#FFF" /> },
+  spotify: { label: 'Spotify', bg: '#1DB954', icon: <FontAwesome6 name="spotify" size={sz(16)} color="#FFF" /> },
+  twitch: { label: 'Twitch', bg: '#9146FF', icon: <FontAwesome6 name="twitch" size={sz(16)} color="#FFF" /> },
+  discord: { label: 'Discord', bg: '#5865F2', icon: <FontAwesome6 name="discord" size={sz(16)} color="#FFF" /> },
+  behance: { label: 'Behance', bg: '#1769FF', icon: <FontAwesome6 name="behance" size={sz(16)} color="#FFF" /> },
+  dribbble: { label: 'Dribbble', bg: '#EA4C89', icon: <FontAwesome6 name="dribbble" size={sz(16)} color="#FFF" /> },
+};
+
+const UNKNOWN_PLATFORM_ICON = <FontAwesome6 name="star" size={sz(16)} color="#FFF" />;
+
+// `twitter` stays in PLATFORMS_DB so older profiles still render, but new picks use X.
+const PICKABLE_PLATFORMS = Object.keys(PLATFORMS_DB).filter(k => k !== 'twitter');
+
+const PACKAGES = [
+  { type: 'story', name: 'Story Package', desc: '1 Instagram Story · 24hr visibility', price: '1000' },
+  { type: 'reel', name: 'Reel Package', desc: '1 Reel (30-60 sec) · Edited & tagged', price: '8000' },
+  { type: 'ugc', name: 'UGC Package', desc: '1 UGC Video · Raw + Edited', price: '12000' },
+  { type: 'brand', name: 'Brand Partnership', desc: 'Custom scope, agreed with the brand', price: '20000' },
+];
+
+// The text-editing sheets own their drafts so a keystroke re-renders only the
+// sheet, not the whole profile screen behind it.
+
+function EditInstagramModal({ visible, initialHandle, onClose, onSave }: {
+  visible: boolean,
+  initialHandle: string,
+  onClose: () => void,
+  onSave: (handle: string) => Promise<boolean>,
+}) {
+  const [handle, setHandle] = useState(initialHandle);
+  const [saving, setSaving] = useState(false);
+  // Reseed from the saved handle each time the sheet opens (during render, so
+  // the first frame already shows it).
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setHandle(initialHandle);
+  }
+
+  const save = async () => {
+    if (!handle.trim()) return;
+    setSaving(true);
+    try {
+      if (await onSave(handle)) setHandle('');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Instagram Handle</Text>
+            <Pressable onPress={onClose}>
+              <Ionicons name="close" size={sz(24)} color="#FFF" />
+            </Pressable>
+          </View>
+          <Text style={styles.modalSubtitle}>Enter your Instagram username to automatically sync followers, engagement, and views.</Text>
+          <TextInput
+            style={styles.modalInput}
+            placeholder="e.g. cristiano"
+            placeholderTextColor="#666"
+            value={handle}
+            onChangeText={setHandle}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
+          />
+          <Pressable
+            style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, saving && { opacity: 0.5 }]}
+            onPress={() => { Keyboard.dismiss(); save(); }}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.modalButtonText}>Save & Sync</Text>
+            )}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function AddReelModal({ visible, onClose, onAdd }: {
+  visible: boolean,
+  onClose: () => void,
+  onAdd: (url: string) => void,
+}) {
+  // Kept across open/close so a half-pasted link survives dismissing the sheet.
+  const [url, setUrl] = useState('');
+
+  const add = () => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    setUrl('');
+    onAdd(trimmed);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Add Instagram Reel</Text>
+            <Pressable onPress={onClose}>
+              <Ionicons name="close" size={sz(24)} color="#FFF" />
+            </Pressable>
+          </View>
+          <Text style={styles.modalSubtitle}>Paste the link to your Instagram Reel to showcase it on your profile.</Text>
+          <TextInput
+            style={styles.modalInput}
+            placeholder="https://www.instagram.com/reel/..."
+            placeholderTextColor="#666"
+            value={url}
+            onChangeText={setUrl}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
+          />
+          <Pressable
+            style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, !url.trim() && { opacity: 0.5 }]}
+            onPress={() => { Keyboard.dismiss(); add(); }}
+            disabled={!url.trim()}
+          >
+            <Text style={styles.modalButtonText}>Add Reel</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function EditWorkedWithModal({ visible, workedWith, onClose, onSave }: {
+  visible: boolean,
+  workedWith: string[] | undefined,
+  onClose: () => void,
+  onSave: (draft: string[]) => Promise<void>,
+}) {
+  const [draft, setDraft] = useState<string[]>([]);
+  const [newCompany, setNewCompany] = useState('');
+  const [saving, setSaving] = useState(false);
+  // Reseed from the saved list each time the sheet opens.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) {
+      setDraft(workedWith || []);
+      setNewCompany('');
+    }
+  }
+
+  // Catalog brands first, then any custom companies the user has saved or just added.
+  const companyOptions = useMemo(() => [
+    ...COMPANY_CATALOG.map(c => c.name),
+    ...[...(workedWith || []), ...draft].filter((c, i, all) =>
+      !COMPANY_CATALOG.some(k => k.name.toLowerCase() === c.toLowerCase())
+      && all.findIndex(o => o.toLowerCase() === c.toLowerCase()) === i),
+  ], [workedWith, draft]);
+
+  const toggleCompany = (company: string) => {
+    const key = company.toLowerCase();
+    setDraft(prev => prev.some(c => c.toLowerCase() === key)
+      ? prev.filter(c => c.toLowerCase() !== key)
+      : [...prev, company]);
+  };
+
+  const addCustomCompany = () => {
+    const added = newCompany.trim();
+    if (!added) return;
+    // Use the catalog spelling when the typed name is a known brand.
+    const name = COMPANY_CATALOG.find(c => c.name.toLowerCase() === added.toLowerCase())?.name || added;
+    setDraft(prev => prev.some(c => c.toLowerCase() === name.toLowerCase()) ? prev : [...prev, name]);
+    setNewCompany('');
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave(draft);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Worked With</Text>
+            <Pressable onPress={onClose}>
+              <Ionicons name="close" size={sz(24)} color="#FFF" />
+            </Pressable>
+          </View>
+          <Text style={styles.modalSubtitle}>Select the brands you have collaborated with.</Text>
+
+          <View style={{ maxHeight: sz(280), width: '100%', marginBottom: sz(16) }}>
+            <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: sz(8) }]}>
+              {companyOptions.map((company) => {
+                const selected = draft.some(c => c.toLowerCase() === company.toLowerCase());
+                const logo = companyLogo(company);
+                return (
+                  <Pressable
+                    key={company}
+                    onPress={() => toggleCompany(company)}
+                    style={[styles.platformChip, selected && styles.platformChipSelected]}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selected }}
+                  >
+                    <View style={[styles.platformChipIcon, { backgroundColor: logo.bg }]}>
+                      {logo.icon}
+                    </View>
+                    <Text style={styles.platformChipText}>{company}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          <View style={{ flexDirection: 'row', marginBottom: sz(16) }}>
+            <TextInput
+              style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+              placeholder="Another company"
+              placeholderTextColor="#666"
+              value={newCompany}
+              onChangeText={setNewCompany}
+              maxLength={60}
+              returnKeyType="done"
+              onSubmitEditing={() => { Keyboard.dismiss(); addCustomCompany(); }}
+            />
+            <Pressable style={[styles.modalButton, { paddingHorizontal: sz(16), marginLeft: sz(10), marginBottom: 0, alignSelf: 'stretch', justifyContent: 'center', backgroundColor: '#222' }]} onPress={addCustomCompany}>
+              <Text style={styles.modalButtonText}>Add</Text>
+            </Pressable>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, saving && { opacity: 0.6 }]}
+            onPress={save}
+            disabled={saving}
+          >
+            {saving
+              ? <ActivityIndicator color="#FFF" />
+              : <Text style={styles.modalButtonText}>Save</Text>}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
 }
 
 export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId?: string, onBack?: () => void }) {
@@ -270,8 +552,6 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
 
   const [isAddReelVisible, setIsAddReelVisible] = useState(false);
   const [isEditInstagramVisible, setIsEditInstagramVisible] = useState(false);
-  const [editInstagramHandle, setEditInstagramHandle] = useState('');
-  const [isUpdatingInstagram, setIsUpdatingInstagram] = useState(false);
   const [isVerificationModalVisible, setIsVerificationModalVisible] = useState(false);
   // Expressing interest from a public profile is the same act as a right swipe.
   const [interested, setInterested] = useState(false);
@@ -279,13 +559,11 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isEditWorkedWithVisible, setIsEditWorkedWithVisible] = useState(false);
-  const [newWorkedWith, setNewWorkedWith] = useState('');
-  const [draftWorkedWith, setDraftWorkedWith] = useState<string[]>([]);
-  const [isSavingWorkedWith, setIsSavingWorkedWith] = useState(false);
   const [isEditPlatformsVisible, setIsEditPlatformsVisible] = useState(false);
   const [draftPlatforms, setDraftPlatforms] = useState<string[]>([]);
   const [isSavingPlatforms, setIsSavingPlatforms] = useState(false);
-  const [newReelUrl, setNewReelUrl] = useState('');
+  // Avatars picked on this device, so their local URI can show before upload finishes.
+  const localPickedUris = useRef(new Set<string>());
   // We use activeProfile?.reels, but keep a local state if optimistic UI is desired, 
   // or just depend on activeProfile.reels directly. Let's use activeProfile for consistency.
   const reels = activeProfile?.reels || [];
@@ -306,6 +584,23 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
     setReloadKey(k => k + 1);
   };
 
+  // The stats poll outlives loadProfile, so it's tracked here and stopped on
+  // unmount; unmountedRef also stops a sync that resolves after we've left.
+  const statsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unmountedRef = useRef(false);
+  const stopStatsPoll = () => {
+    if (statsPollRef.current) clearInterval(statsPollRef.current);
+    statsPollRef.current = null;
+  };
+
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      stopStatsPoll();
+    };
+  }, []);
+
   useEffect(() => {
     async function loadProfile() {
       try {
@@ -318,13 +613,16 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           setIsSyncing(true);
           syncInstagram(p.instagram_handle)
             .then(() => {
+              if (unmountedRef.current) return;
               // Start polling every 15s for updated stats
               let attempts = 0;
               const maxAttempts = 12; // poll for up to 3 minutes
+              stopStatsPoll();
               const poll = setInterval(async () => {
                 attempts++;
                 try {
                   const updated = await getMyProfile();
+                  if (unmountedRef.current) return;
                   const up = updated as InfluencerProfile;
                   setActiveProfile(up);
                   // Stop polling once we have real stats
@@ -339,6 +637,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                   }
                 }
               }, 15_000);
+              statsPollRef.current = poll;
             })
             .catch(() => setIsSyncing(false));
         }
@@ -389,9 +688,11 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
     );
   }
 
+  // blob:/file:// URLs from the server point at someone else's device, so they
+  // stay hidden; the ones the user just picked here are the optimistic preview.
   const isValidUrl = (url?: string | null) => {
     if (!url) return false;
-    if (url.startsWith('blob:') || url.startsWith('file://')) return false;
+    if (url.startsWith('blob:') || url.startsWith('file://')) return localPickedUris.current.has(url);
     return true;
   };
 
@@ -406,20 +707,19 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
     : [avatarImage, coverImage].filter((uri): uri is string => !!uri);
 
 
-  const handleAddReel = async () => {
+  const handleAddReel = async (reelUrl: string) => {
     if (publicUserId) return;
-    if (!newReelUrl.trim() || !activeProfile) return;
-    
+    if (!reelUrl || !activeProfile) return;
+
     // Create a new reel object from the URL
     const newId = Math.random().toString(36).substring(7);
-    const newReel = { id: newId, url: newReelUrl.trim(), views: '0' };
+    const newReel = { id: newId, url: reelUrl, views: '0' };
     const updatedReels = [newReel, ...reels];
 
     try {
       // Optimistically update UI
       setActiveProfile({ ...activeProfile, reels: updatedReels });
       setIsAddReelVisible(false);
-      setNewReelUrl('');
 
       // The server fetches the thumbnail, so take its copy of the reels.
       const saved = await updateMyProfile({ reels: updatedReels }) as InfluencerProfile;
@@ -432,64 +732,39 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
     }
   };
 
-  const handleUpdateInstagram = async () => {
-    if (!editInstagramHandle.trim()) return;
+  // Returns true on success so the modal can clear its input.
+  const handleUpdateInstagram = async (rawHandle: string) => {
     try {
-      setIsUpdatingInstagram(true);
-      const cleanHandle = editInstagramHandle.replace(/^@/, '').trim().toLowerCase();
+      const cleanHandle = rawHandle.replace(/^@/, '').trim().toLowerCase();
       // Optimistic update
       setActiveProfile(prev => prev ? { ...prev, instagram_handle: cleanHandle } : prev);
-      
+
       // Update in DB
       await updateMyProfile({ instagram_handle: cleanHandle });
-      
+
       // Trigger sync
       setIsEditInstagramVisible(false);
-      setEditInstagramHandle('');
-      
+
       // We don't await this so it happens in the background, which will trigger the polling UI
       syncInstagram(cleanHandle);
+      return true;
     } catch (e: any) {
       showAlert('Update failed', e.message || 'Could not update Instagram handle.');
-    } finally {
-      setIsUpdatingInstagram(false);
+      return false;
     }
   };
 
-  const openEditWorkedWith = () => {
-    setDraftWorkedWith(activeProfile?.worked_with || []);
-    setNewWorkedWith('');
-    setIsEditWorkedWithVisible(true);
-  };
+  const openEditWorkedWith = () => setIsEditWorkedWithVisible(true);
 
-  const toggleDraftCompany = (company: string) => {
-    const key = company.toLowerCase();
-    setDraftWorkedWith(prev => prev.some(c => c.toLowerCase() === key)
-      ? prev.filter(c => c.toLowerCase() !== key)
-      : [...prev, company]);
-  };
-
-  const handleAddCustomCompany = () => {
-    const added = newWorkedWith.trim();
-    if (!added) return;
-    // Use the catalog spelling when the typed name is a known brand.
-    const name = COMPANY_CATALOG.find(c => c.name.toLowerCase() === added.toLowerCase())?.name || added;
-    setDraftWorkedWith(prev => prev.some(c => c.toLowerCase() === name.toLowerCase()) ? prev : [...prev, name]);
-    setNewWorkedWith('');
-  };
-
-  const handleSaveWorkedWith = async () => {
+  const handleSaveWorkedWith = async (draftWorkedWith: string[]) => {
     const previous = activeProfile?.worked_with || [];
     try {
-      setIsSavingWorkedWith(true);
       setActiveProfile(prev => prev ? { ...prev, worked_with: draftWorkedWith } : prev);
       await updateMyProfile({ worked_with: draftWorkedWith });
       setIsEditWorkedWithVisible(false);
     } catch (e) {
       setActiveProfile(prev => prev ? { ...prev, worked_with: previous } : prev);
       showAlert('Error', 'Could not update your Worked With list');
-    } finally {
-      setIsSavingWorkedWith(false);
     }
   };
 
@@ -558,6 +833,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
       const previousAvatar = activeProfile?.avatar_url;
       try {
         const uri = result.assets[0].uri;
+        localPickedUris.current.add(uri);
         setActiveProfile(prev => prev ? { ...prev, avatar_url: uri } : prev);
 
         // Upload through /api/upload: face verification only accepts
@@ -590,51 +866,14 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
 
   const engagementStr = activeProfile.engagement_rate ? `${activeProfile.engagement_rate}%` : '0%';
 
-  const PLATFORMS_DB: Record<string, { label: string, bg: string, icon: React.ReactNode }> = {
-    instagram: { label: 'Instagram', bg: '#E1306C', icon: <FontAwesome6 name="instagram" size={sz(16)} color="#FFF" /> },
-    youtube: { label: 'YouTube', bg: '#FF0000', icon: <FontAwesome6 name="youtube" size={sz(16)} color="#FFF" /> },
-    tiktok: { label: 'TikTok', bg: '#000000', icon: <FontAwesome6 name="tiktok" size={sz(16)} color="#FFF" /> },
-    x: { label: 'X', bg: '#000000', icon: <FontAwesome6 name="x-twitter" size={sz(16)} color="#FFF" /> },
-    twitter: { label: 'Twitter', bg: '#1DA1F2', icon: <FontAwesome6 name="twitter" size={sz(16)} color="#FFF" /> },
-    reddit: { label: 'Reddit', bg: '#FF6B2B', icon: <FontAwesome6 name="reddit-alien" size={sz(16)} color="#FFF" /> },
-    pinterest: { label: 'Pinterest', bg: '#E60023', icon: <FontAwesome6 name="pinterest" size={sz(16)} color="#FFF" /> },
-    facebook: { label: 'Facebook', bg: '#1877F2', icon: <FontAwesome6 name="facebook-f" size={sz(16)} color="#FFF" /> },
-    linkedin: { label: 'LinkedIn', bg: '#0A66C2', icon: <FontAwesome6 name="linkedin-in" size={sz(16)} color="#FFF" /> },
-    snapchat: { label: 'Snapchat', bg: '#FFFC00', icon: <FontAwesome6 name="snapchat" size={sz(16)} color="#000" /> },
-    threads: { label: 'Threads', bg: '#000000', icon: <FontAwesome6 name="threads" size={sz(16)} color="#FFF" /> },
-    spotify: { label: 'Spotify', bg: '#1DB954', icon: <FontAwesome6 name="spotify" size={sz(16)} color="#FFF" /> },
-    twitch: { label: 'Twitch', bg: '#9146FF', icon: <FontAwesome6 name="twitch" size={sz(16)} color="#FFF" /> },
-    discord: { label: 'Discord', bg: '#5865F2', icon: <FontAwesome6 name="discord" size={sz(16)} color="#FFF" /> },
-    behance: { label: 'Behance', bg: '#1769FF', icon: <FontAwesome6 name="behance" size={sz(16)} color="#FFF" /> },
-    dribbble: { label: 'Dribbble', bg: '#EA4C89', icon: <FontAwesome6 name="dribbble" size={sz(16)} color="#FFF" /> },
-  };
-
   const platformsList = (activeProfile.platforms || []).map(p => {
     const matchedKey = Object.keys(PLATFORMS_DB).find(k => k.toLowerCase() === p.toLowerCase());
     return {
       name: p,
-      ...(matchedKey ? PLATFORMS_DB[matchedKey] : { label: p, bg: '#FF6B2B', icon: <FontAwesome6 name="star" size={sz(16)} color="#FFF" /> })
+      ...(matchedKey ? PLATFORMS_DB[matchedKey] : { label: p, bg: '#FF6B2B', icon: UNKNOWN_PLATFORM_ICON })
     };
   });
   const workedWith = activeProfile.worked_with || [];
-
-  // Catalog brands first, then any custom companies the user has saved or just added.
-  const companyOptions = [
-    ...COMPANY_CATALOG.map(c => c.name),
-    ...[...workedWith, ...draftWorkedWith].filter((c, i, all) =>
-      !COMPANY_CATALOG.some(k => k.name.toLowerCase() === c.toLowerCase())
-      && all.findIndex(o => o.toLowerCase() === c.toLowerCase()) === i),
-  ];
-
-  // `twitter` stays in PLATFORMS_DB so older profiles still render, but new picks use X.
-  const pickablePlatforms = Object.keys(PLATFORMS_DB).filter(k => k !== 'twitter');
-
-  const packages = [
-    { type: 'story', name: 'Story Package', desc: '1 Instagram Story · 24hr visibility', price: '1000' },
-    { type: 'reel', name: 'Reel Package', desc: '1 Reel (30-60 sec) · Edited & tagged', price: '8000' },
-    { type: 'ugc', name: 'UGC Package', desc: '1 UGC Video · Raw + Edited', price: '12000' },
-    { type: 'brand', name: 'Brand Partnership', desc: 'Custom scope, agreed with the brand', price: '20000' },
-  ];
 
   const headerTranslateY = scrollY.interpolate({
     inputRange: [0, height],
@@ -766,10 +1005,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
             <TouchableOpacity 
               style={styles.instagramHandleRow}
               onPress={() => {
-                if (!publicUserId) {
-                  setEditInstagramHandle(activeProfile.instagram_handle || '');
-                  setIsEditInstagramVisible(true);
-                }
+                if (!publicUserId) setIsEditInstagramVisible(true);
               }}
               disabled={!!publicUserId}
             >
@@ -780,10 +1016,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           ) : !publicUserId ? (
             <TouchableOpacity 
               style={styles.instagramHandleRow}
-              onPress={() => {
-                setEditInstagramHandle('');
-                setIsEditInstagramVisible(true);
-              }}
+              onPress={() => setIsEditInstagramVisible(true)}
             >
               <FontAwesome6 name="instagram" size={sz(13)} color="#888" />
               <Text style={[styles.instagramHandleText, { color: '#888' }]}>Add Instagram Handle</Text>
@@ -1147,7 +1380,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         <View style={[styles.section, { paddingTop: sz(20) }]}>
           <Text style={[styles.packagesTitle, { marginBottom: sz(20) }]}>Packages</Text>
           <View style={styles.packagesContainer}>
-            {packages.map((pkg, idx) => (
+            {PACKAGES.map((pkg, idx) => (
               <View key={idx} style={styles.packageCard}>
                 <View style={styles.packageIconContainer}>
                   {pkg.type === 'story' && (
@@ -1226,140 +1459,27 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
       </View>
       </Animated.ScrollView>
       {/* ── Edit Instagram Modal ── */}
-      <Modal visible={isEditInstagramVisible} transparent animationType="slide" onRequestClose={() => setIsEditInstagramVisible(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Instagram Handle</Text>
-              <Pressable onPress={() => setIsEditInstagramVisible(false)}>
-                <Ionicons name="close" size={sz(24)} color="#FFF" />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtitle}>Enter your Instagram username to automatically sync followers, engagement, and views.</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g. cristiano"
-              placeholderTextColor="#666"
-              value={editInstagramHandle}
-              onChangeText={setEditInstagramHandle}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-            />
-            <Pressable
-              style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, isUpdatingInstagram && { opacity: 0.5 }]}
-              onPress={() => { Keyboard.dismiss(); handleUpdateInstagram(); }}
-              disabled={isUpdatingInstagram}
-            >
-              {isUpdatingInstagram ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.modalButtonText}>Save & Sync</Text>
-              )}
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-
+      <EditInstagramModal
+        visible={isEditInstagramVisible}
+        initialHandle={activeProfile.instagram_handle || ''}
+        onClose={() => setIsEditInstagramVisible(false)}
+        onSave={handleUpdateInstagram}
+      />
 
       {/* ── Add Reel Modal ── */}
-      <Modal visible={isAddReelVisible} transparent animationType="slide" onRequestClose={() => setIsAddReelVisible(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Instagram Reel</Text>
-              <Pressable onPress={() => setIsAddReelVisible(false)}>
-                <Ionicons name="close" size={sz(24)} color="#FFF" />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtitle}>Paste the link to your Instagram Reel to showcase it on your profile.</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="https://www.instagram.com/reel/..."
-              placeholderTextColor="#666"
-              value={newReelUrl}
-              onChangeText={setNewReelUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-            />
-            <Pressable
-              style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, !newReelUrl.trim() && { opacity: 0.5 }]}
-              onPress={() => { Keyboard.dismiss(); handleAddReel(); }}
-              disabled={!newReelUrl.trim()}
-            >
-              <Text style={styles.modalButtonText}>Add Reel</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <AddReelModal
+        visible={isAddReelVisible}
+        onClose={() => setIsAddReelVisible(false)}
+        onAdd={handleAddReel}
+      />
 
       {/* ── Edit Worked With Modal ── */}
-      <Modal visible={isEditWorkedWithVisible} transparent animationType="slide" onRequestClose={() => setIsEditWorkedWithVisible(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Worked With</Text>
-              <Pressable onPress={() => setIsEditWorkedWithVisible(false)}>
-                <Ionicons name="close" size={sz(24)} color="#FFF" />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtitle}>Select the brands you have collaborated with.</Text>
-
-            <View style={{ maxHeight: sz(280), width: '100%', marginBottom: sz(16) }}>
-              <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: sz(8) }]}>
-                {companyOptions.map((company) => {
-                  const selected = draftWorkedWith.some(c => c.toLowerCase() === company.toLowerCase());
-                  const logo = companyLogo(company);
-                  return (
-                    <Pressable
-                      key={company}
-                      onPress={() => toggleDraftCompany(company)}
-                      style={[styles.platformChip, selected && styles.platformChipSelected]}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: selected }}
-                    >
-                      <View style={[styles.platformChipIcon, { backgroundColor: logo.bg }]}>
-                        {logo.icon}
-                      </View>
-                      <Text style={styles.platformChipText}>{company}</Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            <View style={{ flexDirection: 'row', marginBottom: sz(16) }}>
-              <TextInput
-                style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                placeholder="Another company"
-                placeholderTextColor="#666"
-                value={newWorkedWith}
-                onChangeText={setNewWorkedWith}
-                maxLength={60}
-                returnKeyType="done"
-                onSubmitEditing={() => { Keyboard.dismiss(); handleAddCustomCompany(); }}
-              />
-              <Pressable style={[styles.modalButton, { paddingHorizontal: sz(16), marginLeft: sz(10), marginBottom: 0, alignSelf: 'stretch', justifyContent: 'center', backgroundColor: '#222' }]} onPress={handleAddCustomCompany}>
-                <Text style={styles.modalButtonText}>Add</Text>
-              </Pressable>
-            </View>
-
-            <Pressable
-              style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, isSavingWorkedWith && { opacity: 0.6 }]}
-              onPress={handleSaveWorkedWith}
-              disabled={isSavingWorkedWith}
-            >
-              {isSavingWorkedWith
-                ? <ActivityIndicator color="#FFF" />
-                : <Text style={styles.modalButtonText}>Save</Text>}
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <EditWorkedWithModal
+        visible={isEditWorkedWithVisible}
+        workedWith={activeProfile.worked_with}
+        onClose={() => setIsEditWorkedWithVisible(false)}
+        onSave={handleSaveWorkedWith}
+      />
 
       {/* ── Edit Platforms Modal ── */}
       <Modal visible={isEditPlatformsVisible} transparent animationType="slide" onRequestClose={() => setIsEditPlatformsVisible(false)}>
@@ -1375,7 +1495,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
 
             <View style={{ maxHeight: sz(320), width: '100%', marginBottom: sz(20) }}>
               <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: sz(8) }]}>
-                {pickablePlatforms.map((key) => {
+                {PICKABLE_PLATFORMS.map((key) => {
                   const selected = draftPlatforms.includes(key);
                   const platform = PLATFORMS_DB[key];
                   return (

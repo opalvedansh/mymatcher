@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import {
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,10 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 const ACCENT = '#FF6B2B';
 const DANGER = '#FF6B6B';
@@ -24,13 +25,15 @@ const NEAR_LIMIT = MAX_CHARS - 40;
 const webNoOutline = Platform.select({ web: { outlineStyle: 'none' } as any, default: undefined });
 
 export function BrandBioInputScreen({
+  initialBio,
   onBack,
   onNext,
 }: {
+  initialBio?: string;
   onBack?: () => void;
   onNext?: (bio: string) => void;
 }) {
-  const [bio, setBio] = useState('');
+  const [bio, setBio] = useState(initialBio ?? '');
   const [isFocused, setIsFocused] = useState(false);
 
   const charCount = bio.trim().length;
@@ -104,7 +107,10 @@ export function BrandBioInputScreen({
               disabled={!isValid}
               accessibilityRole="button"
               accessibilityState={{ disabled: !isValid }}
-              onPress={() => onNext?.(bio.trim())}
+              onPress={() => {
+                tapFeedback();
+                onNext?.(bio.trim());
+              }}
             >
               <Text style={[styles.nextButtonText, !isValid && styles.nextButtonTextDisabled]}>Continue</Text>
             </Pressable>

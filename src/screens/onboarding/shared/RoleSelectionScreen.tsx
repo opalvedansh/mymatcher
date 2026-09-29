@@ -2,34 +2,48 @@ import { useState } from 'react';
 import { AntDesign } from '@expo/vector-icons';
 import {
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 import { sz } from '@/theme/scale';
+import { tapFeedback } from '@/utils/optionalModules';
 
 type Role = 'Brand' | 'Influencer' | null;
 
 export function RoleSelectionScreen({
+  initialRole,
   onBack,
   onNext,
 }: {
+  initialRole?: Role;
   onBack?: () => void;
   onNext?: (role: Role) => void;
 }) {
   const { width } = useWindowDimensions();
-  const [selectedRole, setSelectedRole] = useState<Role>(null);
+  const [selectedRole, setSelectedRole] = useState<Role>(initialRole ?? null);
+
+  const selectRole = (role: Role) => {
+    tapFeedback('selection');
+    setSelectedRole(role);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Header */}
-        <Pressable onPress={onBack} style={styles.backButton}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={sz(12)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <AntDesign name="arrow-left" size={sz(24)} color={colors.text} />
         </Pressable>
 
@@ -45,11 +59,12 @@ export function RoleSelectionScreen({
           {/* Role Options */}
           <View style={styles.optionsContainer}>
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.optionCard,
                 selectedRole === 'Brand' && styles.optionCardSelected,
+                pressed && styles.cardPressed,
               ]}
-              onPress={() => setSelectedRole('Brand')}
+              onPress={() => selectRole('Brand')}
             >
               <Text style={[styles.optionText, selectedRole === 'Brand' && styles.optionTextSelected]}>Brand</Text>
               <View style={[styles.checkbox, selectedRole === 'Brand' && styles.checkboxSelected]}>
@@ -58,11 +73,12 @@ export function RoleSelectionScreen({
             </Pressable>
 
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.optionCard,
                 selectedRole === 'Influencer' && styles.optionCardSelected,
+                pressed && styles.cardPressed,
               ]}
-              onPress={() => setSelectedRole('Influencer')}
+              onPress={() => selectRole('Influencer')}
             >
               <Text style={[styles.optionText, selectedRole === 'Influencer' && styles.optionTextSelected]}>Influencer</Text>
               <View style={[styles.checkbox, selectedRole === 'Influencer' && styles.checkboxSelected]}>
@@ -75,12 +91,16 @@ export function RoleSelectionScreen({
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.nextButton,
               !selectedRole && styles.nextButtonDisabled,
+              pressed && styles.pressed,
             ]}
             disabled={!selectedRole}
-            onPress={() => onNext?.(selectedRole)}
+            onPress={() => {
+              tapFeedback();
+              onNext?.(selectedRole);
+            }}
           >
             <Text style={styles.nextButtonText}>Next</Text>
           </Pressable>
@@ -190,4 +210,7 @@ const styles = StyleSheet.create({
     fontSize: sz(18),
     fontWeight: '700',
   },
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  cardPressed: { transform: [{ scale: 0.99 }], opacity: 0.85 },
+  backPressed: { opacity: 0.6 },
 });

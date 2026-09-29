@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '@/api/client';
 import { colors } from '@/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { sz } from '@/theme/scale';
-
-const { width } = Dimensions.get('window');
 
 type Stats = {
   total_users: string;
@@ -21,6 +18,9 @@ type Stats = {
 };
 
 export default function AdminStatsScreen() {
+  // Read live so rotation and split view resize the cards.
+  const { width } = useWindowDimensions();
+  const halfWidth = (width - sz(56)) / 2; // 20 padding on sides + 16 gap
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -59,21 +59,21 @@ export default function AdminStatsScreen() {
     const isFullWidth = index === 0;
     
     return (
-      <View key={config.key} style={[styles.cardContainer, isFullWidth && styles.fullWidthCard]}>
-        <BlurView intensity={20} tint="dark" style={styles.blurCard}>
-          <LinearGradient
-            colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.01)']}
-            style={styles.cardGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: config.color + '20' }]}>
-              <Ionicons name={config.icon} size={sz(24)} color={config.color} />
-            </View>
-            <Text style={styles.cardValue}>{formatNumber(value)}</Text>
-            <Text style={styles.cardTitle}>{config.label}</Text>
-          </LinearGradient>
-        </BlurView>
+      // A translucent fill instead of a BlurView: over this near-black
+      // gradient a blur looked the same and cost a native blur per card.
+      <View key={config.key} style={[styles.cardContainer, { width: halfWidth }, isFullWidth && styles.fullWidthCard]}>
+        <LinearGradient
+          colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.01)']}
+          style={styles.cardGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: config.color + '20' }]}>
+            <Ionicons name={config.icon} size={sz(24)} color={config.color} />
+          </View>
+          <Text style={styles.cardValue}>{formatNumber(value)}</Text>
+          <Text style={styles.cardTitle}>{config.label}</Text>
+        </LinearGradient>
       </View>
     );
   };
@@ -137,20 +137,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardContainer: {
-    width: (width - sz(56)) / 2, // 20 padding on sides + 16 gap
     height: sz(160),
     marginBottom: sz(16),
     borderRadius: sz(24),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(24,24,28,0.6)',
   },
   fullWidthCard: {
     width: '100%',
     height: sz(140),
-  },
-  blurCard: {
-    flex: 1,
   },
   cardGradient: {
     flex: 1,
