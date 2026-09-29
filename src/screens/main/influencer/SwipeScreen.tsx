@@ -300,6 +300,19 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
       }
     });
 
+  // Opening the profile is its own gesture rather than a Pressable: a Pressable
+  // under the pan still fires onPress when a swipe lifts off, so swiping right
+  // opened the brand's profile. Exclusive only lets the tap through when the
+  // pan never started.
+  const tapGesture = Gesture.Tap()
+    .maxDistance(10)
+    .runOnJS(true)
+    .onEnd((_event, success) => {
+      const profile = brands[currentIndex];
+      if (success && profile && !busyRef.current) onViewProfile?.(profile.user_id);
+    });
+  const cardGesture = Gesture.Exclusive(panGesture, tapGesture);
+
   const animatedCardStyle = useAnimatedStyle(() => {
     const rotate = interpolate(
       translateX.value,
@@ -387,7 +400,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
         const isTop = offset === 0;
         const item = toCardItem(profile);
         return (
-          <GestureDetector key={profile.user_id} gesture={isTop ? panGesture : Gesture.Pan().enabled(false)}>
+          <GestureDetector key={profile.user_id} gesture={isTop ? cardGesture : Gesture.Pan().enabled(false)}>
             <Animated.View
               style={[
                 ss.cardWrapper,
@@ -396,11 +409,13 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
                   : { zIndex: 1, transform: [{ scale: 0.97 }], top: sz(6) },
               ]}
             >
-              <Pressable
+              <View
                 style={{ flex: 1 }}
-                onPress={() => isTop && onViewProfile && onViewProfile(profile.user_id)}
+                accessible
+                accessibilityRole="button"
                 accessibilityLabel={item.name}
                 accessibilityHint="Swipe right to like, left to pass"
+                onAccessibilityTap={() => isTop && onViewProfile?.(profile.user_id)}
               >
                 <CardContent item={item} />
                 {isTop && (
@@ -413,7 +428,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
                     </Animated.View>
                   </>
                 )}
-              </Pressable>
+              </View>
             </Animated.View>
           </GestureDetector>
         );

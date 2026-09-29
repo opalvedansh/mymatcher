@@ -18,8 +18,7 @@ export default function Route() {
       onBack={() => goToStep('photos')}
       onStart={async (packages) => {
         await updateOnboarding({ packages, currentStep: 'price_packages' });
-        await completeOnboarding();
-        router.replace('/(influencer-tabs)/home');
+        if (await completeOnboarding()) router.replace('/(influencer-tabs)/home');
       }}
     />
   );

@@ -273,6 +273,19 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
       }
     });
 
+  // Opening the profile is its own gesture rather than a Pressable: a Pressable
+  // under the pan still fires onPress when a swipe lifts off, so swiping right
+  // opened the creator's profile. Exclusive only lets the tap through when the
+  // pan never started.
+  const tapGesture = Gesture.Tap()
+    .maxDistance(10)
+    .runOnJS(true)
+    .onEnd((_event, success) => {
+      const profile = influencers[currentIndex];
+      if (success && profile) onViewProfile?.(profile.user_id);
+    });
+  const cardGesture = Gesture.Exclusive(panGesture, tapGesture);
+
   const animatedCardStyle = useAnimatedStyle(() => {
     const rotate = interpolate(
       translateX.value,
@@ -390,13 +403,14 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
       );
     }
 
-    return [...influencers]
-      .map((profile, i) => {
-        if (i < currentIndex) return null;
-        const isTop = i === currentIndex;
+    // Only the top two cards are mounted, so the rest don't load images yet.
+    return influencers
+      .slice(currentIndex, currentIndex + 2)
+      .map((profile, offset) => {
+        const isTop = offset === 0;
         const item = toCardItem(profile);
         return (
-          <GestureDetector key={profile.user_id} gesture={isTop ? panGesture : Gesture.Pan().enabled(false)}>
+          <GestureDetector key={profile.user_id} gesture={isTop ? cardGesture : Gesture.Pan().enabled(false)}>
             <Animated.View
               style={[
                 ss.cardWrapper,
@@ -405,19 +419,26 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
                   : { zIndex: 1, transform: [{ scale: 0.97 }], top: sz(6) },
               ]}
             >
-              <Pressable style={{ flex: 1 }} onPress={() => isTop && onViewProfile && onViewProfile(profile.user_id)}>
+              <View
+                style={{ flex: 1 }}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={item.name}
+                accessibilityHint="Swipe right to like, left to pass"
+                onAccessibilityTap={() => isTop && onViewProfile?.(profile.user_id)}
+              >
                 <CardContent item={item} />
                 {isTop && (
                   <>
-                    <Animated.View style={[ss.stamp, ss.likeStamp, likeOpacityStyle]}>
+                    <Animated.View style={[ss.stamp, ss.likeStamp, likeOpacityStyle]} pointerEvents="none">
                       <Text style={ss.likeStampTxt}>LIKE</Text>
                     </Animated.View>
-                    <Animated.View style={[ss.stamp, ss.nopeStamp, nopeOpacityStyle]}>
+                    <Animated.View style={[ss.stamp, ss.nopeStamp, nopeOpacityStyle]} pointerEvents="none">
                       <Text style={ss.nopeStampTxt}>NOPE</Text>
                     </Animated.View>
                   </>
                 )}
-              </Pressable>
+              </View>
             </Animated.View>
           </GestureDetector>
         );

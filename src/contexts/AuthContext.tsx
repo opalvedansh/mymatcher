@@ -87,7 +87,9 @@ interface AuthContextType {
   endPasswordRecovery: () => void;
   // Onboarding methods
   updateOnboarding: (data: Partial<OnboardingData>) => Promise<void>;
-  completeOnboarding: () => Promise<void>;
+  // Resolves true once the account is set up; false when it failed (the
+  // user has already been told why).
+  completeOnboarding: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -113,6 +115,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUserDataPromise = useRef<Promise<void> | null>(null);
   // Onboarding saves fire on every field change, so warn at most once per run.
   const progressSaveWarned = useRef(false);
+
+  // Latest onboarding data. Steps advance before their save lands, so reads
+  // must not come from a render closure that is one step behind.
+  const onboardingRef = useRef<OnboardingData | null>(null);
+  const setOnboarding = (data: OnboardingData | null) => {
+    onboardingRef.current = data;
+    setOnboardingData(data);
+  };
+  // One save in flight at a time; taps made meanwhile collapse into one
+  // follow-up save of the newest data.
+  const saveChain = useRef<Promise<void>>(Promise.resolve());
+  const saveQueued = useRef(false);
+  // Local image URI → upload of it, started as soon as the photo is chosen so
+  // the final step doesn't upload every photo while the user waits.
+  const uploads = useRef(new Map<string, Promise<string>>());
+  const completing = useRef<Promise<boolean> | null>(null);
 
   // Listen to auth state changes
   useEffect(() => {
@@ -166,7 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         // Disconnect socket on sign-out
         socketService.disconnect();
-        setOnboardingData(null);
+        setOnboarding(null);
+        uploads.current.clear();
         setOnboardingComplete(false);
         setLoading(false);
       }
@@ -218,12 +237,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const progress = onboardingProgress && Object.keys(onboardingProgress).length > 0
           ? { ...DEFAULT_ONBOARDING, ...onboardingProgress }
           : { ...DEFAULT_ONBOARDING };
+        // A refetch mid-session (e.g. on token refresh) can arrive before the
+        // newest step's background save; what this device already has is newer.
+        if (onboardingRef.current) Object.assign(progress, onboardingRef.current);
         // users.role is authoritative and never changes once set; the copy in
         // onboarding_data can drift (e.g. the user went back and picked the
         // other role), which would route them to the wrong tabs and profile.
         if (dbUser?.role === 'brand') progress.role = 'Brand';
         else if (dbUser?.role === 'influencer') progress.role = 'Influencer';
-        setOnboardingData(progress);
+        setOnboarding(progress);
       } catch (error: any) {
         console.error('[Startup] Error fetching user data:', error);
         const status = error?.status ?? error?.response?.status;
@@ -433,15 +455,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // --- Onboarding methods ---
 
-  const updateOnboarding = async (data: Partial<OnboardingData>) => {
-    if (!user) return;
-
-    const newData = { ...onboardingData, ...data } as OnboardingData;
-    setOnboardingData(newData);
-
+  const saveOnboardingNow = async () => {
     try {
-      // Save onboarding progress via API
-      await api.put('/api/auth/onboarding', newData);
+      await api.put('/api/auth/onboarding', onboardingRef.current);
       progressSaveWarned.current = false;
     } catch (error: any) {
       const reason = [error?.status && `HTTP ${error.status}`, error?.message, error?.detail]
@@ -458,13 +474,102 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const completeOnboarding = async () => {
+  // Saves in the background. Each save sends the newest data, so a queued save
+  // covers every change made while the previous one was in flight.
+  const scheduleOnboardingSave = () => {
+    if (saveQueued.current) return saveChain.current;
+    saveQueued.current = true;
+    saveChain.current = saveChain.current.then(() => {
+      saveQueued.current = false;
+      return saveOnboardingNow();
+    });
+    return saveChain.current;
+  };
+
+  const isLocalUri = (uri?: string | null): uri is string =>
+    !!uri && (uri.startsWith('file://') || uri.startsWith('blob:') || uri.startsWith('ph://'));
+
+  // Starts uploading a chosen image right away. Once it lands, the saved
+  // progress points at the uploaded copy instead of a temp file that won't
+  // survive an app restart.
+  const startUpload = (uri: string) => {
+    let pending = uploads.current.get(uri);
+    if (pending) return pending;
+    // Uploads need the user's row, which the first progress save creates.
+    pending = saveChain.current.then(() => uploadImage(uri));
+    uploads.current.set(uri, pending);
+    pending.then(
+      (url) => {
+        const current = onboardingRef.current;
+        if (!current) return;
+        const photos = current.photos?.map((p) => (p === uri ? url : p)) ?? [];
+        const logo = current.logo === uri ? url : current.logo;
+        if (logo === current.logo && photos.every((p, i) => p === current.photos[i])) return;
+        setOnboarding({ ...current, photos, logo });
+        scheduleOnboardingSave();
+      },
+      // Forget a failed upload so finishing onboarding retries it.
+      () => uploads.current.delete(uri),
+    );
+    return pending;
+  };
+
+  // Resolves immediately so the next step opens without waiting on the
+  // network; completeOnboarding waits for anything still in flight.
+  const updateOnboarding = async (data: Partial<OnboardingData>) => {
     if (!user) return;
 
+    const newData = { ...(onboardingRef.current ?? DEFAULT_ONBOARDING), ...data } as OnboardingData;
+    setOnboarding(newData);
+    scheduleOnboardingSave();
+
+    for (const uri of [...(data.photos ?? []), data.logo]) {
+      if (isLocalUri(uri)) startUpload(uri).catch(() => {});
+    }
+  };
+
+  // Returns the uploaded URL for a local image, uploading it if the early
+  // upload hasn't finished or failed.
+  const resolveImage = async (uri: string) => (isLocalUri(uri) ? startUpload(uri) : uri);
+
+  // A second tap on the final button while setup is running joins that run
+  // instead of creating the account twice.
+  const completeOnboarding = () => {
+    if (!completing.current) {
+      completing.current = runCompleteOnboarding().finally(() => {
+        completing.current = null;
+      });
+    }
+    return completing.current;
+  };
+
+  const runCompleteOnboarding = async (): Promise<boolean> => {
+    if (!user) return false;
+
     try {
-      // 1. Sync role into PostgreSQL users table
+      // Let the last step's save land first so nothing below races it.
+      await saveChain.current;
+      const onboardingData = onboardingRef.current;
       const role = onboardingData?.role?.toLowerCase() as 'brand' | 'influencer' | undefined;
-      
+
+      // 1. Finish the image uploads that started when each photo was chosen,
+      // in parallel. Done before the role is set: an app closed during this
+      // step then resumes onboarding rather than landing on a half-made profile.
+      let finalLogo = onboardingData?.logo;
+      let finalPhotos: string[] = [];
+      try {
+        const logoUpload = finalLogo ? resolveImage(finalLogo) : Promise.resolve(finalLogo);
+        [finalLogo, finalPhotos] = await Promise.all([
+          logoUpload,
+          Promise.all((onboardingData?.photos || []).filter(Boolean).map(resolveImage)),
+        ]);
+      } catch (e) {
+        console.error('[API] image upload failed:', e);
+        alert('Failed to upload a photo. Please check your connection and try again.');
+        return false; // HALT EXECUTION
+      }
+
+      // 2. Sync role into PostgreSQL users table
       try {
         await api.post('/api/auth/sync', { role });
       } catch (e: any) {
@@ -475,40 +580,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .filter(Boolean)
           .join(' · ');
         alert(`Failed to initialize profile. Please try again.\n\n${reason || 'Unknown error'}`);
-        return; // HALT EXECUTION
+        return false; // HALT EXECUTION
       }
 
-      // 2. Push profile fields into PostgreSQL
+      // 3. Push profile fields into PostgreSQL
       if (onboardingData && role) {
         try {
-          // Upload logo if necessary
-          let finalLogo = onboardingData.logo;
-          if (finalLogo && (finalLogo.startsWith('file://') || finalLogo.startsWith('blob:'))) {
-            try { 
-              finalLogo = await uploadImage(finalLogo); 
-            } catch (e) { 
-              console.error('[API] upload logo failed:', e); 
-              alert("Failed to upload logo. Please try again.");
-              return; // HALT EXECUTION
-            }
-          }
-
-          // Upload photos if necessary
-          const finalPhotos = [];
-          for (const uri of (onboardingData.photos || [])) {
-            if (uri && (uri.startsWith('file://') || uri.startsWith('blob:'))) {
-              try { 
-                finalPhotos.push(await uploadImage(uri)); 
-              } catch (e) { 
-                console.error('[API] upload photo failed:', e); 
-                alert("Failed to upload a photo. Please try again.");
-                return; // HALT EXECUTION
-              }
-            } else {
-              finalPhotos.push(uri);
-            }
-          }
-
           if (role === 'brand') {
             await updateMyProfile({
               name:           onboardingData.name       || undefined,
@@ -548,14 +625,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (e) {
           console.error('[API] updateMyProfile on complete failed:', e);
           alert("Failed to save profile. Please try again.");
-          return; // HALT EXECUTION
+          return false; // HALT EXECUTION
         }
       }
 
       setOnboardingComplete(true);
+      return true;
     } catch (error) {
       console.error('Error completing onboarding:', error);
       alert("An unexpected error occurred.");
+      return false;
     }
   };
 

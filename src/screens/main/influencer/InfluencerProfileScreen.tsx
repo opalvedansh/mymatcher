@@ -13,6 +13,7 @@ import {
   PanResponder,
   Modal,
   TextInput,
+  KeyboardAvoidingView,
   Linking,
 
   AccessibilityInfo,
@@ -1226,7 +1227,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
       </Animated.ScrollView>
       {/* ── Edit Instagram Modal ── */}
       <Modal visible={isEditInstagramVisible} transparent animationType="slide" onRequestClose={() => setIsEditInstagramVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Instagram Handle</Text>
@@ -1258,14 +1259,14 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               )}
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
 
 
       {/* ── Add Reel Modal ── */}
       <Modal visible={isAddReelVisible} transparent animationType="slide" onRequestClose={() => setIsAddReelVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Instagram Reel</Text>
@@ -1293,12 +1294,12 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               <Text style={styles.modalButtonText}>Add Reel</Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Edit Worked With Modal ── */}
       <Modal visible={isEditWorkedWithVisible} transparent animationType="slide" onRequestClose={() => setIsEditWorkedWithVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Worked With</Text>
@@ -1357,12 +1358,12 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 : <Text style={styles.modalButtonText}>Save</Text>}
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Edit Platforms Modal ── */}
       <Modal visible={isEditPlatformsVisible} transparent animationType="slide" onRequestClose={() => setIsEditPlatformsVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Available On</Text>
@@ -1405,7 +1406,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
                 : <Text style={styles.modalButtonText}>Save</Text>}
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <VerificationModal

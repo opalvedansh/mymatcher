@@ -18,8 +18,7 @@ export default function Route() {
       onBack={() => goToStep('brand-campaign-upload')}
       onNext={async (categories) => {
         await updateOnboarding({ categories, currentStep: 'brand_categories' });
-        await completeOnboarding();
-        router.replace('/(brand-tabs)/home');
+        if (await completeOnboarding()) router.replace('/(brand-tabs)/home');
       }}
     />
   );

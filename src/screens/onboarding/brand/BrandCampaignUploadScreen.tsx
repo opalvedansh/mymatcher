@@ -28,7 +28,7 @@ export function BrandCampaignUploadScreen({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 5],
-      quality: 1,
+      quality: 0.8,
     });
 
     if (!result.canceled) {

@@ -120,8 +120,14 @@ async function updateOnboardingData(req, res, next) {
       [req.user.id, req.user.email || '', JSON.stringify(req.body)]
     );
 
+    // The row is already written; a Redis blip must not turn a saved step into
+    // a 500 that the app reports as lost progress.
     if (redisClient) {
-      await redisClient.del(`user:session:${req.user.id}`);
+      try {
+        await redisClient.del(`user:session:${req.user.id}`);
+      } catch (cacheErr) {
+        logger.warn({ err: cacheErr.message, uid: req.user.id }, 'Failed to invalidate session cache after onboarding save');
+      }
     }
 
     res.json(rows[0]?.onboarding_data || {});
