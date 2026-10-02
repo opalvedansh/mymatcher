@@ -33,12 +33,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { InfluencerProfile } from '@/api/types';
-import { StoryPackageIcon, UgcPackageIcon, BrandPackageIcon, ReelPackageIcon } from '@/components/PackageIcons';
+import { PackageIcon } from '@/components/PackageIcons';
+import { PackagePriceEditor } from '@/components/PackagePriceEditor';
+import { PACKAGE_OPTIONS, completePackages, formatPrice, toPackageDrafts, type CreatorPackage, type PackageDraft } from '@/utils/packages';
 import { VerificationModal } from './VerificationModal';
 import { LinkedinReviews } from './LinkedinReviews';
-import type { LinkedinReview } from '@/api/types';
 import { TouchableOpacity } from 'react-native';
-import { sz } from '@/theme/scale';
+import { sz, tabBarClearance } from '@/theme/scale';
 
 // ──────────────────────── Line Chart ────────────────────────
 const CHART_DATA = [100, 98, 85, 60, 40, 25, 8, 2, 1, 0];
@@ -294,13 +295,6 @@ const UNKNOWN_PLATFORM_ICON = <FontAwesome6 name="star" size={sz(16)} color="#FF
 // `twitter` stays in PLATFORMS_DB so older profiles still render, but new picks use X.
 const PICKABLE_PLATFORMS = Object.keys(PLATFORMS_DB).filter(k => k !== 'twitter');
 
-const PACKAGES = [
-  { type: 'story', name: 'Story Package', desc: '1 Instagram Story · 24hr visibility', price: '1000' },
-  { type: 'reel', name: 'Reel Package', desc: '1 Reel (30-60 sec) · Edited & tagged', price: '8000' },
-  { type: 'ugc', name: 'UGC Package', desc: '1 UGC Video · Raw + Edited', price: '12000' },
-  { type: 'brand', name: 'Brand Partnership', desc: 'Custom scope, agreed with the brand', price: '20000' },
-];
-
 // The text-editing sheets own their drafts so a keystroke re-renders only the
 // sheet, not the whole profile screen behind it.
 
@@ -537,6 +531,79 @@ function EditWorkedWithModal({ visible, workedWith, onClose, onSave }: {
   );
 }
 
+function EditPackagesModal({ visible, packages, onClose, onSave }: {
+  visible: boolean,
+  packages: CreatorPackage[] | undefined,
+  onClose: () => void,
+  onSave: (next: CreatorPackage[]) => Promise<void>,
+}) {
+  const [drafts, setDrafts] = useState<PackageDraft[]>([]);
+  const [showErrors, setShowErrors] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  // Reseed from the saved list each time the sheet opens.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) {
+      setDrafts(toPackageDrafts(packages));
+      setShowErrors(false);
+    }
+  }
+
+  const save = async () => {
+    // Removing every package is allowed; brands then just don't see the section.
+    const next = drafts.length === 0 ? [] : completePackages(drafts);
+    if (!next) {
+      setShowErrors(true);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(next);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Packages</Text>
+            <Pressable onPress={onClose} hitSlop={sz(8)} accessibilityRole="button" accessibilityLabel="Close">
+              <Ionicons name="close" size={sz(24)} color="#FFF" />
+            </Pressable>
+          </View>
+          <Text style={styles.modalSubtitle}>Pick what you offer and set your price for each. Brands see these on your profile.</Text>
+
+          <ScrollView
+            ref={scrollRef}
+            style={{ flexGrow: 0 }}
+            contentContainerStyle={{ paddingBottom: sz(16) }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <PackagePriceEditor drafts={drafts} onChange={setDrafts} showErrors={showErrors} scrollRef={scrollRef} />
+          </ScrollView>
+
+          <Pressable
+            style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, saving && { opacity: 0.6 }]}
+            onPress={save}
+            disabled={saving}
+            accessibilityRole="button"
+          >
+            {saving
+              ? <ActivityIndicator color="#FFF" />
+              : <Text style={styles.modalButtonText}>Save</Text>}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId?: string, onBack?: () => void }) {
   const { user, signOut, deleteAccount } = useAuth();
   const { width, height } = useWindowDimensions();
@@ -559,6 +626,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isEditWorkedWithVisible, setIsEditWorkedWithVisible] = useState(false);
+  const [isEditPackagesVisible, setIsEditPackagesVisible] = useState(false);
   const [isEditPlatformsVisible, setIsEditPlatformsVisible] = useState(false);
   const [draftPlatforms, setDraftPlatforms] = useState<string[]>([]);
   const [isSavingPlatforms, setIsSavingPlatforms] = useState(false);
@@ -791,9 +859,15 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
     }
   };
 
-  const handleSaveLinkedinReviews = async (next: LinkedinReview[]) => {
-    const saved = await updateMyProfile({ linkedin_reviews: next }) as InfluencerProfile;
-    setActiveProfile(prev => prev ? { ...prev, linkedin_reviews: saved.linkedin_reviews ?? next } : prev);
+  // Throws on failure so the sheet stays open with the creator's edits.
+  const handleSavePackages = async (next: CreatorPackage[]) => {
+    try {
+      const saved = await updateMyProfile({ packages: next }) as InfluencerProfile;
+      setActiveProfile(prev => prev ? { ...prev, packages: saved.packages ?? next } : prev);
+      setIsEditPackagesVisible(false);
+    } catch (e) {
+      showAlert('Could not save', e instanceof ApiError && e.status === 400 ? e.message : 'Check your connection and try again.');
+    }
   };
 
   const openEditPlatforms = () => {
@@ -874,6 +948,7 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
     };
   });
   const workedWith = activeProfile.worked_with || [];
+  const packages = activeProfile.packages || [];
 
   const headerTranslateY = scrollY.interpolate({
     inputRange: [0, height],
@@ -1376,58 +1451,75 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           )}
         </View>
 
-        {/* ── Rates (Packages) ── */}
-        <View style={[styles.section, { paddingTop: sz(20) }]}>
-          <Text style={[styles.packagesTitle, { marginBottom: sz(20) }]}>Packages</Text>
-          <View style={styles.packagesContainer}>
-            {PACKAGES.map((pkg, idx) => (
-              <View key={idx} style={styles.packageCard}>
-                <View style={styles.packageIconContainer}>
-                  {pkg.type === 'story' && (
-                    <StoryPackageIcon size={sz(28)} color="#FFF" />
-                  )}
-                  {pkg.type === 'reel' && (
-                    <ReelPackageIcon size={sz(28)} color="#FFF" />
-                  )}
-                  {pkg.type === 'ugc' && (
-                    <UgcPackageIcon size={sz(28)} color="#FFF" />
-                  )}
-                  {pkg.type === 'brand' && (
-                    <BrandPackageIcon size={sz(28)} color="#FFF" />
-                  )}
-                </View>
-                <View style={styles.packageDetails}>
-                  <Text style={styles.packageName}>{pkg.name}</Text>
-                  <Text style={styles.packageDesc}>{pkg.desc}</Text>
-                </View>
-                <Text style={styles.packagePriceLabel}>₹{pkg.price.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</Text>
-              </View>
-            ))}
+        {/* ── Packages: what the creator sells, at the prices they set ── */}
+        {(packages.length > 0 || !publicUserId) && (
+          <View style={[styles.section, { paddingTop: sz(20) }]}>
+            <View style={styles.packagesHeader}>
+              <Text style={styles.packagesTitle}>Packages</Text>
+              {!publicUserId && packages.length > 0 && (
+                <TouchableOpacity onPress={() => setIsEditPackagesVisible(true)} hitSlop={sz(8)} accessibilityLabel="Edit packages">
+                  <Ionicons name="pencil" size={sz(16)} color="#888" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.packagesContainer}>
+              {packages.map((pkg) => {
+                const option = PACKAGE_OPTIONS.find(o => o.type === pkg.type);
+                if (!option) return null;
+                return (
+                  <View key={pkg.type} style={styles.packageCard}>
+                    <View style={styles.packageIconContainer}>
+                      <PackageIcon type={pkg.type} size={sz(28)} color="#FFF" />
+                    </View>
+                    <View style={styles.packageDetails}>
+                      <Text style={styles.packageName}>{option.name}</Text>
+                      <Text style={styles.packageDesc}>{option.desc}</Text>
+                    </View>
+                    <Text style={styles.packagePriceLabel}>{formatPrice(pkg.price)}</Text>
+                  </View>
+                );
+              })}
 
-            {/* Custom Package */}
-            <View style={styles.packageCard}>
-              <View style={styles.packageIconContainer}>
-                <View style={styles.customIconBg}>
-                  <Ionicons name="add" size={sz(24)} color="#FF6B2B" />
+              {!publicUserId && packages.length === 0 && (
+                <Pressable
+                  onPress={() => setIsEditPackagesVisible(true)}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.packageCard, styles.packageEmptyCard, pressed && styles.pressed]}
+                >
+                  <View style={styles.packageDetails}>
+                    <Text style={styles.packageName}>Add your packages and prices</Text>
+                    <Text style={styles.packageDesc}>Brands see what you offer and what you charge.</Text>
+                  </View>
+                  <Ionicons name="add-circle" size={sz(26)} color="#FF6B2B" />
+                </Pressable>
+              )}
+
+              {/* Custom Package */}
+              {!!publicUserId && (
+                <View style={styles.packageCard}>
+                  <View style={styles.packageIconContainer}>
+                    <View style={styles.customIconBg}>
+                      <Ionicons name="add" size={sz(24)} color="#FF6B2B" />
+                    </View>
+                  </View>
+                  <View style={styles.packageDetails}>
+                    <Text style={styles.packageName}>Custom package</Text>
+                    <Text style={styles.packageDesc}>Have something else in mind?</Text>
+                  </View>
+                  <View style={styles.requestQuoteBtn}>
+                    <Text style={styles.requestQuoteText}>Request Quote</Text>
+                  </View>
                 </View>
-              </View>
-              <View style={styles.packageDetails}>
-                <Text style={styles.packageName}>Custom package</Text>
-                <Text style={styles.packageDesc}>Have something else in mind?</Text>
-              </View>
-              <View style={styles.requestQuoteBtn}>
-                <Text style={styles.requestQuoteText}>Request Quote</Text>
-              </View>
+              )}
             </View>
           </View>
-        </View>
+        )}
 
-        {/* ── LinkedIn Reviews ── */}
+        {/* ── LinkedIn reviews, written by brands this creator matched with ── */}
         <LinkedinReviews
-          reviews={activeProfile.linkedin_reviews || []}
-          editable={!publicUserId}
-          ownerName={activeProfile.name || ''}
-          onSave={handleSaveLinkedinReviews}
+          creatorId={activeProfile.user_id}
+          creatorName={activeProfile.name || ''}
+          isOwnProfile={!publicUserId}
         />
 
         {/* ── Interest button (public profile only) ── */}
@@ -1453,8 +1545,8 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           </Pressable>
         )}
 
-        {/* ── Bottom Padding ── */}
-        <View style={{ height: sz(40) }} />
+        {/* ── Bottom Padding (clears the floating tab bar on your own profile) ── */}
+        <View style={{ height: publicUserId ? sz(40) : tabBarClearance(40) }} />
 
       </View>
       </Animated.ScrollView>
@@ -1471,6 +1563,14 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
         visible={isAddReelVisible}
         onClose={() => setIsAddReelVisible(false)}
         onAdd={handleAddReel}
+      />
+
+      {/* ── Edit Packages Modal ── */}
+      <EditPackagesModal
+        visible={isEditPackagesVisible}
+        packages={activeProfile.packages}
+        onClose={() => setIsEditPackagesVisible(false)}
+        onSave={handleSavePackages}
       />
 
       {/* ── Edit Worked With Modal ── */}
@@ -1869,10 +1969,21 @@ const styles = StyleSheet.create({
   rateValue: {
     fontSize: sz(13), fontWeight: '600', color: '#FFF',
   },
+  packagesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: sz(20),
+  },
   packagesTitle: {
     fontSize: sz(24),
     fontWeight: '700',
     color: '#FFF',
+  },
+  packageEmptyCard: {
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
   },
   packagesContainer: {
     gap: sz(12),
@@ -1893,14 +2004,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: sz(16),
-  },
-  storyIconBg: {
-    width: sz(32),
-    height: sz(32),
-    backgroundColor: '#FFF',
-    borderRadius: sz(8),
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   customIconBg: {
     width: sz(40),

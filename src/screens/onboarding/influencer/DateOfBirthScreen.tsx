@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/theme/colors';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
 import { sz } from '@/theme/scale';
+import { checkDob, formatDob } from '@/utils/dob';
 import { tapFeedback } from '@/utils/optionalModules';
 
 export function DateOfBirthScreen({
@@ -26,7 +27,9 @@ export function DateOfBirthScreen({
   onBack?: () => void;
   onNext?: (dob: string) => void;
 }) {
-  const [dob, setDob] = useState(initialDob ?? '');
+  // Drafts saved before auto-formatting may hold bare digits like 20112004.
+  const [dob, setDob] = useState(() => formatDob(initialDob ?? ''));
+  const check = checkDob(dob);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -60,24 +63,25 @@ export function DateOfBirthScreen({
             placeholder="DD/MM/YYYY"
             placeholderTextColor="#555555"
             value={dob}
-            onChangeText={setDob}
+            onChangeText={(text) => setDob((prev) => formatDob(text, prev))}
             selectionColor={colors.primary}
-            keyboardType="numeric"
+            keyboardType="number-pad"
             maxLength={10}
             returnKeyType="done"
             onSubmitEditing={Keyboard.dismiss}
           />
         </View>
+        {!check.ok && check.error && <Text style={styles.error}>{check.error}</Text>}
 
         {/* Footer */}
         <View style={styles.footer}>
           <Pressable
             style={({ pressed }) => [
               styles.nextButton,
-              dob.trim() === '' && styles.nextButtonDisabled,
+              !check.ok && styles.nextButtonDisabled,
               pressed && styles.pressed,
             ]}
-            disabled={dob.trim() === ''}
+            disabled={!check.ok}
             onPress={() => { tapFeedback(); Keyboard.dismiss(); onNext?.(dob); }}
           >
             <Text style={styles.nextButtonText}>Next</Text>
@@ -137,6 +141,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     paddingHorizontal: sz(16),
+  },
+  error: {
+    color: '#FF6B6B',
+    fontSize: sz(13),
+    lineHeight: sz(18),
+    marginTop: sz(10),
+    textAlign: 'center',
   },
   footer: {
     flex: 1,

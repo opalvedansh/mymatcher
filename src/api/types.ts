@@ -1,5 +1,7 @@
 // ─── API Response & Model Types ──────────────────────────────────
 
+import type { CreatorPackage } from '@/utils/packages';
+
 export type UserRole = 'brand' | 'influencer';
 export type SwipeDirection = 'like' | 'reject' | 'super_like';
 export type MatchStatus = 'active' | 'archived';
@@ -95,6 +97,8 @@ export interface InfluencerProfile {
   stats_verified?: boolean;
   worked_with?: string[];
   linkedin_reviews?: LinkedinReview[];
+  /** What the creator sells and their price for each; empty until they set them. */
+  packages?: CreatorPackage[];
   email: string;
   role: 'influencer';
   member_since: string;
@@ -220,6 +224,35 @@ export interface BrandRating {
   my_score: number | null;
   /** True only for a creator who has matched with this brand. */
   can_rate: boolean;
+}
+
+/** What a brand writes in a LinkedIn review of a creator. */
+export interface CreatorReviewInput {
+  quote: string;
+  reviewer_name: string;
+  reviewer_title: string | null;
+  linkedin_url: string;
+}
+
+/** A LinkedIn review of a creator, written by a brand that matched with them. */
+export interface CreatorReview extends CreatorReviewInput {
+  id: string;
+  brand_id: string;
+  created_at: string;
+  updated_at: string;
+  brand_name: string | null;
+  brand_logo_url: string | null;
+  brand_verified: boolean;
+}
+
+/** GET/PUT/DELETE /api/reviews/:creatorId */
+export interface CreatorReviews {
+  reviews: CreatorReview[];
+  count: number;
+  /** The signed-in brand's own review, if it has written one. */
+  my_review: (CreatorReviewInput & { updated_at: string }) | null;
+  /** True only for a brand that has matched with this creator. */
+  can_review: boolean;
 }
 
 /** POST /api/profiles/me/verification */
@@ -350,6 +383,9 @@ export interface InfluencerProfileUpdate {
   lat?: number;
   lng?: number;
   age?: number;
+  /** ISO date (YYYY-MM-DD). Stored privately; profiles show only the age. */
+  dob?: string;
+  packages?: CreatorPackage[];
   gender?: string;
   instagram_handle?: string;
   platforms?: string[];

@@ -16,6 +16,7 @@ import { tapFeedback } from '@/utils/optionalModules';
 
 const CATEGORIES = [
   { id: 'retail', name: 'Retail & Consumer' },
+  { id: 'apparel', name: 'Clothing & Apparel' },
   { id: 'food', name: 'Food & Beverage' },
   { id: 'tech', name: 'Technology' },
   { id: 'auto', name: 'Automotive' },

@@ -1,5 +1,6 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
+import type { PackageType } from '@/utils/packages';
 
 export const StoryPackageIcon = ({ size = 20, color = 'white' }) => (
   <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
@@ -32,3 +33,15 @@ export const ReelPackageIcon = ({ size = 20, color = 'white' }) => (
     <Path fillRule="evenodd" clipRule="evenodd" d="M0 6.56207H18.375V13.1246C18.375 16.0241 16.0245 18.3746 13.125 18.3746H5.25C2.3505 18.3746 0 16.0241 0 13.1246V6.56207ZM12.2587 11.7781C12.5387 11.9391 12.5387 12.3413 12.2587 12.5023L7.84875 15.0367C7.56875 15.1976 7.21875 14.9965 7.21875 14.6746V9.60577C7.21875 9.28394 7.56875 9.08279 7.84875 9.24371L12.2587 11.7781Z" fill={color}/>
   </Svg>
 );
+
+const ICON_BY_TYPE: Record<PackageType, typeof StoryPackageIcon> = {
+  story: StoryPackageIcon,
+  reel: ReelPackageIcon,
+  ugc: UgcPackageIcon,
+  brand_collab: BrandPackageIcon,
+};
+
+export const PackageIcon = ({ type, size = 20, color = 'white' }: { type: PackageType; size?: number; color?: string }) => {
+  const Icon = ICON_BY_TYPE[type];
+  return <Icon size={size} color={color} />;
+};

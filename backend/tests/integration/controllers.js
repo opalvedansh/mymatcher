@@ -367,6 +367,68 @@ async function main() {
   r = await call(ratings.removeMyRating, { user: { id: 'infl-b', role: 'influencer' }, params: { brandId: B2 } });
   check('a creator can take their rating back', r.body?.removed === 1, JSON.stringify(r.body));
 
+  // ── LinkedIn reviews by matched brands (migration 032) ───────
+  const reviewsCtl = require(`${BACKEND}/src/controllers/reviewController`);
+  const linkedinReview = {
+    quote: 'Delivered on time and the reel beat our benchmarks.',
+    reviewer_name: 'Riya Menon',
+    reviewer_title: 'Brand Manager at Brand Two',
+    linkedin_url: 'https://www.linkedin.com/in/riya-menon/',
+  };
+
+  r = await call(reviewsCtl.reviewCreator, {
+    user: { id: B2, role: 'brand' }, params: { creatorId: 'infl-a' }, body: linkedinReview,
+  });
+  check('a matched brand can add a LinkedIn review of a creator',
+    r.status === 200 && r.body?.count === 1 && r.body?.reviews?.[0]?.brand_name === 'Brand Two'
+      && r.body?.reviews?.[0]?.linkedin_url === linkedinReview.linkedin_url && r.body?.can_review === true,
+    JSON.stringify(r.body) + (r.err?.message || ''));
+
+  r = await call(reviewsCtl.reviewCreator, {
+    user: { id: B2, role: 'brand' }, params: { creatorId: 'infl-a' },
+    body: { ...linkedinReview, quote: 'Good, but replies were slow.', reviewer_title: null },
+  });
+  check('reviewing again edits the review rather than adding one',
+    r.body?.count === 1 && r.body?.my_review?.quote === 'Good, but replies were slow.' && r.body?.my_review?.reviewer_title === null,
+    JSON.stringify(r.body));
+
+  r = await call(reviewsCtl.reviewCreator, {
+    user: { id: B2, role: 'brand' }, params: { creatorId: I2 }, body: linkedinReview,
+  });
+  check('a brand that never matched the creator cannot review them', r.status === 403, JSON.stringify(r.body));
+
+  r = await call(reviewsCtl.getCreatorReviews, { user: { id: 'infl-a', role: 'influencer' }, params: { creatorId: 'infl-a' } });
+  check('the creator sees the review but cannot write one about themselves',
+    r.body?.count === 1 && r.body?.can_review === false && r.body?.my_review === null, JSON.stringify(r.body) + (r.err?.message || ''));
+
+  await pg.query(`INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ('infl-a', $1)`, [B2]);
+  r = await call(reviewsCtl.getCreatorReviews, { user: { id: 'infl-a', role: 'influencer' }, params: { creatorId: 'infl-a' } });
+  check('a review by a brand the creator blocked is hidden', r.body?.count === 0 && r.body?.reviews?.length === 0, JSON.stringify(r.body));
+  await pg.query(`DELETE FROM user_blocks WHERE blocker_id = 'infl-a'`);
+
+  const { rows: [reviewRow] } = await pg.query(`SELECT id FROM creator_reviews WHERE influencer_id = 'infl-a'`);
+  await pg.query(
+    `INSERT INTO reports (reporter_id, target_type, target_id, reason) VALUES ('infl-a', 'review', $1, 'harassment')`,
+    [reviewRow.id]
+  );
+  check('a review can be reported', true);
+
+  r = await call(reviewsCtl.removeMyReview, { user: { id: B2, role: 'brand' }, params: { creatorId: 'infl-a' } });
+  check('a brand can take its review back', r.body?.count === 0, JSON.stringify(r.body));
+
+  // ── Creator packages and date of birth (migration 031) ───────
+  r = await call(profiles.updateMyProfile, {
+    user: { id: 'infl-a', role: 'influencer' },
+    body: { dob: '2000-01-15', packages: [{ type: 'reel', price: 8000 }, { type: 'story', price: 1500 }] },
+  });
+  check('a creator saves their packages and date of birth',
+    r.status === 200 && r.body?.packages?.length === 2 && r.body?.packages?.[0]?.type === 'story',
+    JSON.stringify(r.body?.packages) + (r.err?.message || ''));
+  check('the price range comes from the packages', r.body?.price_min === 1500 && r.body?.price_max === 8000,
+    JSON.stringify([r.body?.price_min, r.body?.price_max]));
+  check('the age is worked out from the date of birth', r.body?.age >= 26, String(r.body?.age));
+  check('the date of birth itself is never returned', !('dob' in (r.body || {})), JSON.stringify(Object.keys(r.body || {})));
+
   r = await call(profiles.updateMyProfile, {
     user: { id: B2, role: 'brand' }, body: { payment_mode: 'upi', payment_days: 14 },
   });

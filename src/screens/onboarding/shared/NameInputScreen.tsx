@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -87,8 +88,17 @@ export function NameInputScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* With the Instagram field the form is taller than the space above the
+          keyboard, so it scrolls while Next stays pinned below it. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        showsVerticalScrollIndicator={false}
+      >
       <DismissKeyboard>
-        <View style={styles.container}>
+        <View style={{ flex: 1 }}>
         {/* Header */}
         <Pressable
           onPress={onBack}
@@ -176,23 +186,24 @@ export function NameInputScreen({
             )}
           </View>
         )}
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.nextButton,
-              !canContinue && styles.nextButtonDisabled,
-              pressed && styles.pressed,
-            ]}
-            disabled={!canContinue}
-            onPress={submit}
-          >
-            <Text style={styles.nextButtonText}>Next</Text>
-          </Pressable>
-        </View>
         </View>
       </DismissKeyboard>
+      </ScrollView>
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.nextButton,
+            !canContinue && styles.nextButtonDisabled,
+            pressed && styles.pressed,
+          ]}
+          disabled={!canContinue}
+          onPress={submit}
+        >
+          <Text style={styles.nextButtonText}>Next</Text>
+        </Pressable>
+      </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -204,10 +215,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   container: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: sz(20),
     paddingTop: sz(16),
-    paddingBottom: sz(32),
+    paddingBottom: sz(16),
   },
   backButton: {
     marginBottom: sz(24),
@@ -256,8 +267,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: sz(16),
   },
   footer: {
-    flex: 1,
-    justifyContent: 'flex-end',
+    paddingHorizontal: sz(20),
+    paddingTop: sz(8),
+    paddingBottom: sz(32),
   },
   nextButton: {
     backgroundColor: colors.primary,

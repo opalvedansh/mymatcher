@@ -189,6 +189,77 @@ describe('Profile Routes', () => {
     });
   });
 
+  describe('PUT /api/profiles/me (creator packages and date of birth)', () => {
+    const asCreator = (body) =>
+      request(server).put('/api/profiles/me').set('x-test-role', 'influencer').send(body);
+
+    it('saves packages in display order and derives the price range from them', async () => {
+      db.query.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+      db.query.mockResolvedValueOnce({ rows: [{ user_id: 'test-user-id-123' }] }); // re-fetch
+
+      const res = await asCreator({
+        packages: [{ type: 'reel', price: 8000 }, { type: 'story', price: 1500 }],
+      });
+
+      expect(res.status).toBe(200);
+      const params = db.query.mock.calls[0][1];
+      expect(params[13]).toBe(1500); // price_min
+      expect(params[14]).toBe(8000); // price_max
+      expect(JSON.parse(params[20])).toEqual([
+        { type: 'story', price: 1500 },
+        { type: 'reel', price: 8000 },
+      ]);
+    });
+
+    it('clears the price range when every package is removed', async () => {
+      db.query.mockResolvedValueOnce({ rowCount: 1 });
+      db.query.mockResolvedValueOnce({ rows: [{ user_id: 'test-user-id-123' }] });
+
+      const res = await asCreator({ packages: [] });
+
+      expect(res.status).toBe(200);
+      const params = db.query.mock.calls[0][1];
+      expect([params[13], params[14], params[20]]).toEqual([0, 0, '[]']);
+    });
+
+    it.each([
+      ['a package with no price', [{ type: 'story' }]],
+      ['a price that is not whole rupees', [{ type: 'story', price: 99.5 }]],
+      ['a price over ₹1 crore', [{ type: 'story', price: 10000001 }]],
+      ['an unknown package type', [{ type: 'podcast', price: 5000 }]],
+      ['the same package twice', [{ type: 'ugc', price: 5000 }, { type: 'ugc', price: 6000 }]],
+    ])('rejects %s with 400', async (_label, packages) => {
+      const res = await asCreator({ packages });
+
+      expect(res.status).toBe(400);
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('stores the date of birth and the age worked out from it', async () => {
+      db.query.mockResolvedValueOnce({ rowCount: 1 });
+      db.query.mockResolvedValueOnce({ rows: [{ user_id: 'test-user-id-123' }] });
+
+      const res = await asCreator({ dob: '2000-01-15' });
+
+      expect(res.status).toBe(200);
+      const params = db.query.mock.calls[0][1];
+      expect(params[19]).toBe('2000-01-15');
+      expect(params[8]).toBeGreaterThanOrEqual(26); // age
+    });
+
+    it.each([
+      ['someone under 13', `${new Date().getUTCFullYear() - 5}-01-01`],
+      ['a date in the future', `${new Date().getUTCFullYear() + 1}-01-01`],
+      ['a date that does not exist', '2004-02-30'],
+      ['a date that is not YYYY-MM-DD', '20/11/2004'],
+    ])('rejects a date of birth for %s with 422', async (_label, dob) => {
+      const res = await asCreator({ dob });
+
+      expect(res.status).toBe(422);
+      expect(db.query).not.toHaveBeenCalled();
+    });
+  });
+
   describe('POST /api/profiles/me/verification', () => {
     it('puts a brand in the review queue without verifying it', async () => {
       db.query

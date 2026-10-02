@@ -125,6 +125,7 @@ export default function Moderation() {
               <option value="post">Posts</option>
               <option value="story">Stories</option>
               <option value="message">Messages</option>
+              <option value="review">Reviews</option>
             </select>
             <div className="panel-actions">
               <span className="tiny muted">
@@ -332,6 +333,18 @@ function TargetCell({ report, onReadContext, canRead }: {
           <a className="tiny" href={url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--info)' }}>Open media</a>
           {(t.expired as boolean) && <Badge>Expired</Badge>}
         </div>
+      </div>
+    );
+  }
+
+  if (report.target_type === 'review') {
+    return (
+      <div style={{ minWidth: 0 }}>
+        <div className="truncate" style={{ maxWidth: 320 }}>“{t.quote as string}”</div>
+        <div className="tiny muted truncate" style={{ maxWidth: 320 }}>
+          {t.reviewer_name as string} for {(t.brand_name as string) || 'a brand'}, reviewing {(t.influencer_name as string) || 'a creator'}
+        </div>
+        <a className="tiny" href={t.linkedin_url as string} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--info)' }}>Open LinkedIn link</a>
       </div>
     );
   }

@@ -26,7 +26,7 @@ const reportLimiter = rateLimit({
 const userIdBody = [body('user_id').isString().notEmpty().isLength({ max: 128 })];
 const userIdParam = [param('userId').isString().notEmpty().isLength({ max: 128 })];
 const reportRules = [
-  body('target_type').isIn(['user', 'post', 'story', 'message']),
+  body('target_type').isIn(['user', 'post', 'story', 'message', 'review']),
   body('target_id').isString().notEmpty().isLength({ max: 128 }),
   body('reason').isIn(['spam', 'inappropriate', 'harassment', 'fake_profile', 'other']),
   body('details').optional({ values: 'null' }).isString().isLength({ max: 1000 }),

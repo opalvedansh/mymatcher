@@ -14,7 +14,7 @@ import { sz } from '@/theme/scale';
 import { tapFeedback } from '@/utils/optionalModules';
 
 const CATEGORIES = [
-  'Lifestyle', 'Fashion', 'Beauty', 'Fitness',
+  'Lifestyle', 'Fashion', 'Clothing & Apparel', 'Beauty', 'Fitness',
   'Food', 'Travel', 'Tech', 'Gaming',
   'Finance', 'Business', 'Education', 'Comedy',
   'Photography', 'Music', 'Automotive', 'Luxury',

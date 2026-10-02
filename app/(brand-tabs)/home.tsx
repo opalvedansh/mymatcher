@@ -36,9 +36,9 @@ const ACCENT = '#FF6B2B';
 const PAGE_SIZE = 20;
 // Coming back to the tab after this long refetches quietly in the background.
 const STALE_MS = 60_000;
-// tabBarClearance already adds Android's bottom inset to the list padding, so
-// only iOS keeps the bottom edge (as the old react-native SafeAreaView did).
-const SAFE_EDGES: Edge[] | undefined = Platform.OS === 'android' ? ['top', 'left', 'right'] : undefined;
+// The tab bar covers the bottom safe area and tabBarClearance already adds
+// it to the list padding, so the bottom edge is left out here.
+const SAFE_EDGES: Edge[] = ['top', 'left', 'right'];
 
 type FetchMode = 'initial' | 'refresh' | 'silent' | 'merge' | 'more';
 

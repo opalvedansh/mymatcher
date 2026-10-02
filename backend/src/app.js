@@ -50,6 +50,7 @@ const storiesRoutes = require('./routes/stories');
 const mapsRoutes    = require('./routes/maps');
 const notificationRoutes = require('./routes/notifications');
 const ratingRoutes = require('./routes/ratings');
+const reviewRoutes = require('./routes/reviews');
 const postsRoutes   = require('./routes/posts');
 const shareController = require('./controllers/shareController');
 const safetyRoutes  = require('./routes/safety');
@@ -196,6 +197,7 @@ app.use('/api/maps',     mapsRoutes);
 app.use('/api/posts',    postsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ratings', ratingRoutes);
+app.use('/api/reviews', reviewRoutes);
 app.use('/api',          safetyRoutes);
 
 // ─── API Documentation ───────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { Dimensions, PixelRatio, Platform } from 'react-native';
+import { Dimensions, PixelRatio } from 'react-native';
 import { initialWindowMetrics } from 'react-native-safe-area-context';
 
 // Every screen was designed on an iPhone 16. Sizes in the code are iPhone 16
@@ -32,10 +32,9 @@ export function sz(size: number): number {
   return PixelRatio.roundToNearestPixel(size * SCALE);
 }
 
-// On iOS the tab bar floats over the home indicator, as designed. Android
-// draws edge to edge, so without this the tab bar sits under the system
-// navigation buttons.
-export const TAB_BAR_EXTRA_BOTTOM = Platform.OS === 'android' ? insets?.bottom ?? 0 : 0;
+// The tab bar grows by the bottom safe area so its icons sit above the iPhone
+// home indicator and Android's navigation buttons, not underneath them.
+export const TAB_BAR_EXTRA_BOTTOM = insets?.bottom ?? 0;
 
 /** Bottom padding that clears the floating tab bar (`size` in iPhone 16 points). */
 export function tabBarClearance(size: number): number {

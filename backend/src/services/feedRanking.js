@@ -86,7 +86,9 @@ function influencerSql(idFilter) {
      SELECT
        u.id, u.role, u.created_at,
        ip.name, ip.avatar_url, ip.cover_url, ip.bio, ip.categories,
-       ip.location, ip.lat, ip.lng, ip.age, ip.gender, ip.platforms,
+       ip.location, ip.lat, ip.lng,
+       COALESCE(date_part('year', age(ip.dob))::int, ip.age) AS age,
+       ip.gender, ip.platforms,
        ip.followers, ip.engagement_rate, ip.avg_views, ip.price_min, ip.price_max, ip.verified,
        -- Brands the creator listed themselves; the card shows these instead of stock logos.
        ip.worked_with,

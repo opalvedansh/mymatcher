@@ -7,6 +7,8 @@ import { syncUser, updateMyProfile, uploadImage, syncInstagram, deleteMyAccount 
 import api from '../api/client';
 import { socketService } from '../api/socket';
 import { registerForPush, unregisterPush } from '../services/pushNotifications';
+import { checkDob, formatDob } from '../utils/dob';
+import { completePackages, toPackageDrafts, type CreatorPackage } from '../utils/packages';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
@@ -34,7 +36,8 @@ export interface OnboardingData {
   bio: string;
   instagramUsername?: string;
   photos: string[];
-  packages: any[];
+  // { type, price }[]; drafts saved before prices were asked for hold bare type ids.
+  packages: (CreatorPackage | string)[];
   // Brand-specific
   logo: string;
   campaigns: string[];
@@ -618,6 +621,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               website:        onboardingData.website             || undefined,
             });
           } else {
+            // Drafts from before the DOB step auto-formatted may hold bare digits.
+            const dob = checkDob(formatDob(onboardingData.dob || ''));
+            const packages = completePackages(toPackageDrafts(onboardingData.packages));
             await updateMyProfile({
               name:       onboardingData.name         || undefined,
               bio:        onboardingData.bio          || undefined,
@@ -626,6 +632,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               categories: onboardingData.categories?.length ? onboardingData.categories : undefined,
               platforms:  onboardingData.platforms?.length  ? onboardingData.platforms  : undefined,
               gender:     onboardingData.gender       || undefined,
+              dob:        dob.ok ? dob.iso : undefined,
+              packages:   packages ?? undefined,
               location:   onboardingData.location?.name    || undefined,
               lat:        onboardingData.location?.lat     ?? undefined,
               lng:        onboardingData.location?.lng     ?? undefined,

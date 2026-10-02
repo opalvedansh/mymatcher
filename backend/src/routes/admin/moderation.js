@@ -6,7 +6,7 @@ const c = require('../../controllers/admin/moderation');
 const { adminMessageLimiter } = require('../../config/adminLimiters');
 const { cursorQuery, limitQuery, requireReason } = require('./_rules');
 
-const TARGET_TYPES = ['user', 'post', 'story', 'message'];
+const TARGET_TYPES = ['user', 'post', 'story', 'message', 'review'];
 const REASONS = ['spam', 'inappropriate', 'harassment', 'fake_profile', 'other'];
 const STATUSES = ['open', 'actioned', 'dismissed'];
 

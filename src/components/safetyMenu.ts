@@ -14,6 +14,7 @@ const TARGET_LABEL: Record<ReportTargetType, string> = {
   post: 'post',
   story: 'story',
   message: 'message',
+  review: 'review',
 };
 
 export function askReportReason(targetType: ReportTargetType, targetId: string) {

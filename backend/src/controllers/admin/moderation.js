@@ -21,16 +21,16 @@ function invalid(message) {
 /**
  * Resolves the reported content for a page of reports.
  *
- * Groups by target_type into at most four queries, and filters ids to real
- * UUIDs first: reports.target_id is TEXT while post/story/message ids are
+ * Groups by target_type into at most five queries, and filters ids to real
+ * UUIDs first: reports.target_id is TEXT while post/story/message/review ids are
  * UUID, so one malformed value in `= ANY($1::uuid[])` would fail the whole
  * query with a 22P02 and take the queue page down with it.
  */
 async function resolveTargets(reports) {
-  const byType = { user: [], post: [], story: [], message: [] };
+  const byType = { user: [], post: [], story: [], message: [], review: [] };
   for (const r of reports) byType[r.target_type]?.push(r.target_id);
 
-  const [users, posts, stories, messages] = await Promise.all([
+  const [users, posts, stories, messages, reviews] = await Promise.all([
     byType.user.length
       ? db.query(
         `SELECT u.id, u.email, u.banned, u.deleted_at, u.created_at,
@@ -70,6 +70,18 @@ async function resolveTargets(reports) {
         [onlyUuids(byType.message)]
       )
       : { rows: [] },
+    byType.review.length
+      ? db.query(
+        `SELECT r.id, r.influencer_id, r.brand_id, r.quote, r.reviewer_name, r.reviewer_title,
+                r.linkedin_url, r.created_at,
+                bp.name AS brand_name, ip.name AS influencer_name
+           FROM creator_reviews r
+           LEFT JOIN brand_profiles      bp ON bp.user_id = r.brand_id
+           LEFT JOIN influencer_profiles ip ON ip.user_id = r.influencer_id
+          WHERE r.id = ANY($1::uuid[])`,
+        [onlyUuids(byType.review)]
+      )
+      : { rows: [] },
   ]);
 
   const index = {
@@ -77,6 +89,7 @@ async function resolveTargets(reports) {
     post: new Map(posts.rows.map((r) => [String(r.id), r])),
     story: new Map(stories.rows.map((r) => [String(r.id), r])),
     message: new Map(messages.rows.map((r) => [String(r.id), { ...r, content: null, content_available: true }])),
+    review: new Map(reviews.rows.map((r) => [String(r.id), r])),
   };
 
   // A missing row means the content is already gone. Say so rather than
@@ -224,6 +237,9 @@ async function applyReportAction(client, { report, action, reason, adminId }) {
       const attachment = old?.attachment ? await openAttachment({ attachment: old.attachment }) : null;
       if (attachment?.path) await removeObjects([attachment.path]);
       effects.push({ type: 'message_redacted', id: report.target_id, applied: rowCount > 0 });
+    } else if (report.target_type === 'review') {
+      const { rowCount } = await client.query('DELETE FROM creator_reviews WHERE id = $1::uuid', [report.target_id]);
+      effects.push({ type: 'review_deleted', id: report.target_id, applied: rowCount > 0 });
     } else {
       throw invalid('delete_content does not apply to a user report; use ban_target');
     }

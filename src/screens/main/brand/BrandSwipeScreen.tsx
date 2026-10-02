@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { InfluencerProfile } from '@/api/types';
@@ -17,11 +17,14 @@ import { MatchBoomModal } from '@/components/MatchBoomModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
 import { showAlert } from '@/components/ActionSheet';
-import { sz, tabBarClearance } from '@/theme/scale';
+import { sz } from '@/theme/scale';
+import { TAB_BAR_HEIGHT } from '@/theme/tabBar';
 import { SwipeDeck, type SwipeDeckHandle, type SwipeDir } from '@/features/swipe/SwipeDeck';
 import { useSwipeQueue } from '@/features/swipe/useSwipeQueue';
 
 const ACCENT = '#FF6B2B';
+// The tab bar covers the bottom safe area; the card stack clears the bar itself.
+const SAFE_EDGES: Edge[] = ['top', 'left', 'right'];
 
 /** 40000 → 40K. Never rounds a real number up into a bigger one. */
 const compact = (n: number) =>
@@ -268,7 +271,7 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
 
 
   return (
-    <SafeAreaView style={ss.safe}>
+    <SafeAreaView style={ss.safe} edges={SAFE_EDGES}>
       {/* Header */}
       <View style={ss.header}>
         <View style={ss.logoRow}>
@@ -340,7 +343,8 @@ const card = StyleSheet.create({
   verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: sz(4), backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: sz(10), paddingVertical: sz(5), borderRadius: sz(20) },
   verifiedTxt: { color: '#FFF', fontSize: sz(11), fontWeight: '600' },
   // info panel
-  infoPanel: { paddingHorizontal: sz(20), paddingTop: sz(14), paddingBottom: tabBarClearance(130), backgroundColor: 'transparent' },
+  // Room for the X / heart row below: its bottom offset + the 50pt heart + a gap.
+  infoPanel: { paddingHorizontal: sz(20), paddingTop: sz(14), paddingBottom: sz(18 + 50 + 16), backgroundColor: 'transparent' },
   infoName: { color: '#fff', fontSize: sz(28), fontWeight: '800' },
   infoCats: { color: 'rgba(255,255,255,0.8)', fontSize: sz(14), marginTop: sz(3) },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: sz(6), gap: sz(4) },
@@ -380,14 +384,15 @@ const ss = StyleSheet.create({
   titleBlock: { paddingHorizontal: sz(20), paddingBottom: sz(12) },
   title: { color: '#fff', fontSize: sz(22), fontWeight: '700' },
   subtitle: { color: '#888', fontSize: sz(13), marginTop: sz(3) },
-  stackArea: { flex: 1, marginHorizontal: sz(16), marginBottom: sz(16), position: 'relative' },
+  // The whole card, rounded corners included, ends just above the tab bar.
+  stackArea: { flex: 1, marginHorizontal: sz(16), marginBottom: TAB_BAR_HEIGHT + sz(12), position: 'relative' },
   cardWrapper: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   stamp: { position: 'absolute', top: sz(40), borderWidth: 4, borderRadius: sz(8), paddingHorizontal: sz(12), paddingVertical: sz(6), zIndex: 10, backgroundColor: 'rgba(0,0,0,0.4)' },
   likeStamp: { left: sz(40), borderColor: '#4CAF50', transform: [{ rotate: '-15deg' }] },
   likeStampTxt: { color: '#4CAF50', fontSize: sz(28), fontWeight: '900', letterSpacing: sz(2) },
   nopeStamp: { right: sz(40), borderColor: '#FF3B30', transform: [{ rotate: '15deg' }] },
   nopeStampTxt: { color: '#FF3B30', fontSize: sz(28), fontWeight: '900', letterSpacing: sz(2) },
-  actionRow: { position: 'absolute', bottom: tabBarClearance(70), left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: sz(28), zIndex: 100 },
+  actionRow: { position: 'absolute', bottom: sz(18), left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: sz(28), zIndex: 100 },
   btnPass: { width: sz(44), height: sz(44), borderRadius: sz(22), backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', boxShadow: '0px 3px 6px rgba(0,0,0,0.18)', elevation: 5 },
   btnLike: { width: sz(50), height: sz(50), borderRadius: sz(25), backgroundColor: '#FF6B2B', justifyContent: 'center', alignItems: 'center', boxShadow: '0px 4px 8px rgba(255,107,43,0.4)', elevation: 7 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },

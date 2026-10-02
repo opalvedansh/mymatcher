@@ -36,7 +36,7 @@ import { MatchrLogo } from '@/components/MatchrLogo';
 import { PremiumIcon, MinimalIcon, BoldIcon, AuthenticIcon, GenzIcon } from '@/components/VibeIcons';
 import { TaskIcon, HeartBubbleIcon, UsersIcon, CashIcon, EventIcon } from '@/components/CampaignIcons';
 import type { BrandProfile, MatchRecord, PaymentMode, Responsiveness } from '@/api/types';
-import { sz } from '@/theme/scale';
+import { sz, tabBarClearance } from '@/theme/scale';
 
 const H = sz(20);
 const PRIMARY = '#F05A28';
@@ -1089,7 +1089,12 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
           <Ionicons name={publicUserId ? 'ellipsis-horizontal' : 'settings-outline'} size={sz(20)} color="#FFF" />
         </Pressable>
       </View>
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={s.scroll}
+        // In the profile tab the last section has to clear the floating tab bar.
+        contentContainerStyle={publicUserId ? s.scrollContent : s.scrollContentInTab}
+        showsVerticalScrollIndicator={false}
+      >
         
         {/* ════ HERO COVER ════ */}
         <View style={s.heroWrapper}>
@@ -1639,6 +1644,7 @@ const s = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: BG },
   scroll:        { flex: 1, backgroundColor: BG },
   scrollContent: { paddingBottom: sz(40) },
+  scrollContentInTab: { paddingBottom: tabBarClearance(40) },
 
   heroWrapper: { position: 'relative', marginBottom: sz(24), height: sz(460) },
   coverBg:     { width: '100%', height: '100%' },

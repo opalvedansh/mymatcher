@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AntDesign } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,58 +12,51 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DismissKeyboard } from '@/components/DismissKeyboard';
+import { PackagePriceEditor } from '@/components/PackagePriceEditor';
 import { colors } from '@/theme/colors';
 import { sz } from '@/theme/scale';
 import { tapFeedback } from '@/utils/optionalModules';
-
-const PACKAGES = [
-  { id: 'story', label: 'Story', description: 'A single 15s Instagram/Snapchat story.' },
-  { id: 'reel', label: 'Reel', description: 'A high-quality short form video up to 60s.' },
-  { id: 'brand_collab', label: 'Brand collaboration', description: 'Dedicated post or series on your feed.' },
-  { id: 'ugc', label: 'UGC', description: 'Raw content created for the brand to use.' },
-];
+import { completePackages, toPackageDrafts, type CreatorPackage } from '@/utils/packages';
 
 export function PricePackagesScreen({
   initialPackages,
   onBack,
   onStart,
 }: {
-  initialPackages?: string[];
+  initialPackages?: unknown;
   onBack?: () => void;
-  onStart?: (selectedPackages: string[]) => void | Promise<void>;
+  onStart?: (packages: CreatorPackage[]) => void | Promise<void>;
 }) {
-  const [selectedPackages, setSelectedPackages] = useState<Set<string>>(
-    () => new Set((initialPackages ?? []).filter((id) => PACKAGES.some((p) => p.id === id))),
-  );
+  const [drafts, setDrafts] = useState(() => toPackageDrafts(initialPackages));
+  // Missing prices are only pointed out once the creator tries to continue.
+  const [showErrors, setShowErrors] = useState(false);
   // Finishing uploads photos and creates the profile, which takes a few
   // seconds; show it's working and block a second tap meanwhile.
   const [submitting, setSubmitting] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const packages = completePackages(drafts);
 
   const handleStart = async () => {
-    if (submitting) return;
+    if (submitting || drafts.length === 0) return;
+    if (!packages) {
+      setShowErrors(true);
+      return;
+    }
     tapFeedback();
     setSubmitting(true);
     try {
-      await onStart?.(Array.from(selectedPackages));
+      await onStart?.(packages);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const togglePackage = (id: string) => {
-    const newSelected = new Set(selectedPackages);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    tapFeedback('selection');
-    setSelectedPackages(newSelected);
-  };
-
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      {/* Keeps Start above the keyboard while a price is being typed. */}
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Header */}
         <Pressable
           onPress={onBack}
@@ -73,61 +68,44 @@ export function PricePackagesScreen({
           <AntDesign name="arrow-left" size={sz(20)} color={colors.text} />
         </Pressable>
 
-        <ScrollView 
-          style={styles.scrollView} 
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
         >
-          {/* Text Content */}
-          <View style={styles.textContainer}>
-            <Text style={styles.title}>Enter your{'\n'}price{'\n'}packages</Text>
-            <Text style={styles.subtitle}>
-              Write about your charges according to the deliverables.
-            </Text>
-          </View>
+          <DismissKeyboard>
+            <View style={styles.textContainer}>
+              <Text style={styles.title}>Enter your{'\n'}price{'\n'}packages</Text>
+              <Text style={styles.subtitle}>
+                Pick what you offer and set your price for each. Brands see these on your profile.
+              </Text>
+            </View>
+          </DismissKeyboard>
 
-          {/* Packages List */}
-          <View style={styles.packagesContainer}>
-            {PACKAGES.map((pkg) => {
-              const isSelected = selectedPackages.has(pkg.id);
-              return (
-                <Pressable
-                  key={pkg.id}
-                  style={({ pressed }) => [
-                    styles.packageCard,
-                    isSelected && styles.packageCardSelected,
-                    pressed && styles.cardPressed,
-                  ]}
-                  onPress={() => togglePackage(pkg.id)}
-                >
-                  <View style={styles.packageCardContent}>
-                    <Text style={[styles.packageText, isSelected && styles.packageTextSelected]}>
-                      {pkg.label}
-                    </Text>
-                    {/* Optional: Add a subtle description for more professional feel */}
-                    <Text style={[styles.packageDescription, isSelected && styles.packageDescriptionSelected]}>
-                      {pkg.description}
-                    </Text>
-                  </View>
-                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                    {isSelected && <AntDesign name="check" size={sz(14)} color="#000000" />}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+          <PackagePriceEditor
+            drafts={drafts}
+            onChange={setDrafts}
+            showErrors={showErrors}
+            scrollRef={scrollRef}
+          />
         </ScrollView>
 
         {/* Footer */}
         <View style={styles.footer}>
+          {showErrors && !packages && drafts.length > 0 && (
+            <Text style={styles.hint}>Add a price for each package you picked.</Text>
+          )}
           <Pressable
             style={({ pressed }) => [
               styles.startButton,
-              selectedPackages.size === 0 && styles.startButtonDisabled,
+              (drafts.length === 0 || (showErrors && !packages)) && styles.startButtonDisabled,
               pressed && styles.pressed,
             ]}
-            disabled={selectedPackages.size === 0 || submitting}
-            accessibilityState={{ busy: submitting, disabled: selectedPackages.size === 0 || submitting }}
+            disabled={drafts.length === 0 || submitting}
+            accessibilityState={{ busy: submitting, disabled: drafts.length === 0 || submitting }}
             onPress={handleStart}
           >
             {submitting ? (
@@ -137,7 +115,7 @@ export function PricePackagesScreen({
             )}
           </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -180,65 +158,16 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     paddingRight: sz(20),
   },
-  packagesContainer: {
-    gap: sz(16),
-  },
-  packageCard: {
-    width: '100%',
-    minHeight: sz(86),
-    paddingVertical: sz(16),
-    paddingHorizontal: sz(20),
-    borderRadius: sz(16),
-    borderWidth: 1.5,
-    borderColor: '#262626',
-    backgroundColor: '#0A0A0A',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  packageCardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(255, 90, 31, 0.05)',
-  },
-  packageCardContent: {
-    flex: 1,
-    paddingRight: sz(16),
-  },
-  packageText: {
-    color: '#E0E0E0',
-    fontSize: sz(16),
-    fontWeight: '600',
-    marginBottom: sz(4),
-  },
-  packageTextSelected: {
-    color: colors.primary,
-  },
-  packageDescription: {
-    color: '#666666',
-    fontSize: sz(12),
-    lineHeight: sz(16),
-  },
-  packageDescriptionSelected: {
-    color: '#A0A0A0',
-  },
-  checkbox: {
-    width: sz(24),
-    height: sz(24),
-    borderRadius: sz(12),
-    borderWidth: 1.5,
-    borderColor: '#444444',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  checkboxSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
   footer: {
     paddingHorizontal: sz(20),
-    paddingTop: sz(16),
+    paddingTop: sz(12),
     backgroundColor: colors.background, // ensures it covers content if it scrolls under
+  },
+  hint: {
+    color: '#FF6B6B',
+    fontSize: sz(13),
+    textAlign: 'center',
+    marginBottom: sz(10),
   },
   startButton: {
     backgroundColor: colors.primary,
@@ -258,5 +187,4 @@ const styles = StyleSheet.create({
   },
   pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
   backPressed: { opacity: 0.6 },
-  cardPressed: { transform: [{ scale: 0.99 }], opacity: 0.85 },
 });

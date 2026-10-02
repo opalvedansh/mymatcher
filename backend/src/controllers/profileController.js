@@ -6,6 +6,8 @@ const { isOwnUploadUrl } = require('../utils/storage');
 const sharedCache = require('../utils/sharedCache');
 const feedDeck = require('../services/feedDeck');
 const { prepareReels, persistSyncedThumbnails } = require('../services/reelThumbnails');
+const { ageFromDob } = require('../utils/dob');
+const { parseLinkedinUrl } = require('../utils/linkedin');
 
 // ─── Helper: fetch full profile by userId + role (explicit columns) ──
 async function fetchProfile(userId, role) {
@@ -33,10 +35,14 @@ async function fetchProfile(userId, role) {
       `SELECT
          p.user_id, p.name, p.avatar_url, p.cover_url, p.bio,
          p.categories, p.location, p.lat, p.lng,
-         p.age, p.gender, p.platforms, p.photos, p.reels,
+         -- Worked out from the date of birth on every read so it never goes
+         -- stale; the date itself is never returned.
+         COALESCE(date_part('year', age(p.dob))::int, p.age) AS age,
+         p.gender, p.platforms, p.photos, p.reels,
          p.followers, p.engagement_rate, p.avg_views,
          p.price_min, p.price_max, p.verified, p.updated_at,
          p.instagram_handle, p.instagram_synced_at, p.worked_with, p.linkedin_reviews,
+         p.packages,
          u.email, u.role, u.created_at AS member_since
        FROM influencer_profiles p
        JOIN users u ON u.id = p.user_id
@@ -57,8 +63,33 @@ const PRIVATE_PROFILE_FIELDS = [
   'verification_status', 'verification_note',
 ];
 
+// Mirrors PACKAGE_OPTIONS in the app's src/utils/packages.ts.
+const PACKAGE_TYPES = ['story', 'reel', 'ugc', 'brand_collab'];
+const MAX_PACKAGE_PRICE = 10000000; // ₹1 crore
+
+// Validates the full replacement list of a creator's packages: each a known
+// type at most once, priced in whole rupees. Returns the list in display
+// order, or throws an error with status 400 describing the first problem.
+function cleanPackages(packages) {
+  const fail = (message) => Object.assign(new Error(message), { status: 400 });
+  if (!Array.isArray(packages) || packages.length > PACKAGE_TYPES.length) {
+    throw fail(`packages must be a list of up to ${PACKAGE_TYPES.length} packages`);
+  }
+  const byType = new Map();
+  for (const p of packages) {
+    if (!p || typeof p !== 'object' || !PACKAGE_TYPES.includes(p.type)) {
+      throw fail(`Each package needs a type: ${PACKAGE_TYPES.join(', ')}`);
+    }
+    if (byType.has(p.type)) throw fail('Each package can only be listed once');
+    if (!Number.isInteger(p.price) || p.price < 1 || p.price > MAX_PACKAGE_PRICE) {
+      throw fail('Each package needs a price in whole rupees, up to ₹1 crore');
+    }
+    byType.set(p.type, { type: p.type, price: p.price });
+  }
+  return PACKAGE_TYPES.filter((t) => byType.has(t)).map((t) => byType.get(t));
+}
+
 const MAX_LINKEDIN_REVIEWS = 10;
-const LINKEDIN_HOST = /(^|\.)(linkedin\.com|lnkd\.in)$/i;
 
 // Validates the full replacement list of LinkedIn reviews. Returns the cleaned
 // list, or throws an error with status 400 describing the first problem.
@@ -82,15 +113,8 @@ function cleanLinkedinReviews(reviews) {
     if (!reviewerName || reviewerName.length > 80) throw fail('Reviewer name is required (up to 80 characters)');
     if (reviewerTitle.length > 100) throw fail('Reviewer role must be up to 100 characters');
 
-    let url;
-    try {
-      url = new URL(rawUrl);
-    } catch {
-      throw fail('Each review needs a valid LinkedIn link');
-    }
-    if (url.protocol !== 'https:' || !LINKEDIN_HOST.test(url.hostname)) {
-      throw fail('Review links must point to linkedin.com');
-    }
+    const url = parseLinkedinUrl(rawUrl);
+    if (!url) throw fail('Review links must point to linkedin.com');
 
     let id = str(r.id);
     if (!/^[\w-]{1,40}$/.test(id) || ids.has(id)) id = crypto.randomUUID();
@@ -102,7 +126,7 @@ function cleanLinkedinReviews(reviews) {
       quote,
       reviewer_name: reviewerName,
       reviewer_title: reviewerTitle || null,
-      linkedin_url: url.toString(),
+      linkedin_url: url,
       added_at: Number.isNaN(addedAt) ? new Date().toISOString() : new Date(addedAt).toISOString(),
     };
   });
@@ -193,9 +217,12 @@ async function updateMyProfile(req, res, next) {
       // verification and the Instagram sync may set them.
       const {
         name, avatar_url, cover_url, bio, categories,
-        location, lat, lng, age, gender, platforms, photos, reels,
-        price_min, price_max, instagram_handle, worked_with, linkedin_reviews
+        location, lat, lng, gender, platforms, photos, reels,
+        instagram_handle, worked_with, linkedin_reviews, dob, packages
       } = req.body;
+      let { price_min, price_max } = req.body;
+      // The route has already checked dob; keep the stored age in step with it.
+      const age = dob ? ageFromDob(dob) : req.body.age;
 
       let cleanReviews = null;
       if (linkedin_reviews !== undefined && linkedin_reviews !== null) {
@@ -205,6 +232,21 @@ async function updateMyProfile(req, res, next) {
           if (err.status === 400) return res.status(400).json({ error: err.message });
           throw err;
         }
+      }
+
+      let cleanPackageList = null;
+      if (packages !== undefined && packages !== null) {
+        try {
+          cleanPackageList = cleanPackages(packages);
+        } catch (err) {
+          if (err.status === 400) return res.status(400).json({ error: err.message });
+          throw err;
+        }
+        // The price range the feed matches against brand budgets comes from
+        // the packages; 0/0 means the creator has not priced anything.
+        const prices = cleanPackageList.map((p) => p.price);
+        price_min = prices.length ? Math.min(...prices) : 0;
+        price_max = prices.length ? Math.max(...prices) : 0;
       }
 
       let cleanPlatforms = null;
@@ -264,7 +306,9 @@ async function updateMyProfile(req, res, next) {
           price_max       = COALESCE($15, price_max),
           instagram_handle = COALESCE($16, instagram_handle),
           worked_with     = COALESCE($17, worked_with),
-          linkedin_reviews = COALESCE($18::jsonb, linkedin_reviews)
+          linkedin_reviews = COALESCE($18::jsonb, linkedin_reviews),
+          dob             = COALESCE($20::date, dob),
+          packages        = COALESCE($21::jsonb, packages)
         WHERE user_id = $19`,
         [name, avatar_url, cover_url, bio, categories,
          location, lat, lng, age, gender, cleanPlatforms, photos,
@@ -273,7 +317,9 @@ async function updateMyProfile(req, res, next) {
          instagram_handle,
          cleanWorkedWith,
          cleanReviews ? JSON.stringify(cleanReviews) : null,
-         userId]
+         userId,
+         dob || null,
+         cleanPackageList ? JSON.stringify(cleanPackageList) : null]
       );
     }
 

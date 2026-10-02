@@ -19,6 +19,8 @@ import type {
   ProfileUpdate,
   Responsiveness,
   BrandRating,
+  CreatorReviews,
+  CreatorReviewInput,
   VerificationRequestResult,
   UserRole,
   ChatResponse,
@@ -184,6 +186,21 @@ export function removeBrandRating(brandId: string) {
   return api.delete<{ removed: number }>(`/api/ratings/${encodeURIComponent(brandId)}`);
 }
 
+// ─── LinkedIn reviews of a creator ────────────────────────────────
+
+export function getCreatorReviews(creatorId: string) {
+  return api.get<CreatorReviews>(`/api/reviews/${encodeURIComponent(creatorId)}`);
+}
+
+/** Only a brand that matched with the creator may review them; writing again edits it. */
+export function reviewCreator(creatorId: string, review: CreatorReviewInput) {
+  return api.put<CreatorReviews>(`/api/reviews/${encodeURIComponent(creatorId)}`, review);
+}
+
+export function removeCreatorReview(creatorId: string) {
+  return api.delete<CreatorReviews>(`/api/reviews/${encodeURIComponent(creatorId)}`);
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────
 
 export function getMessages(matchId: string, limit = 50, cursor?: string) {
@@ -237,7 +254,7 @@ export function getStoryViewers(storyId: string) {
 
 // ─── Trust & safety ───────────────────────────────────────────────
 
-export type ReportTargetType = 'user' | 'post' | 'story' | 'message';
+export type ReportTargetType = 'user' | 'post' | 'story' | 'message' | 'review';
 export type ReportReason = 'spam' | 'inappropriate' | 'harassment' | 'fake_profile' | 'other';
 
 export function blockUser(userId: string) {

@@ -7,7 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { BrandProfile } from '@/api/types';
@@ -16,12 +16,15 @@ import { MatchBoomModal } from '@/components/MatchBoomModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { showAlert } from '@/components/ActionSheet';
 import { NotificationBell } from '@/components/NotificationBell';
-import { sz, tabBarClearance } from '@/theme/scale';
+import { sz } from '@/theme/scale';
+import { TAB_BAR_HEIGHT } from '@/theme/tabBar';
 import { SwipeDeck, type SwipeDeckHandle, type SwipeDir } from '@/features/swipe/SwipeDeck';
 import { useSwipeQueue } from '@/features/swipe/useSwipeQueue';
 
 
 const ACCENT = '#FF6B2B';
+// The tab bar covers the bottom safe area; the card stack clears the bar itself.
+const SAFE_EDGES: Edge[] = ['top', 'left', 'right'];
 
 type CardItem = {
   id: string;
@@ -267,7 +270,7 @@ export function SwipeScreen({ onViewProfile, onNavigateToMessages }: { onViewPro
 
 
   return (
-    <SafeAreaView style={ss.safe}>
+    <SafeAreaView style={ss.safe} edges={SAFE_EDGES}>
       {/* ── Header ── */}
       <View style={ss.header}>
         <View style={ss.logoRow}>
@@ -344,7 +347,7 @@ const card = StyleSheet.create({
     backgroundColor: '#1C1C1C',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: tabBarClearance(180),
+    paddingBottom: sz(180),
   },
   fallbackInitial: { color: '#333', fontSize: sz(120), fontWeight: '800' },
   skeleton: { flex: 1, backgroundColor: '#1A1A1A' },
@@ -401,7 +404,8 @@ const card = StyleSheet.create({
   infoPanel: {
     paddingHorizontal: sz(20),
     paddingTop: sz(14),
-    paddingBottom: tabBarClearance(130), // increased space for the overlapping buttons
+    // Room for the X / heart row below: its bottom offset + the 64pt heart + a gap.
+    paddingBottom: sz(18 + 64 + 16),
     backgroundColor: 'transparent',
   },
   infoName: {
@@ -482,20 +486,21 @@ const ss = StyleSheet.create({
     marginTop: sz(3),
   },
   // The area that holds both the stacked cards AND the floating buttons
+  // The whole card, rounded corners included, ends just above the tab bar.
   stackArea: {
     flex: 1,
     marginHorizontal: sz(16),
-    marginBottom: sz(16),
+    marginBottom: TAB_BAR_HEIGHT + sz(12),
     position: 'relative',
   },
   cardWrapper: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
   },
-  // Buttons are positioned absolutely inside stackArea, near the bottom
+  // Buttons sit near the card's bottom edge, below the stats row
   actionRow: {
     position: 'absolute',
-    bottom: tabBarClearance(70),
+    bottom: sz(18),
     left: 0,
     right: 0,
     flexDirection: 'row',

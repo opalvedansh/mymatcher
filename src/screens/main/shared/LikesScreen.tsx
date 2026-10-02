@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   FlatList,
-  Platform,
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
@@ -20,9 +19,9 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { sz, tabBarClearance } from '@/theme/scale';
 
 const GRID_SPACING = sz(16);
-// tabBarClearance already adds Android's bottom inset to the list padding, so
-// only iOS keeps the bottom edge (as the old react-native SafeAreaView did).
-const SAFE_EDGES: Edge[] | undefined = Platform.OS === 'android' ? ['top', 'left', 'right'] : undefined;
+// The tab bar covers the bottom safe area and tabBarClearance already adds
+// it to the list padding, so the bottom edge is left out here.
+const SAFE_EDGES: Edge[] = ['top', 'left', 'right'];
 // Placeholder cards shown blurred when there is nothing to show yet.
 const DUMMIES = [1, 2, 3, 4];
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -15,20 +15,22 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { FontAwesome6, Ionicons } from '@expo/vector-icons';
-import type { LinkedinReview } from '@/api/types';
+import { FontAwesome6, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { getCreatorReviews, removeCreatorReview, reviewCreator } from '@/api';
+import type { CreatorReview, CreatorReviews } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { showAlert } from '@/components/ActionSheet';
+import { openSafetyMenu } from '@/components/safetyMenu';
+import { useAuth } from '@/contexts/AuthContext';
 import { sz } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 const LINKEDIN_BLUE = '#0A66C2';
 const DANGER = '#FF6B6B';
 const PLACEHOLDER = '#8A8A8A';
-const MAX_REVIEWS = 10;
 const QUOTE_MIN = 10;
 const QUOTE_MAX = 600;
-// Mirrors the server check in profileController.cleanLinkedinReviews.
+// Mirrors the server check in backend/src/utils/linkedin.js.
 const LINKEDIN_URL = /^https:\/\/([a-z0-9-]+\.)*(linkedin\.com|lnkd\.in)(\/|$)/i;
 
 // react-native-web passes hover/focus to Pressable style callbacks; native typings only declare `pressed`.
@@ -53,11 +55,21 @@ function validate(draft: Draft): DraftErrors {
   const quote = draft.quote.trim();
   if (quote.length < QUOTE_MIN) errors.quote = `Add at least ${QUOTE_MIN} characters.`;
   else if (quote.length > QUOTE_MAX) errors.quote = `Keep it under ${QUOTE_MAX} characters.`;
-  if (!draft.name.trim()) errors.name = 'Add the name of the person who wrote it.';
+  if (!draft.name.trim()) errors.name = 'Add your name.';
   if (!LINKEDIN_URL.test(normalizeUrl(draft.url))) {
-    errors.url = 'Paste a linkedin.com link to the recommendation or the reviewer’s profile.';
+    errors.url = 'Paste a linkedin.com link to your profile or the recommendation.';
   }
   return errors;
+}
+
+// A 422 lists its reasons in `detail`; a 403 says why in `message`.
+function saveErrorMessage(e: unknown) {
+  if (e instanceof ApiError) {
+    const reasons = e.detail as unknown;
+    if (e.status === 422 && Array.isArray(reasons) && reasons[0]?.message) return String(reasons[0].message);
+    if (e.status === 403 || e.status === 400) return e.message;
+  }
+  return 'Could not save. Check your connection and try again.';
 }
 
 function initials(name: string) {
@@ -72,16 +84,20 @@ function initials(name: string) {
 function ReviewCard({
   review,
   width,
-  editable,
+  mine,
   onEdit,
+  onMore,
 }: {
-  review: LinkedinReview;
+  review: CreatorReview;
   width: number;
-  editable: boolean;
+  /** Written by the brand viewing it, which can edit it. */
+  mine: boolean;
   onEdit: () => void;
+  onMore: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = review.quote.length > 220;
+  const brandName = review.brand_name || 'a brand';
 
   return (
     <View style={[styles.card, { width }]}>
@@ -89,17 +105,15 @@ function ReviewCard({
         <View style={styles.linkedinMark}>
           <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
         </View>
-        {editable && (
-          <Pressable
-            onPress={onEdit}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel={`Edit review from ${review.reviewer_name}`}
-            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="pencil" size={sz(14)} color="#BDBDBD" />
-          </Pressable>
-        )}
+        <Pressable
+          onPress={mine ? onEdit : onMore}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={mine ? 'Edit your review' : `Report or block ${brandName}`}
+          style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+        >
+          <Ionicons name={mine ? 'pencil' : 'ellipsis-horizontal'} size={sz(14)} color="#BDBDBD" />
+        </Pressable>
       </View>
 
       <Text style={styles.quote} numberOfLines={expanded ? undefined : 6}>
@@ -123,6 +137,13 @@ function ReviewCard({
         </View>
       </View>
 
+      <View style={styles.brandRow}>
+        <Text style={styles.brandText} numberOfLines={1}>Matched brand · {review.brand_name || 'Brand'}</Text>
+        {review.brand_verified && (
+          <MaterialCommunityIcons name="check-decagram" size={sz(13)} color={ACCENT} accessibilityLabel="Verified brand" />
+        )}
+      </View>
+
       <Pressable
         onPress={() => Linking.openURL(review.linkedin_url).catch(() => {})}
         accessibilityRole="link"
@@ -135,20 +156,24 @@ function ReviewCard({
   );
 }
 
+/**
+ * LinkedIn reviews of a creator. Only a brand that has matched with the
+ * creator can add one (one each, editable); the creator only reads them.
+ * Whether the viewer may add one is the server's call (`can_review`).
+ */
 export function LinkedinReviews({
-  reviews,
-  editable,
-  ownerName,
-  onSave,
+  creatorId,
+  creatorName,
+  isOwnProfile,
 }: {
-  reviews: LinkedinReview[];
-  editable: boolean;
-  ownerName: string;
-  /** Persists the full list; should throw on failure. */
-  onSave: (next: LinkedinReview[]) => Promise<void>;
+  creatorId: string;
+  creatorName: string;
+  isOwnProfile: boolean;
 }) {
+  const { user } = useAuth();
   const { width } = useWindowDimensions();
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [data, setData] = useState<CreatorReviews | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [errors, setErrors] = useState<DraftErrors>({});
@@ -156,6 +181,20 @@ export function LinkedinReviews({
   const [saving, setSaving] = useState(false);
   const [focusedField, setFocusedField] = useState<keyof Draft | null>(null);
   const sheetAnim = useRef(new Animated.Value(0)).current;
+
+  const load = useCallback(async () => {
+    setLoadFailed(false);
+    try {
+      setData(await getCreatorReviews(creatorId));
+    } catch (e) {
+      console.warn('[API] getCreatorReviews failed:', e);
+      setLoadFailed(true);
+    }
+  }, [creatorId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useEffect(() => {
     if (!isFormOpen) return;
@@ -171,7 +210,41 @@ export function LinkedinReviews({
       });
   }, [isFormOpen, sheetAnim]);
 
-  if (!editable && reviews.length === 0) return null;
+  // Until the reviews arrive (or if they can't), the section still shows on
+  // the creator's own profile, and a failed load offers a retry to anyone,
+  // rather than the section silently vanishing.
+  if (!data) {
+    if (!isOwnProfile && !loadFailed) return null;
+    return (
+      <View style={styles.section}>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>LinkedIn reviews</Text>
+        </View>
+        {loadFailed ? (
+          <Pressable
+            onPress={load}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
+          >
+            <View style={styles.linkedinMark}>
+              <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.emptyTitle}>Couldn't load reviews</Text>
+              <Text style={styles.emptyBody}>Check your connection and tap to try again.</Text>
+            </View>
+            <Ionicons name="refresh" size={sz(22)} color="#BDBDBD" />
+          </Pressable>
+        ) : (
+          <View style={[styles.emptyCard, { justifyContent: 'center' }]}>
+            <ActivityIndicator color="#BDBDBD" />
+          </View>
+        )}
+      </View>
+    );
+  }
+  const { reviews, my_review: myReview, can_review: canReview } = data;
+  if (!isOwnProfile && reviews.length === 0 && !canReview) return null;
 
   const sheetTranslate = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [60, 0] });
   const quoteLength = draft.quote.trim().length;
@@ -180,13 +253,12 @@ export function LinkedinReviews({
 
   const contentWidth = Math.min(width, 560) - sz(40); // profile content has 20px side padding
   const cardWidth = reviews.length > 1 ? Math.min(contentWidth - sz(28), sz(340)) : contentWidth;
-  const firstName = ownerName.split(' ')[0] || 'the creator';
+  const firstName = creatorName.split(' ')[0] || 'this creator';
 
-  const openForm = (review?: LinkedinReview) => {
-    setEditingId(review?.id ?? null);
+  const openForm = () => {
     setDraft(
-      review
-        ? { quote: review.quote, name: review.reviewer_name, title: review.reviewer_title || '', url: review.linkedin_url }
+      myReview
+        ? { quote: myReview.quote, name: myReview.reviewer_name, title: myReview.reviewer_title || '', url: myReview.linkedin_url }
         : emptyDraft,
     );
     setErrors({});
@@ -198,16 +270,14 @@ export function LinkedinReviews({
     if (!saving) setIsFormOpen(false);
   };
 
-  const persist = async (next: LinkedinReview[]) => {
+  const run = async (request: () => Promise<CreatorReviews>) => {
     setSaving(true);
     setSubmitError(null);
     try {
-      await onSave(next);
+      setData(await request());
       setIsFormOpen(false);
     } catch (e) {
-      setSubmitError(
-        e instanceof ApiError && e.status === 400 ? e.message : 'Could not save. Check your connection and try again.',
-      );
+      setSubmitError(saveErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -218,23 +288,18 @@ export function LinkedinReviews({
     setErrors(found);
     if (Object.keys(found).length > 0) return;
 
-    const entry: LinkedinReview = {
-      id: editingId || `rev-${Date.now().toString(36)}`,
+    run(() => reviewCreator(creatorId, {
       quote: draft.quote.trim(),
       reviewer_name: draft.name.trim(),
       reviewer_title: draft.title.trim() || null,
       linkedin_url: normalizeUrl(draft.url),
-      added_at: reviews.find(r => r.id === editingId)?.added_at || new Date().toISOString(),
-    };
-    persist(editingId ? reviews.map(r => (r.id === editingId ? entry : r)) : [entry, ...reviews]);
+    }));
   };
 
   const confirmDelete = () => {
-    const target = reviews.find(r => r.id === editingId);
-    if (!target) return;
-    showAlert('Remove this review?', `The review from ${target.reviewer_name} will no longer show on your profile.`, [
+    showAlert('Remove your review?', `It will no longer show on ${firstName}'s profile.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => persist(reviews.filter(r => r.id !== editingId)) },
+      { text: 'Remove', style: 'destructive', onPress: () => run(() => removeCreatorReview(creatorId)) },
     ]);
   };
 
@@ -248,15 +313,17 @@ export function LinkedinReviews({
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>LinkedIn reviews</Text>
-          {reviews.length > 0 && (
+          {(reviews.length > 0 || isOwnProfile) && (
             <Text style={styles.subtitle}>
-              {editable ? 'Added by you, each linked to LinkedIn' : `Added by ${firstName}, each linked to LinkedIn`}
+              {isOwnProfile
+                ? 'From brands you have matched with, each linked to LinkedIn'
+                : `From brands ${firstName} has matched with, each linked to LinkedIn`}
             </Text>
           )}
         </View>
-        {editable && reviews.length > 0 && reviews.length < MAX_REVIEWS && (
+        {canReview && !myReview && reviews.length > 0 && (
           <Pressable
-            onPress={() => openForm()}
+            onPress={openForm}
             accessibilityRole="button"
             style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
           >
@@ -267,20 +334,32 @@ export function LinkedinReviews({
       </View>
 
       {reviews.length === 0 ? (
-        <Pressable
-          onPress={() => openForm()}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
-        >
-          <View style={styles.linkedinMark}>
-            <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
+        canReview ? (
+          <Pressable
+            onPress={openForm}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
+          >
+            <View style={styles.linkedinMark}>
+              <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.emptyTitle}>Add a LinkedIn review</Text>
+              <Text style={styles.emptyBody}>You matched with {firstName}. Tell other brands how working with them went.</Text>
+            </View>
+            <Ionicons name="add-circle" size={sz(26)} color={ACCENT} />
+          </Pressable>
+        ) : (
+          <View style={styles.emptyCard}>
+            <View style={styles.linkedinMark}>
+              <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.emptyTitle}>No LinkedIn reviews yet</Text>
+              <Text style={styles.emptyBody}>Brands you match with can add one here, linked to their LinkedIn.</Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.emptyTitle}>Add a LinkedIn review</Text>
-            <Text style={styles.emptyBody}>Show brands what past clients said, with a link to the original.</Text>
-          </View>
-          <Ionicons name="add-circle" size={sz(26)} color={ACCENT} />
-        </Pressable>
+        )
       ) : (
         <ScrollView
           horizontal
@@ -296,8 +375,14 @@ export function LinkedinReviews({
               key={review.id}
               review={review}
               width={cardWidth}
-              editable={editable}
-              onEdit={() => openForm(review)}
+              mine={!!user?.id && review.brand_id === user.id}
+              onEdit={openForm}
+              onMore={() => openSafetyMenu({
+                userId: review.brand_id,
+                name: review.brand_name || 'this brand',
+                target: { type: 'review', id: review.id },
+                onBlocked: load,
+              })}
             />
           ))}
         </ScrollView>
@@ -316,10 +401,10 @@ export function LinkedinReviews({
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sheetTitle} accessibilityRole="header">
-                    {editingId ? 'Edit review' : 'Add LinkedIn review'}
+                    {myReview ? 'Edit your review' : 'Add LinkedIn review'}
                   </Text>
                   <Text style={styles.sheetSubtitle}>
-                    Copy a recommendation from your LinkedIn profile. Brands can open the link to check it.
+                    Your review shows on {firstName}'s profile with your brand name. Add your LinkedIn so other brands can check who wrote it.
                   </Text>
                 </View>
                 <Pressable
@@ -356,7 +441,7 @@ export function LinkedinReviews({
                     onChangeText={setField('quote')}
                     onFocus={() => setFocusedField('quote')}
                     onBlur={() => setFocusedField(null)}
-                    placeholder="What they wrote about working with you"
+                    placeholder={`What was it like working with ${firstName}?`}
                     placeholderTextColor={PLACEHOLDER}
                     multiline
                     maxLength={QUOTE_MAX + 50}
@@ -370,10 +455,10 @@ export function LinkedinReviews({
                 {errors.quote ? (
                   <Text style={styles.fieldError}>{errors.quote}</Text>
                 ) : (
-                  <Text style={styles.fieldHelp}>Paste it exactly as it appears on LinkedIn.</Text>
+                  <Text style={styles.fieldHelp}>Keep it about the collaboration.</Text>
                 )}
 
-                <Text style={[styles.groupLabel, { marginTop: sz(24) }]}>Reviewer</Text>
+                <Text style={[styles.groupLabel, { marginTop: sz(24) }]}>Written by</Text>
                 <View style={styles.group}>
                   <FieldRow
                     icon="person-outline"
@@ -391,7 +476,7 @@ export function LinkedinReviews({
                       placeholderTextColor={PLACEHOLDER}
                       maxLength={80}
                       autoCapitalize="words"
-                      accessibilityLabel="Reviewer name"
+                      accessibilityLabel="Your name"
                     />
                   </FieldRow>
                   <FieldRow
@@ -410,12 +495,12 @@ export function LinkedinReviews({
                       placeholder="e.g. Brand Manager at Mamaearth"
                       placeholderTextColor={PLACEHOLDER}
                       maxLength={100}
-                      accessibilityLabel="Reviewer role and company"
+                      accessibilityLabel="Your role and company"
                     />
                   </FieldRow>
                   <FieldRow
                     icon="link-outline"
-                    label="LinkedIn link"
+                    label="Your LinkedIn"
                     focused={focusedField === 'url'}
                     error={errors.url}
                     last
@@ -426,7 +511,7 @@ export function LinkedinReviews({
                       onChangeText={setField('url')}
                       onFocus={() => setFocusedField('url')}
                       onBlur={() => setFocusedField(null)}
-                      placeholder="linkedin.com/in/..."
+                      placeholder="linkedin.com/in/your-profile"
                       placeholderTextColor={PLACEHOLDER}
                       autoCapitalize="none"
                       autoCorrect={false}
@@ -440,7 +525,7 @@ export function LinkedinReviews({
               <View style={styles.sheetFooter}>
                 {submitError && <Text style={[styles.fieldError, { marginBottom: sz(12) }]}>{submitError}</Text>}
                 <View style={styles.footerRow}>
-                  {editingId && (
+                  {myReview && (
                     <Pressable
                       onPress={confirmDelete}
                       disabled={saving}
@@ -465,7 +550,7 @@ export function LinkedinReviews({
                     {saving ? (
                       <ActivityIndicator color="#FFF" />
                     ) : (
-                      <Text style={styles.saveButtonText}>{editingId ? 'Save changes' : 'Save review'}</Text>
+                      <Text style={styles.saveButtonText}>{myReview ? 'Save changes' : 'Post review'}</Text>
                     )}
                   </Pressable>
                 </View>
@@ -552,6 +637,8 @@ const styles = StyleSheet.create({
   initialsText: { color: '#FFF', fontSize: sz(14), fontWeight: '700' },
   reviewerName: { color: '#FFF', fontSize: sz(15), fontWeight: '600' },
   reviewerTitle: { color: '#9A9A9A', fontSize: sz(12), marginTop: sz(2) },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: sz(5), marginTop: sz(12) },
+  brandText: { color: '#9A9A9A', fontSize: sz(12), flexShrink: 1 },
   viewLink: {
     flexDirection: 'row', alignItems: 'center', gap: sz(6), alignSelf: 'flex-start',
     marginTop: sz(16), paddingTop: sz(14), borderTopWidth: StyleSheet.hairlineWidth,

@@ -8,6 +8,7 @@ const { cache } = require('../middleware/cacheMiddleware');
 const { getMyProfile, updateMyProfile, getProfileById, getMyResponsiveness, requestVerification, verifyFace, syncInstagram, searchInstagram } = require('../controllers/profileController');
 const { requireRole } = require('../middleware/auth');
 const { isBlockedBetween } = require('../utils/blocks');
+const { MIN_AGE, ageFromDob } = require('../utils/dob');
 const { redisStore, limiterDefaults } = require('../config/rateLimitStore');
 
 // Runs before the response cache, since cached profiles are shared by all viewers.
@@ -34,6 +35,13 @@ const profileRules = [
   // '' clears the mode; anything else has to be one the profile can render.
   body('payment_mode').optional().isIn(['', 'bank_transfer', 'upi', 'cheque', 'paypal']),
   body('payment_days').optional().isInt({ min: 0, max: 90 }).toInt(),
+  body('dob').optional().custom((value) => {
+    const age = ageFromDob(value);
+    if (age === null) throw new Error('dob must be a real past date as YYYY-MM-DD');
+    if (age < MIN_AGE) throw new Error(`You need to be at least ${MIN_AGE} to use Matchr`);
+    return true;
+  }),
+  body('packages').optional().isArray({ max: 4 }),
   body('price_min').optional().isNumeric().toInt(),
   body('price_max').optional().isNumeric().toInt(),
   body('lat').optional().isFloat().toFloat(),
