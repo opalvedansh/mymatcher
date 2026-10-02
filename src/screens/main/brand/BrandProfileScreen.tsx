@@ -1634,7 +1634,8 @@ export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
       {/* ════ EDIT MODAL ════ */}
       {!publicUserId && (
         <CampaignDetailsSheet
-          key={editSession}
+          // Siblings: each key is prefixed so the two counters never collide.
+          key={`edit-${editSession}`}
           visible={editModalVisible}
           profile={profile}
           onClose={closeEditModal}
@@ -1645,7 +1646,7 @@ export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
       {/* ════ BUSINESS VERIFICATION ════ */}
       {!publicUserId && (
         <VerifySheet
-          key={verifySession}
+          key={`verify-${verifySession}`}
           visible={verifyVisible}
           initialName={profile.verification_business_name || profile.name || ''}
           onClose={closeVerifyModal}
