@@ -186,7 +186,7 @@ export function removeBrandRating(brandId: string) {
   return api.delete<{ removed: number }>(`/api/ratings/${encodeURIComponent(brandId)}`);
 }
 
-// ─── LinkedIn reviews of a creator ────────────────────────────────
+// ─── Reviews of a creator ─────────────────────────────────────────
 
 export function getCreatorReviews(creatorId: string) {
   return api.get<CreatorReviews>(`/api/reviews/${encodeURIComponent(creatorId)}`);

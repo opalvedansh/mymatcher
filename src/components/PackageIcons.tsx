@@ -1,5 +1,6 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import type { PackageType } from '@/utils/packages';
 
 export const StoryPackageIcon = ({ size = 20, color = 'white' }) => (
@@ -41,7 +42,9 @@ const ICON_BY_TYPE: Record<PackageType, typeof StoryPackageIcon> = {
   brand_collab: BrandPackageIcon,
 };
 
-export const PackageIcon = ({ type, size = 20, color = 'white' }: { type: PackageType; size?: number; color?: string }) => {
+/** A preset package's icon, or a price tag for one the creator made up. */
+export const PackageIcon = ({ type, size = 20, color = 'white' }: { type: PackageType | 'custom'; size?: number; color?: string }) => {
+  if (type === 'custom') return <Ionicons name="pricetag" size={size * 0.9} color={color} />;
   const Icon = ICON_BY_TYPE[type];
   return <Icon size={size} color={color} />;
 };

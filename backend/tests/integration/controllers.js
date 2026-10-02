@@ -367,33 +367,32 @@ async function main() {
   r = await call(ratings.removeMyRating, { user: { id: 'infl-b', role: 'influencer' }, params: { brandId: B2 } });
   check('a creator can take their rating back', r.body?.removed === 1, JSON.stringify(r.body));
 
-  // ── LinkedIn reviews by matched brands (migration 032) ───────
+  // ── Reviews by matched brands (migrations 032, 033) ──────────
   const reviewsCtl = require(`${BACKEND}/src/controllers/reviewController`);
-  const linkedinReview = {
+  const brandReview = {
     quote: 'Delivered on time and the reel beat our benchmarks.',
     reviewer_name: 'Riya Menon',
     reviewer_title: 'Brand Manager at Brand Two',
-    linkedin_url: 'https://www.linkedin.com/in/riya-menon/',
   };
 
   r = await call(reviewsCtl.reviewCreator, {
-    user: { id: B2, role: 'brand' }, params: { creatorId: 'infl-a' }, body: linkedinReview,
+    user: { id: B2, role: 'brand' }, params: { creatorId: 'infl-a' }, body: brandReview,
   });
-  check('a matched brand can add a LinkedIn review of a creator',
+  check('a matched brand can review a creator',
     r.status === 200 && r.body?.count === 1 && r.body?.reviews?.[0]?.brand_name === 'Brand Two'
-      && r.body?.reviews?.[0]?.linkedin_url === linkedinReview.linkedin_url && r.body?.can_review === true,
+      && r.body?.reviews?.[0]?.reviewer_name === 'Riya Menon' && r.body?.can_review === true,
     JSON.stringify(r.body) + (r.err?.message || ''));
 
   r = await call(reviewsCtl.reviewCreator, {
     user: { id: B2, role: 'brand' }, params: { creatorId: 'infl-a' },
-    body: { ...linkedinReview, quote: 'Good, but replies were slow.', reviewer_title: null },
+    body: { ...brandReview, quote: 'Good, but replies were slow.', reviewer_title: null },
   });
   check('reviewing again edits the review rather than adding one',
     r.body?.count === 1 && r.body?.my_review?.quote === 'Good, but replies were slow.' && r.body?.my_review?.reviewer_title === null,
     JSON.stringify(r.body));
 
   r = await call(reviewsCtl.reviewCreator, {
-    user: { id: B2, role: 'brand' }, params: { creatorId: I2 }, body: linkedinReview,
+    user: { id: B2, role: 'brand' }, params: { creatorId: I2 }, body: brandReview,
   });
   check('a brand that never matched the creator cannot review them', r.status === 403, JSON.stringify(r.body));
 
@@ -419,10 +418,18 @@ async function main() {
   // ── Creator packages and date of birth (migration 031) ───────
   r = await call(profiles.updateMyProfile, {
     user: { id: 'infl-a', role: 'influencer' },
-    body: { dob: '2000-01-15', packages: [{ type: 'reel', price: 8000 }, { type: 'story', price: 1500 }] },
+    body: {
+      dob: '2000-01-15',
+      packages: [
+        { type: 'reel', price: 8000 },
+        { type: 'custom', name: 'Podcast guest spot', desc: null, price: 4000 },
+        { type: 'story', price: 1500 },
+      ],
+    },
   });
-  check('a creator saves their packages and date of birth',
-    r.status === 200 && r.body?.packages?.length === 2 && r.body?.packages?.[0]?.type === 'story',
+  check('a creator saves their packages, custom ones included, and date of birth',
+    r.status === 200 && r.body?.packages?.length === 3 && r.body?.packages?.[0]?.type === 'story'
+      && r.body?.packages?.[2]?.name === 'Podcast guest spot',
     JSON.stringify(r.body?.packages) + (r.err?.message || ''));
   check('the price range comes from the packages', r.body?.price_min === 1500 && r.body?.price_max === 8000,
     JSON.stringify([r.body?.price_min, r.body?.price_max]));

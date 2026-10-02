@@ -63,30 +63,52 @@ const PRIVATE_PROFILE_FIELDS = [
   'verification_status', 'verification_note',
 ];
 
-// Mirrors PACKAGE_OPTIONS in the app's src/utils/packages.ts.
+// Mirrors PACKAGE_OPTIONS and the custom-package limits in the app's
+// src/utils/packages.ts.
 const PACKAGE_TYPES = ['story', 'reel', 'ugc', 'brand_collab'];
+const MAX_CUSTOM_PACKAGES = 6;
+const CUSTOM_NAME_MAX = 40;
+const CUSTOM_DESC_MAX = 100;
+const MAX_PACKAGES = PACKAGE_TYPES.length + MAX_CUSTOM_PACKAGES;
 const MAX_PACKAGE_PRICE = 10000000; // ₹1 crore
 
-// Validates the full replacement list of a creator's packages: each a known
-// type at most once, priced in whole rupees. Returns the list in display
-// order, or throws an error with status 400 describing the first problem.
+// Validates the full replacement list of a creator's packages, priced in
+// whole rupees: each preset type at most once, plus up to
+// MAX_CUSTOM_PACKAGES the creator named themselves ({ type: 'custom', name,
+// desc }). Returns presets in display order, then custom ones in the order
+// given, or throws an error with status 400 describing the first problem.
 function cleanPackages(packages) {
   const fail = (message) => Object.assign(new Error(message), { status: 400 });
-  if (!Array.isArray(packages) || packages.length > PACKAGE_TYPES.length) {
-    throw fail(`packages must be a list of up to ${PACKAGE_TYPES.length} packages`);
+  if (!Array.isArray(packages) || packages.length > MAX_PACKAGES) {
+    throw fail(`packages must be a list of up to ${MAX_PACKAGES} packages`);
   }
+  const str = (v) => (typeof v === 'string' ? v.trim() : '');
   const byType = new Map();
+  const custom = [];
   for (const p of packages) {
-    if (!p || typeof p !== 'object' || !PACKAGE_TYPES.includes(p.type)) {
-      throw fail(`Each package needs a type: ${PACKAGE_TYPES.join(', ')}`);
+    if (!p || typeof p !== 'object' || !(PACKAGE_TYPES.includes(p.type) || p.type === 'custom')) {
+      throw fail(`Each package needs a type: ${PACKAGE_TYPES.join(', ')} or custom`);
     }
-    if (byType.has(p.type)) throw fail('Each package can only be listed once');
     if (!Number.isInteger(p.price) || p.price < 1 || p.price > MAX_PACKAGE_PRICE) {
       throw fail('Each package needs a price in whole rupees, up to ₹1 crore');
     }
+    if (p.type === 'custom') {
+      const name = str(p.name);
+      const desc = str(p.desc);
+      if (!name || name.length > CUSTOM_NAME_MAX) {
+        throw fail(`Each custom package needs a name of up to ${CUSTOM_NAME_MAX} characters`);
+      }
+      if (desc.length > CUSTOM_DESC_MAX) {
+        throw fail(`Keep a custom package's description under ${CUSTOM_DESC_MAX} characters`);
+      }
+      if (custom.length >= MAX_CUSTOM_PACKAGES) throw fail(`You can add up to ${MAX_CUSTOM_PACKAGES} custom packages`);
+      custom.push({ type: 'custom', name, desc: desc || null, price: p.price });
+      continue;
+    }
+    if (byType.has(p.type)) throw fail('Each package can only be listed once');
     byType.set(p.type, { type: p.type, price: p.price });
   }
-  return PACKAGE_TYPES.filter((t) => byType.has(t)).map((t) => byType.get(t));
+  return [...PACKAGE_TYPES.filter((t) => byType.has(t)).map((t) => byType.get(t)), ...custom];
 }
 
 const MAX_LINKEDIN_REVIEWS = 10;

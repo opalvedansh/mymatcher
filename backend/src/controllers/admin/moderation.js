@@ -73,7 +73,7 @@ async function resolveTargets(reports) {
     byType.review.length
       ? db.query(
         `SELECT r.id, r.influencer_id, r.brand_id, r.quote, r.reviewer_name, r.reviewer_title,
-                r.linkedin_url, r.created_at,
+                r.created_at,
                 bp.name AS brand_name, ip.name AS influencer_name
            FROM creator_reviews r
            LEFT JOIN brand_profiles      bp ON bp.user_id = r.brand_id

@@ -62,7 +62,6 @@ afterAll(async () => {
 const REVIEW = {
   id: 'rev-1', brand_id: 'brand-1', quote: 'Delivered early and the reel did great.',
   reviewer_name: 'Riya Menon', reviewer_title: 'Brand Manager at Nike',
-  linkedin_url: 'https://www.linkedin.com/in/riya-menon/',
   created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z',
   brand_name: 'Nike', brand_logo_url: null, brand_verified: true,
 };
@@ -99,9 +98,7 @@ describe('Creator reviews', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ count: 1, my_review: null, can_review: false });
-      expect(res.body.reviews[0]).toMatchObject({
-        brand_name: 'Nike', reviewer_name: 'Riya Menon', linkedin_url: REVIEW.linkedin_url,
-      });
+      expect(res.body.reviews[0]).toMatchObject({ brand_name: 'Nike', reviewer_name: 'Riya Menon' });
     });
 
     it('leaves out reviews by brands either side has blocked', async () => {
@@ -154,7 +151,6 @@ describe('Creator reviews', () => {
       quote: '  Delivered early and the reel did great.  ',
       reviewer_name: 'Riya Menon',
       reviewer_title: 'Brand Manager at Nike',
-      linkedin_url: 'https://www.linkedin.com/in/riya-menon/',
     };
 
     it('saves a review from a matched brand, editing any earlier one', async () => {
@@ -168,8 +164,9 @@ describe('Creator reviews', () => {
       expect(upsert[1]).toEqual([
         'creator-2', 'brand-1', 'match-1',
         'Delivered early and the reel did great.', 'Riya Menon', 'Brand Manager at Nike',
-        'https://www.linkedin.com/in/riya-menon/',
       ]);
+      // Reviews carry no LinkedIn link any more (migration 033).
+      expect(upsert[0]).not.toContain('linkedin_url');
     });
 
     it('accepts a review without a role and company', async () => {
@@ -211,10 +208,7 @@ describe('Creator reviews', () => {
       ['a review that is too short', { quote: 'ok' }],
       ['a review over 600 characters', { quote: 'x'.repeat(601) }],
       ['a missing reviewer name', { reviewer_name: '  ' }],
-      ['a link that is not LinkedIn', { linkedin_url: 'https://evil.example.com/in/riya' }],
-      ['a LinkedIn look-alike domain', { linkedin_url: 'https://linkedin.com.evil.io/in/riya' }],
-      ['a plain-http link', { linkedin_url: 'http://www.linkedin.com/in/riya' }],
-      ['a missing link', { linkedin_url: undefined }],
+      ['a missing review', { quote: undefined }],
     ])('rejects %s with 422', async (_label, change) => {
       const res = await asBrand(request(server).put('/api/reviews/creator-2').send({ ...review, ...change }));
 

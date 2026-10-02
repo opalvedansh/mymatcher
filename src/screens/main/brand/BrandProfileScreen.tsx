@@ -717,7 +717,12 @@ const VerifySheet = memo(function VerifySheet({
   );
 });
 
-export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: string, onBack?: () => void }) {
+export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
+  publicUserId?: string,
+  /** Set when the viewer has already matched with this brand. */
+  matchId?: string,
+  onBack?: () => void,
+}) {
   const { width } = useWindowDimensions();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -1590,8 +1595,19 @@ export function BrandProfileScreen({ publicUserId, onBack }: { publicUserId?: st
           </View>
         )}
 
+        {/* Already matched: go to the chat rather than liking again. */}
+        {publicUserId && matchId && (
+          <Pressable
+            style={({ pressed }) => [s.interestedBtn, pressed && s.pressedSoft]}
+            onPress={() => router.navigate({ pathname: '/(influencer-tabs)/messages', params: { matchId } })}
+            accessibilityRole="button"
+          >
+            <Text style={s.interestedTxt}>Message</Text>
+          </Pressable>
+        )}
+
         {/* A creator reached this from the swipe deck; the button is that same like. */}
-        {publicUserId && (
+        {publicUserId && !matchId && (
           <Pressable
             style={({ pressed }) => [
               s.interestedBtn,

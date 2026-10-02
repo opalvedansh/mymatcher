@@ -211,6 +211,28 @@ describe('Profile Routes', () => {
       ]);
     });
 
+    it('saves custom packages after the presets and counts them in the price range', async () => {
+      db.query.mockResolvedValueOnce({ rowCount: 1 });
+      db.query.mockResolvedValueOnce({ rows: [{ user_id: 'test-user-id-123' }] });
+
+      const res = await asCreator({
+        packages: [
+          { type: 'custom', name: '  YouTube video ', desc: ' 1 dedicated video ', price: 25000 },
+          { type: 'story', price: 1500 },
+          { type: 'custom', name: 'Event appearance', desc: '', price: 900 },
+        ],
+      });
+
+      expect(res.status).toBe(200);
+      const params = db.query.mock.calls[0][1];
+      expect([params[13], params[14]]).toEqual([900, 25000]);
+      expect(JSON.parse(params[20])).toEqual([
+        { type: 'story', price: 1500 },
+        { type: 'custom', name: 'YouTube video', desc: '1 dedicated video', price: 25000 },
+        { type: 'custom', name: 'Event appearance', desc: null, price: 900 },
+      ]);
+    });
+
     it('clears the price range when every package is removed', async () => {
       db.query.mockResolvedValueOnce({ rowCount: 1 });
       db.query.mockResolvedValueOnce({ rows: [{ user_id: 'test-user-id-123' }] });
@@ -228,6 +250,12 @@ describe('Profile Routes', () => {
       ['a price over ₹1 crore', [{ type: 'story', price: 10000001 }]],
       ['an unknown package type', [{ type: 'podcast', price: 5000 }]],
       ['the same package twice', [{ type: 'ugc', price: 5000 }, { type: 'ugc', price: 6000 }]],
+      ['a custom package with no name', [{ type: 'custom', name: '   ', price: 5000 }]],
+      ['a custom package name over 40 characters', [{ type: 'custom', name: 'x'.repeat(41), price: 5000 }]],
+      ['a custom description over 100 characters', [{ type: 'custom', name: 'Talk', desc: 'x'.repeat(101), price: 5000 }]],
+      ['a custom package with no price', [{ type: 'custom', name: 'Talk' }]],
+      ['more than 6 custom packages',
+        Array.from({ length: 7 }, (_, i) => ({ type: 'custom', name: `Extra ${i}`, price: 1000 }))],
     ])('rejects %s with 400', async (_label, packages) => {
       const res = await asCreator({ packages });
 

@@ -12,7 +12,7 @@ import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { getMatches, getLikesReceived } from '@/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -28,6 +28,8 @@ const DUMMIES = [1, 2, 3, 4];
 type MixedRecord = {
   id: string;
   type: 'match' | 'like';
+  /** The other person, whose profile the card opens. */
+  userId?: string;
   name?: string;
   avatar?: string;
   verified?: boolean;
@@ -52,6 +54,7 @@ const keyExtractor = (item: GridItem) => (typeof item === 'number' ? `dummy-${it
 export function LikesScreen() {
   const { width } = useWindowDimensions();
   const { onboardingData, user } = useAuth();
+  const router = useRouter();
   const role = onboardingData?.role?.toLowerCase() as 'brand' | 'influencer' | undefined;
 
   const [items, setItems] = useState<MixedRecord[]>([]);
@@ -83,6 +86,7 @@ export function LikesScreen() {
       const formattedMatches: MixedRecord[] = matchesData.map((m: any) => ({
         id: m.match_id,
         type: 'match',
+        userId: role === 'brand' ? m.influencer_id : m.brand_id,
         ...(role === 'brand'
           ? {
               name: m.influencer_name, avatar: m.influencer_avatar, verified: m.influencer_verified, location: m.influencer_location,
@@ -97,6 +101,7 @@ export function LikesScreen() {
       const formattedLikes: MixedRecord[] = likesData.map((l: any) => ({
         id: l.swipe_id,
         type: 'like',
+        userId: l.user_id,
         ...(role === 'brand'
           ? {
               name: l.influencer_name, avatar: l.influencer_avatar, verified: l.influencer_verified, location: l.influencer_location,
@@ -131,6 +136,20 @@ export function LikesScreen() {
     }, [load]),
   );
 
+  // A brand only ever sees creators here, and a creator only brands. A matched
+  // card passes its match so the profile offers Message instead of Interested.
+  const openProfile = useCallback((record: MixedRecord) => {
+    if (!record.userId) return;
+    router.push({
+      pathname: '/profile/[id]',
+      params: {
+        id: record.userId,
+        role: role === 'brand' ? 'influencer' : 'brand',
+        ...(record.type === 'match' ? { matchId: record.id } : {}),
+      },
+    });
+  }, [router, role]);
+
   const renderItem = useCallback(({ item, index }: { item: GridItem; index: number }) => {
     const isDummy = typeof item === 'number';
     const record = isDummy ? null : item;
@@ -140,9 +159,21 @@ export function LikesScreen() {
 
     // Blur if dummy, OR if it's a 'like' and user doesn't have premium
     const shouldBlur = isDummy || (!isPremium && record?.type === 'like');
+    // A blurred card stays shut: opening it would show who is behind the blur.
+    const canOpen = !shouldBlur && !!record?.userId;
 
     return (
-      <View style={[styles.gridItem, { width: ITEM_WIDTH, height: ITEM_WIDTH * 1.55 }]}>
+      <Pressable
+        onPress={canOpen ? () => openProfile(record) : undefined}
+        disabled={!canOpen}
+        accessibilityRole={canOpen ? 'button' : undefined}
+        accessibilityLabel={canOpen ? (record.name ? `Open ${record.name}'s profile` : 'Open profile') : undefined}
+        style={({ pressed }) => [
+          styles.gridItem,
+          { width: ITEM_WIDTH, height: ITEM_WIDTH * 1.55 },
+          pressed && styles.cardPressed,
+        ]}
+      >
         <Image
           source={{ uri: imageUrl }}
           style={styles.matchImage}
@@ -185,9 +216,9 @@ export function LikesScreen() {
             </View>
           </>
         )}
-      </View>
+      </Pressable>
     );
-  }, [ITEM_WIDTH, isPremium]);
+  }, [ITEM_WIDTH, isPremium, openProfile]);
 
   const ready = !loading && !error;
 
@@ -272,6 +303,7 @@ const styles = StyleSheet.create({
   premiumBtnText: { color: '#000', fontSize: sz(14), fontWeight: '700' },
   gridRow: { paddingHorizontal: sz(24), justifyContent: 'space-between', marginBottom: GRID_SPACING },
   gridItem: { borderRadius: sz(12), overflow: 'hidden', backgroundColor: '#222', justifyContent: 'flex-end' },
+  cardPressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
   matchImage: { position: 'absolute', width: '100%', height: '100%' },
   avatarPlaceholder: { backgroundColor: '#2A2A2A', justifyContent: 'center', alignItems: 'center' },
   avatarInitial: { fontSize: sz(40), fontWeight: '700', color: '#FF6B2B' },

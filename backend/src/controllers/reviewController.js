@@ -3,12 +3,11 @@ const logger = require('../config/logger');
 const { blockedBetween, isBlockedBetween } = require('../utils/blocks');
 
 /**
- * LinkedIn reviews of a creator, written by brands.
+ * Reviews of a creator, written by brands.
  *
  * A creator cannot add one about themselves; only a brand the creator has
- * actually matched with may, once — reviewing again edits it. Each links to
- * LinkedIn so other brands can check who wrote it. Gated the same way as
- * brand ratings (ratingController).
+ * actually matched with may, once — reviewing again edits it. Gated the same
+ * way as brand ratings (ratingController).
  *
  * Served apart from GET /api/profiles/:id because that response is cached and
  * shared by every viewer, while `can_review` and `my_review` depend on who asks.
@@ -38,7 +37,7 @@ async function findMatch(brandId, influencerId) {
 async function loadReviews(creatorId, viewer) {
   const [list, summary, mine, match] = await Promise.all([
     db.query(
-      `SELECT r.id, r.brand_id, r.quote, r.reviewer_name, r.reviewer_title, r.linkedin_url,
+      `SELECT r.id, r.brand_id, r.quote, r.reviewer_name, r.reviewer_title,
               r.created_at, r.updated_at,
               bp.name AS brand_name, bp.logo_url AS brand_logo_url, bp.verified AS brand_verified
          ${VISIBLE}
@@ -49,7 +48,7 @@ async function loadReviews(creatorId, viewer) {
     db.query(`SELECT COUNT(*)::int AS count ${VISIBLE}`, [creatorId, viewer.id]),
     viewer.role === 'brand'
       ? db.query(
-        `SELECT quote, reviewer_name, reviewer_title, linkedin_url, updated_at
+        `SELECT quote, reviewer_name, reviewer_title, updated_at
            FROM creator_reviews WHERE influencer_id = $1 AND brand_id = $2`,
         [creatorId, viewer.id]
       )
@@ -84,10 +83,10 @@ async function reviewCreator(req, res, next) {
     const { creatorId } = req.params;
     const { id: brandId, role } = req.user;
     // The route has already checked and normalised these.
-    const { quote, reviewer_name: reviewerName, reviewer_title: reviewerTitle, linkedin_url: linkedinUrl } = req.body;
+    const { quote, reviewer_name: reviewerName, reviewer_title: reviewerTitle } = req.body;
 
     if (role !== 'brand') {
-      return res.status(403).json({ error: 'Only a brand can add a LinkedIn review of a creator' });
+      return res.status(403).json({ error: 'Only a brand can review a creator' });
     }
     if (await isBlockedBetween(brandId, creatorId)) {
       return res.status(404).json({ error: 'User not found' });
@@ -100,13 +99,13 @@ async function reviewCreator(req, res, next) {
 
     await db.query(
       `INSERT INTO creator_reviews
-         (influencer_id, brand_id, match_id, quote, reviewer_name, reviewer_title, linkedin_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (influencer_id, brand_id, match_id, quote, reviewer_name, reviewer_title)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (influencer_id, brand_id)
        DO UPDATE SET quote = EXCLUDED.quote, reviewer_name = EXCLUDED.reviewer_name,
-                     reviewer_title = EXCLUDED.reviewer_title, linkedin_url = EXCLUDED.linkedin_url,
+                     reviewer_title = EXCLUDED.reviewer_title,
                      match_id = EXCLUDED.match_id, updated_at = NOW()`,
-      [creatorId, brandId, match.id, quote, reviewerName, reviewerTitle || null, linkedinUrl]
+      [creatorId, brandId, match.id, quote, reviewerName, reviewerTitle || null]
     );
     logger.info({ creatorId, brandId }, 'Creator reviewed');
 

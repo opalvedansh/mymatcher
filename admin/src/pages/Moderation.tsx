@@ -344,7 +344,6 @@ function TargetCell({ report, onReadContext, canRead }: {
         <div className="tiny muted truncate" style={{ maxWidth: 320 }}>
           {t.reviewer_name as string} for {(t.brand_name as string) || 'a brand'}, reviewing {(t.influencer_name as string) || 'a creator'}
         </div>
-        <a className="tiny" href={t.linkedin_url as string} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--info)' }}>Open LinkedIn link</a>
       </div>
     );
   }

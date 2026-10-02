@@ -14,14 +14,16 @@ import { sz } from '@/theme/scale';
 const ACCENT = '#FF6B2B';
 
 /**
- * Someone else's profile, opened from a swipe card.
+ * Someone else's profile, opened from a swipe card or the Likes tab.
  *
  * The caller passes `role` because it already knows it (a brand only ever
  * swipes creators, and the other way round), which saves a request. A link
  * that arrives without it — a deep link, say — resolves the role first.
  */
 export default function PublicProfileRoute() {
-  const { id, role: roleParam } = useLocalSearchParams<{ id: string; role?: string }>();
+  // `matchId` comes from a matched card on the Likes tab: the two already
+  // matched, so the profile offers Message instead of Interested.
+  const { id, role: roleParam, matchId } = useLocalSearchParams<{ id: string; role?: string; matchId?: string }>();
   const router = useRouter();
   const { user } = useAuth();
 
@@ -78,9 +80,9 @@ export default function PublicProfileRoute() {
   const isMe = !!user?.id && user.id === id;
 
   return role === 'brand' ? (
-    <BrandProfileScreen publicUserId={isMe ? undefined : id} onBack={goBack} />
+    <BrandProfileScreen publicUserId={isMe ? undefined : id} matchId={matchId} onBack={goBack} />
   ) : (
-    <InfluencerProfileScreen publicUserId={isMe ? undefined : id} onBack={goBack} />
+    <InfluencerProfileScreen publicUserId={isMe ? undefined : id} matchId={matchId} onBack={goBack} />
   );
 }
 

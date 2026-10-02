@@ -2,7 +2,6 @@ const { body, param } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { getCreatorReviews, reviewCreator, removeMyReview } = require('../controllers/reviewController');
-const { parseLinkedinUrl } = require('../utils/linkedin');
 
 const router = require('express').Router();
 
@@ -15,15 +14,11 @@ const reviewRules = [
     .withMessage('Add the name of the person writing the review'),
   body('reviewer_title').optional({ values: 'falsy' }).isString().trim().isLength({ max: 100 })
     .withMessage('Keep the role and company under 100 characters'),
-  // Stored normalised, so the "View on LinkedIn" button opens exactly what was checked.
-  body('linkedin_url').custom((value) => !!parseLinkedinUrl(value))
-    .withMessage('Paste a linkedin.com link to your profile or the recommendation')
-    .customSanitizer((value) => parseLinkedinUrl(value)),
 ];
 
 router.use(authenticate, requireRole('brand', 'influencer'));
 
-router.get   ('/:creatorId', creatorIdRules, validate, getCreatorReviews); // list, average, can I review
+router.get   ('/:creatorId', creatorIdRules, validate, getCreatorReviews); // list, count, can I review
 router.put   ('/:creatorId', reviewRules,    validate, reviewCreator);     // write or edit my review
 router.delete('/:creatorId', creatorIdRules, validate, removeMyReview);    // take my review back
 

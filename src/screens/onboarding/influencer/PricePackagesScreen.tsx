@@ -17,7 +17,7 @@ import { PackagePriceEditor } from '@/components/PackagePriceEditor';
 import { colors } from '@/theme/colors';
 import { sz } from '@/theme/scale';
 import { tapFeedback } from '@/utils/optionalModules';
-import { completePackages, toPackageDrafts, type CreatorPackage } from '@/utils/packages';
+import { completePackages, draftProblem, toPackageDrafts, type CreatorPackage } from '@/utils/packages';
 
 export function PricePackagesScreen({
   initialPackages,
@@ -37,6 +37,7 @@ export function PricePackagesScreen({
   const scrollRef = useRef<ScrollView>(null);
 
   const packages = completePackages(drafts);
+  const missingName = drafts.some((d) => draftProblem(d) === 'name');
 
   const handleStart = async () => {
     if (submitting || drafts.length === 0) return;
@@ -96,7 +97,11 @@ export function PricePackagesScreen({
         {/* Footer */}
         <View style={styles.footer}>
           {showErrors && !packages && drafts.length > 0 && (
-            <Text style={styles.hint}>Add a price for each package you picked.</Text>
+            <Text style={styles.hint}>
+              {missingName
+                ? 'Give each custom package a name and a price.'
+                : 'Add a price for each package you picked.'}
+            </Text>
           )}
           <Pressable
             style={({ pressed }) => [

@@ -41,7 +41,7 @@ const profileRules = [
     if (age < MIN_AGE) throw new Error(`You need to be at least ${MIN_AGE} to use Matchr`);
     return true;
   }),
-  body('packages').optional().isArray({ max: 4 }),
+  body('packages').optional().isArray({ max: 10 }), // 4 presets + 6 custom; cleanPackages checks each
   body('price_min').optional().isNumeric().toInt(),
   body('price_max').optional().isNumeric().toInt(),
   body('lat').optional().isFloat().toFloat(),

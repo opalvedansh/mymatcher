@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -15,9 +14,9 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { FontAwesome6, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getCreatorReviews, removeCreatorReview, reviewCreator } from '@/api';
-import type { CreatorReview, CreatorReviews } from '@/api/types';
+import type { CreatorReview, CreatorReviews as ReviewsData } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { showAlert } from '@/components/ActionSheet';
 import { openSafetyMenu } from '@/components/safetyMenu';
@@ -25,13 +24,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { sz } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
-const LINKEDIN_BLUE = '#0A66C2';
 const DANGER = '#FF6B6B';
 const PLACEHOLDER = '#8A8A8A';
 const QUOTE_MIN = 10;
 const QUOTE_MAX = 600;
-// Mirrors the server check in backend/src/utils/linkedin.js.
-const LINKEDIN_URL = /^https:\/\/([a-z0-9-]+\.)*(linkedin\.com|lnkd\.in)(\/|$)/i;
 
 // react-native-web passes hover/focus to Pressable style callbacks; native typings only declare `pressed`.
 type InteractionState = { pressed: boolean; hovered?: boolean; focused?: boolean };
@@ -39,16 +35,10 @@ type InteractionState = { pressed: boolean; hovered?: boolean; focused?: boolean
 // The focused box draws its own border, so drop the browser's default outline.
 const webNoOutline = Platform.select({ web: { outlineStyle: 'none' } as any, default: undefined });
 
-type Draft = { quote: string; name: string; title: string; url: string };
+type Draft = { quote: string; name: string; title: string };
 type DraftErrors = Partial<Record<keyof Draft, string>>;
 
-const emptyDraft: Draft = { quote: '', name: '', title: '', url: '' };
-
-function normalizeUrl(raw: string) {
-  const url = raw.trim();
-  if (!url) return url;
-  return /^https?:\/\//i.test(url) ? url.replace(/^http:\/\//i, 'https://') : `https://${url}`;
-}
+const emptyDraft: Draft = { quote: '', name: '', title: '' };
 
 function validate(draft: Draft): DraftErrors {
   const errors: DraftErrors = {};
@@ -56,9 +46,6 @@ function validate(draft: Draft): DraftErrors {
   if (quote.length < QUOTE_MIN) errors.quote = `Add at least ${QUOTE_MIN} characters.`;
   else if (quote.length > QUOTE_MAX) errors.quote = `Keep it under ${QUOTE_MAX} characters.`;
   if (!draft.name.trim()) errors.name = 'Add your name.';
-  if (!LINKEDIN_URL.test(normalizeUrl(draft.url))) {
-    errors.url = 'Paste a linkedin.com link to your profile or the recommendation.';
-  }
   return errors;
 }
 
@@ -102,8 +89,8 @@ function ReviewCard({
   return (
     <View style={[styles.card, { width }]}>
       <View style={styles.cardTop}>
-        <View style={styles.linkedinMark}>
-          <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
+        <View style={styles.reviewMark}>
+          <Ionicons name="chatbubble-ellipses" size={sz(18)} color={ACCENT} />
         </View>
         <Pressable
           onPress={mine ? onEdit : onMore}
@@ -143,25 +130,16 @@ function ReviewCard({
           <MaterialCommunityIcons name="check-decagram" size={sz(13)} color={ACCENT} accessibilityLabel="Verified brand" />
         )}
       </View>
-
-      <Pressable
-        onPress={() => Linking.openURL(review.linkedin_url).catch(() => {})}
-        accessibilityRole="link"
-        style={({ pressed }) => [styles.viewLink, pressed && styles.pressed]}
-      >
-        <Text style={styles.viewLinkText}>View on LinkedIn</Text>
-        <Ionicons name="open-outline" size={sz(14)} color="#BDBDBD" />
-      </Pressable>
     </View>
   );
 }
 
 /**
- * LinkedIn reviews of a creator. Only a brand that has matched with the
- * creator can add one (one each, editable); the creator only reads them.
- * Whether the viewer may add one is the server's call (`can_review`).
+ * Reviews of a creator. Only a brand that has matched with the creator can
+ * write one (one each, editable); the creator only reads them. Whether the
+ * viewer may write one is the server's call (`can_review`).
  */
-export function LinkedinReviews({
+export function CreatorReviews({
   creatorId,
   creatorName,
   isOwnProfile,
@@ -172,7 +150,7 @@ export function LinkedinReviews({
 }) {
   const { user } = useAuth();
   const { width } = useWindowDimensions();
-  const [data, setData] = useState<CreatorReviews | null>(null);
+  const [data, setData] = useState<ReviewsData | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -218,7 +196,7 @@ export function LinkedinReviews({
     return (
       <View style={styles.section}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>LinkedIn reviews</Text>
+          <Text style={styles.title}>Reviews</Text>
         </View>
         {loadFailed ? (
           <Pressable
@@ -226,8 +204,8 @@ export function LinkedinReviews({
             accessibilityRole="button"
             style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
           >
-            <View style={styles.linkedinMark}>
-              <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
+            <View style={styles.reviewMark}>
+              <Ionicons name="chatbubble-ellipses" size={sz(18)} color={ACCENT} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.emptyTitle}>Couldn't load reviews</Text>
@@ -249,7 +227,7 @@ export function LinkedinReviews({
   const sheetTranslate = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [60, 0] });
   const quoteLength = draft.quote.trim().length;
   const counterColor = quoteLength > QUOTE_MAX ? DANGER : quoteLength > QUOTE_MAX - 60 ? '#FFB27A' : '#8A8A8A';
-  const canSubmit = quoteLength > 0 && !!draft.name.trim() && !!draft.url.trim();
+  const canSubmit = quoteLength > 0 && !!draft.name.trim();
 
   const contentWidth = Math.min(width, 560) - sz(40); // profile content has 20px side padding
   const cardWidth = reviews.length > 1 ? Math.min(contentWidth - sz(28), sz(340)) : contentWidth;
@@ -258,7 +236,7 @@ export function LinkedinReviews({
   const openForm = () => {
     setDraft(
       myReview
-        ? { quote: myReview.quote, name: myReview.reviewer_name, title: myReview.reviewer_title || '', url: myReview.linkedin_url }
+        ? { quote: myReview.quote, name: myReview.reviewer_name, title: myReview.reviewer_title || '' }
         : emptyDraft,
     );
     setErrors({});
@@ -270,7 +248,7 @@ export function LinkedinReviews({
     if (!saving) setIsFormOpen(false);
   };
 
-  const run = async (request: () => Promise<CreatorReviews>) => {
+  const run = async (request: () => Promise<ReviewsData>) => {
     setSaving(true);
     setSubmitError(null);
     try {
@@ -292,7 +270,6 @@ export function LinkedinReviews({
       quote: draft.quote.trim(),
       reviewer_name: draft.name.trim(),
       reviewer_title: draft.title.trim() || null,
-      linkedin_url: normalizeUrl(draft.url),
     }));
   };
 
@@ -312,12 +289,10 @@ export function LinkedinReviews({
     <View style={styles.section}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>LinkedIn reviews</Text>
+          <Text style={styles.title}>Reviews</Text>
           {(reviews.length > 0 || isOwnProfile) && (
             <Text style={styles.subtitle}>
-              {isOwnProfile
-                ? 'From brands you have matched with, each linked to LinkedIn'
-                : `From brands ${firstName} has matched with, each linked to LinkedIn`}
+              {isOwnProfile ? 'From brands you have matched with' : `From brands ${firstName} has matched with`}
             </Text>
           )}
         </View>
@@ -340,23 +315,23 @@ export function LinkedinReviews({
             accessibilityRole="button"
             style={({ pressed }) => [styles.emptyCard, pressed && styles.pressed]}
           >
-            <View style={styles.linkedinMark}>
-              <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
+            <View style={styles.reviewMark}>
+              <Ionicons name="chatbubble-ellipses" size={sz(18)} color={ACCENT} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.emptyTitle}>Add a LinkedIn review</Text>
+              <Text style={styles.emptyTitle}>Write a review</Text>
               <Text style={styles.emptyBody}>You matched with {firstName}. Tell other brands how working with them went.</Text>
             </View>
             <Ionicons name="add-circle" size={sz(26)} color={ACCENT} />
           </Pressable>
         ) : (
           <View style={styles.emptyCard}>
-            <View style={styles.linkedinMark}>
-              <FontAwesome6 name="linkedin" size={sz(20)} color={LINKEDIN_BLUE} />
+            <View style={styles.reviewMark}>
+              <Ionicons name="chatbubble-ellipses" size={sz(18)} color={ACCENT} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.emptyTitle}>No LinkedIn reviews yet</Text>
-              <Text style={styles.emptyBody}>Brands you match with can add one here, linked to their LinkedIn.</Text>
+              <Text style={styles.emptyTitle}>No reviews yet</Text>
+              <Text style={styles.emptyBody}>Brands you match with can review your work here.</Text>
             </View>
           </View>
         )
@@ -397,14 +372,14 @@ export function LinkedinReviews({
 
               <View style={styles.sheetHeader}>
                 <View style={styles.headerMark}>
-                  <FontAwesome6 name="linkedin" size={sz(22)} color={LINKEDIN_BLUE} />
+                  <Ionicons name="chatbubble-ellipses" size={sz(20)} color={ACCENT} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sheetTitle} accessibilityRole="header">
-                    {myReview ? 'Edit your review' : 'Add LinkedIn review'}
+                    {myReview ? 'Edit your review' : `Review ${firstName}`}
                   </Text>
                   <Text style={styles.sheetSubtitle}>
-                    Your review shows on {firstName}'s profile with your brand name. Add your LinkedIn so other brands can check who wrote it.
+                    Your review shows on {firstName}'s profile with your brand name, so other brands can see how the collaboration went.
                   </Text>
                 </View>
                 <Pressable
@@ -427,7 +402,7 @@ export function LinkedinReviews({
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
-                <Text style={styles.groupLabel}>Recommendation</Text>
+                <Text style={styles.groupLabel}>Your review</Text>
                 <View
                   style={[
                     styles.textareaBox,
@@ -446,7 +421,7 @@ export function LinkedinReviews({
                     multiline
                     maxLength={QUOTE_MAX + 50}
                     textAlignVertical="top"
-                    accessibilityLabel="Recommendation"
+                    accessibilityLabel="Your review"
                   />
                   <Text style={[styles.counter, { color: counterColor }]}>
                     {quoteLength}/{QUOTE_MAX}
@@ -485,6 +460,7 @@ export function LinkedinReviews({
                     optional
                     focused={focusedField === 'title'}
                     error={errors.title}
+                    last
                   >
                     <TextInput
                       style={[styles.rowInput, webNoOutline]}
@@ -496,27 +472,6 @@ export function LinkedinReviews({
                       placeholderTextColor={PLACEHOLDER}
                       maxLength={100}
                       accessibilityLabel="Your role and company"
-                    />
-                  </FieldRow>
-                  <FieldRow
-                    icon="link-outline"
-                    label="Your LinkedIn"
-                    focused={focusedField === 'url'}
-                    error={errors.url}
-                    last
-                  >
-                    <TextInput
-                      style={[styles.rowInput, webNoOutline]}
-                      value={draft.url}
-                      onChangeText={setField('url')}
-                      onFocus={() => setFocusedField('url')}
-                      onBlur={() => setFocusedField(null)}
-                      placeholder="linkedin.com/in/your-profile"
-                      placeholderTextColor={PLACEHOLDER}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="url"
-                      accessibilityLabel="LinkedIn link"
                     />
                   </FieldRow>
                 </View>
@@ -619,8 +574,8 @@ const styles = StyleSheet.create({
     padding: sz(20),
   },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: sz(14) },
-  linkedinMark: {
-    width: sz(36), height: sz(36), borderRadius: sz(10), backgroundColor: '#FFF',
+  reviewMark: {
+    width: sz(36), height: sz(36), borderRadius: sz(10), backgroundColor: 'rgba(255,107,43,0.12)',
     justifyContent: 'center', alignItems: 'center',
   },
   iconButton: {
@@ -639,12 +594,6 @@ const styles = StyleSheet.create({
   reviewerTitle: { color: '#9A9A9A', fontSize: sz(12), marginTop: sz(2) },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: sz(5), marginTop: sz(12) },
   brandText: { color: '#9A9A9A', fontSize: sz(12), flexShrink: 1 },
-  viewLink: {
-    flexDirection: 'row', alignItems: 'center', gap: sz(6), alignSelf: 'flex-start',
-    marginTop: sz(16), paddingTop: sz(14), borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.12)', width: '100%',
-  },
-  viewLinkText: { color: '#BDBDBD', fontSize: sz(13), fontWeight: '600' },
   emptyCard: {
     flexDirection: 'row', alignItems: 'center', gap: sz(14),
     borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.2)',
@@ -675,7 +624,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   headerMark: {
-    width: sz(44), height: sz(44), borderRadius: sz(12), backgroundColor: '#FFF',
+    width: sz(44), height: sz(44), borderRadius: sz(12), backgroundColor: 'rgba(255,107,43,0.12)',
     justifyContent: 'center', alignItems: 'center',
   },
   sheetTitle: { fontSize: sz(19), fontWeight: '700', color: '#FFF', letterSpacing: -0.3 },

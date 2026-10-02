@@ -35,9 +35,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { InfluencerProfile } from '@/api/types';
 import { PackageIcon } from '@/components/PackageIcons';
 import { PackagePriceEditor } from '@/components/PackagePriceEditor';
-import { PACKAGE_OPTIONS, completePackages, formatPrice, toPackageDrafts, type CreatorPackage, type PackageDraft } from '@/utils/packages';
+import { completePackages, describePackage, formatPrice, toPackageDrafts, type CreatorPackage, type PackageDraft } from '@/utils/packages';
 import { VerificationModal } from './VerificationModal';
-import { LinkedinReviews } from './LinkedinReviews';
+import { CreatorReviews } from './CreatorReviews';
 import { TouchableOpacity } from 'react-native';
 import { sz, tabBarClearance } from '@/theme/scale';
 
@@ -604,7 +604,12 @@ function EditPackagesModal({ visible, packages, onClose, onSave }: {
   );
 }
 
-export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId?: string, onBack?: () => void }) {
+export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
+  publicUserId?: string,
+  /** Set when the viewer has already matched with this creator. */
+  matchId?: string,
+  onBack?: () => void,
+}) {
   const { user, signOut, deleteAccount } = useAuth();
   const { width, height } = useWindowDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -1463,17 +1468,17 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
               )}
             </View>
             <View style={styles.packagesContainer}>
-              {packages.map((pkg) => {
-                const option = PACKAGE_OPTIONS.find(o => o.type === pkg.type);
-                if (!option) return null;
+              {packages.map((pkg, idx) => {
+                const { name: pkgName, desc: pkgDesc } = describePackage(pkg);
                 return (
-                  <View key={pkg.type} style={styles.packageCard}>
+                  // Custom packages can share a type, so the position keeps keys unique.
+                  <View key={`${pkg.type}-${idx}`} style={styles.packageCard}>
                     <View style={styles.packageIconContainer}>
                       <PackageIcon type={pkg.type} size={sz(28)} color="#FFF" />
                     </View>
                     <View style={styles.packageDetails}>
-                      <Text style={styles.packageName}>{option.name}</Text>
-                      <Text style={styles.packageDesc}>{option.desc}</Text>
+                      <Text style={styles.packageName}>{pkgName}</Text>
+                      {!!pkgDesc && <Text style={styles.packageDesc}>{pkgDesc}</Text>}
                     </View>
                     <Text style={styles.packagePriceLabel}>{formatPrice(pkg.price)}</Text>
                   </View>
@@ -1515,15 +1520,26 @@ export function InfluencerProfileScreen({ publicUserId, onBack }: { publicUserId
           </View>
         )}
 
-        {/* ── LinkedIn reviews, written by brands this creator matched with ── */}
-        <LinkedinReviews
+        {/* ── Reviews, written by brands this creator matched with ── */}
+        <CreatorReviews
           creatorId={activeProfile.user_id}
           creatorName={activeProfile.name || ''}
           isOwnProfile={!publicUserId}
         />
 
+        {/* ── Already matched: go to the chat rather than liking again ── */}
+        {!!publicUserId && !!matchId && (
+          <Pressable
+            style={({ pressed }) => [styles.chatButton, pressed && styles.pressed]}
+            onPress={() => router.navigate({ pathname: '/(brand-tabs)/messages', params: { matchId } })}
+            accessibilityRole="button"
+          >
+            <Text style={styles.chatButtonText}>Message</Text>
+          </Pressable>
+        )}
+
         {/* ── Interest button (public profile only) ── */}
-        {!!publicUserId && (
+        {!!publicUserId && !matchId && (
           <Pressable
             style={({ pressed }) => [
               styles.chatButton,

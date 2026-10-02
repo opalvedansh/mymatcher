@@ -275,9 +275,7 @@ export function BrandSwipeScreen({ onViewProfile, onNavigateToMessages }: { onVi
       {/* Header */}
       <View style={ss.header}>
         <View style={ss.logoRow}>
-          <View style={{ marginRight: sz(6) }}>
-            <MatchrLogo size={sz(24)} color="#F2602D" />
-          </View>
+          <MatchrLogo size={sz(34)} color="#F2602D" />
           <Text style={ss.logoWord}>Matchr</Text>
         </View>
         <NotificationBell />
@@ -377,10 +375,9 @@ const card = StyleSheet.create({
 // ─── Screen styles (identical to influencer SwipeScreen) ──────────
 const ss = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#121212' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: sz(20), paddingTop: sz(6), paddingBottom: sz(4) },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: sz(6) },
-  logoM: { fontSize: sz(26), fontWeight: '900', color: '#FF6B2B' },
-  logoWord: { fontSize: sz(22), fontWeight: '700', color: '#fff' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: sz(20), paddingTop: sz(8), paddingBottom: sz(10) },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: sz(10) },
+  logoWord: { fontSize: sz(28), fontWeight: '800', color: '#fff', letterSpacing: -0.6 },
   titleBlock: { paddingHorizontal: sz(20), paddingBottom: sz(12) },
   title: { color: '#fff', fontSize: sz(22), fontWeight: '700' },
   subtitle: { color: '#888', fontSize: sz(13), marginTop: sz(3) },

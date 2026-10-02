@@ -226,15 +226,14 @@ export interface BrandRating {
   can_rate: boolean;
 }
 
-/** What a brand writes in a LinkedIn review of a creator. */
+/** What a brand writes in a review of a creator. */
 export interface CreatorReviewInput {
   quote: string;
   reviewer_name: string;
   reviewer_title: string | null;
-  linkedin_url: string;
 }
 
-/** A LinkedIn review of a creator, written by a brand that matched with them. */
+/** A review of a creator, written by a brand that matched with them. */
 export interface CreatorReview extends CreatorReviewInput {
   id: string;
   brand_id: string;
