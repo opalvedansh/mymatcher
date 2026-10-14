@@ -86,13 +86,17 @@ export default function Content() {
 
                 return (
                   <div className="media-tile" key={row.id}>
-                    <a href={url} target="_blank" rel="noreferrer noopener">
-                      <img src={url} alt="" loading="lazy" />
-                    </a>
+                    {url ? (
+                      <a href={url} target="_blank" rel="noreferrer noopener">
+                        <img src={url} alt="" loading="lazy" />
+                      </a>
+                    ) : (
+                      <div className="media-text-only">{(row as StoryRow).caption || 'Drawing only'}</div>
+                    )}
                     <div className="media-meta">
                       <div className="truncate strong">{row.author_name ?? shortId(row.user_id)}</div>
-                      {isPost && (row as PostRow).caption && (
-                        <div className="tiny muted truncate">{(row as PostRow).caption}</div>
+                      {row.caption && (
+                        <div className="tiny muted truncate">{row.caption}</div>
                       )}
                       <div className="row" style={{ gap: 5, flexWrap: 'wrap' }}>
                         {row.report_count > 0 && <Badge tone="danger">{row.report_count} reports</Badge>}

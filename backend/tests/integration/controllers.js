@@ -218,6 +218,37 @@ async function main() {
   r = await call(stories.getFeedStories, { user: { id: B } });
   check('matched brand sees the story', r.status === 200 && r.body.some((g) => g.id === I1), r.err?.message || '');
 
+  // Editor layouts: stored rebuilt from known fields, refused when malformed.
+  const textLayer = { id: 'a1', type: 'text', text: 'Hello', font: 'neon', color: '#ff6b2b', bg: 'none', align: 'center', size: 76, x: 540, y: 960, scale: 1.2, rotation: 0.3 };
+  const photoLayout = {
+    v: 1,
+    bg: { kind: 'blur' },
+    photo: { w: 1080, h: 1440, x: 540, y: 960, scale: 1, rotation: 0, filter: 'mono', extra: 'dropped' },
+    strokes: [{ brush: 'arrow', color: '#FFFFFF', width: 14, d: 'M10 10Q20 20 30 30L40 40' }],
+    layers: [textLayer, { id: 'b2', type: 'sticker', kind: 'emoji', text: '🔥', size: 180, x: 300, y: 400, scale: 1, rotation: 0 }],
+  };
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: own, layout: photoLayout } });
+  check('story with a layout is created', r.status === 200 && r.body.layout?.photo?.filter === 'mono' && !('extra' in r.body.layout.photo), r.err?.message || JSON.stringify(r.body));
+  check('layout colours are normalised', r.body?.layout?.layers?.[0]?.color === '#FF6B2B');
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: null, layout: { v: 1, bg: { kind: 'gradient', colors: ['#FF6B2B', '#D10869'] }, photo: null, strokes: [], layers: [textLayer] } } });
+  check('text-only story is created', r.status === 200 && r.body.media_url === null, r.err?.message || JSON.stringify(r.body));
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: null, layout: { v: 1, bg: { kind: 'gradient', colors: ['#FF6B2B', '#D10869'] }, photo: null, strokes: [], layers: [] } } });
+  check('empty text-only story is rejected', r.status === 400);
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: null } });
+  check('story with neither photo nor layout is rejected', r.status === 400);
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: own, layout: { ...photoLayout, strokes: [{ brush: 'pen', color: '#FFFFFF', width: 4, d: '<script>' }] } } });
+  check('stroke path outside the editor\'s commands is rejected', r.status === 400);
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: own, layout: { ...photoLayout, layers: [{ ...textLayer, color: 'red; x' }] } } });
+  check('non-hex colour is rejected', r.status === 400);
+  const adminContent = require(`${BACKEND}/src/controllers/admin/content`);
+  r = await call(adminContent.listStories, { query: { user_id: I1 } });
+  check('admin sees the words on a story as its caption',
+    r.status === 200 && r.body.data.some((s) => s.media_url === null && s.caption === 'Hello'),
+    r.err?.message || JSON.stringify(r.body?.data?.map((s) => s.caption)));
+  r = await call(stories.getFeedStories, { user: { id: B } });
+  const i1Stories = r.body?.find?.((g) => g.id === I1)?.items || [];
+  check('feed returns story layouts', i1Stories.some((s) => s.layout?.layers?.length === 2) && i1Stories.some((s) => s.media_url === null), JSON.stringify(i1Stories.map((s) => !!s.layout)));
+
 
   // ── Blocks, reports, account deletion ───────────────────────
   const safety = require(`${BACKEND}/src/controllers/safetyController`);

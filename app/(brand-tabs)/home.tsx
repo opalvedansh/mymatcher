@@ -17,9 +17,8 @@ import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 
-import { getFeedStories, getPostFeed, uploadImage, uploadStory } from '@/api';
+import { getFeedStories, getPostFeed } from '@/api';
 import { syncLike } from '@/utils/likeSync';
 import { StoryViewer } from '@/components/StoryViewer';
 import CommentsSheet from '@/components/CommentsSheet';
@@ -476,22 +475,12 @@ export default function BrandHomeScreen() {
     setViewerVisible(true);
   }, []);
 
-  const handleAddStory = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.5,
-    });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      try {
-        await uploadStory(await uploadImage(result.assets[0].uri));
-        fetchStories();
-      } catch (err) {
-        console.error('Failed to upload story', err);
-        showAlert('Story not posted', 'Something went wrong while uploading. Please try again.');
-      }
-    }
-  }, [fetchStories]);
+  // The story camera has the library, the camera and text stories, and opens
+  // the editor; coming back refreshes the row so the new story shows.
+  const handleAddStory = useCallback(() => {
+    refreshOnFocusRef.current = true;
+    router.push('/story-camera');
+  }, [router]);
 
   const handleStoryPress = useCallback((item: any, index: number) => {
     if (!item.isMe) {

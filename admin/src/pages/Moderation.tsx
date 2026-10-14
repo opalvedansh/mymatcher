@@ -324,13 +324,16 @@ function TargetCell({ report, onReadContext, canRead }: {
   }
 
   if (report.target_type === 'post' || report.target_type === 'story') {
-    const url = (t.image_url ?? t.media_url) as string;
+    // A text-only story has no media, just its caption.
+    const url = (t.image_url ?? t.media_url) as string | null;
     return (
       <div className="cell-name">
-        <img src={url} alt="" className="avatar" style={{ borderRadius: 'var(--r-1)', width: 34, height: 34 }} loading="lazy" />
+        {url && <img src={url} alt="" className="avatar" style={{ borderRadius: 'var(--r-1)', width: 34, height: 34 }} loading="lazy" />}
         <div style={{ minWidth: 0 }}>
           <div className="truncate" style={{ maxWidth: 280 }}>{(t.caption as string) || <span className="muted">No caption</span>}</div>
-          <a className="tiny" href={url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--info)' }}>Open media</a>
+          {url
+            ? <a className="tiny" href={url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--info)' }}>Open media</a>
+            : <span className="tiny muted">Text story</span>}
           {(t.expired as boolean) && <Badge>Expired</Badge>}
         </div>
       </div>

@@ -2,10 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadImage, uploadStory } from '@/api';
+import { StoryEditor, type StoryDraft } from '@/features/story/StoryEditor';
 import { showAlert } from '@/components/ActionSheet';
 import { sz } from '@/theme/scale';
 
@@ -14,7 +14,9 @@ export default function StoryCameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [flash, setFlash] = useState<'on' | 'off' | 'auto'>('off');
-  const [isUploading, setIsUploading] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  // undefined: camera; null: a text-only story; otherwise the photo being edited.
+  const [draft, setDraft] = useState<StoryDraft | undefined>(undefined);
   const cameraRef = useRef<any>(null);
 
   useEffect(() => {
@@ -22,26 +24,6 @@ export default function StoryCameraScreen() {
       requestPermission();
     }
   }, [permission]);
-
-  if (!permission) {
-    return <View style={styles.container} />;
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: 'white', textAlign: 'center', marginBottom: sz(20) }}>
-          We need your permission to show the camera
-        </Text>
-        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={{ color: 'white', fontWeight: '600' }}>Grant Permission</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={{ marginTop: sz(20) }} onPress={() => router.back()}>
-          <Text style={{ color: 'white', fontSize: sz(16) }}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
   function toggleCameraFacing() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
@@ -52,43 +34,68 @@ export default function StoryCameraScreen() {
   }
 
   const handleCapture = async () => {
-    if (!cameraRef.current || isUploading) return;
-    
+    if (!cameraRef.current || isCapturing) return;
     try {
-      setIsUploading(true);
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
-      if (photo?.uri) {
-        await uploadStory(await uploadImage(photo.uri));
-        router.back();
-      }
+      setIsCapturing(true);
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
+      // A camera shot fills the story; it can be pinched smaller in the editor.
+      if (photo?.uri) setDraft({ uri: photo.uri, width: photo.width, height: photo.height, fit: 'cover' });
     } catch (err) {
       console.error('Failed to capture story', err);
-      showAlert('Story not posted', 'Something went wrong while taking or uploading the photo. Please try again.');
+      showAlert('Couldn\'t take the photo', 'Something went wrong with the camera. Please try again.');
     } finally {
-      setIsUploading(false); // only needed if router.back() takes time or fails
+      setIsCapturing(false);
     }
   };
 
   const handlePickImage = async () => {
-    if (isUploading) return;
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.5,
+    if (isCapturing) return;
+    // No system crop: the whole photo goes into the editor, which shows all
+    // of it over a blurred fill and lets the author zoom or move it.
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
     });
-    
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      try {
-        setIsUploading(true);
-        await uploadStory(await uploadImage(result.assets[0].uri));
-        router.back();
-      } catch (err) {
-        console.error('Failed to upload picked story', err);
-        showAlert('Story not posted', 'Something went wrong while uploading. Please try again.');
-        setIsUploading(false);
-      }
-    }
+    const asset = result.canceled ? null : result.assets?.[0];
+    if (asset) setDraft({ uri: asset.uri, width: asset.width, height: asset.height, fit: 'contain' });
   };
+
+  if (draft !== undefined) {
+    return (
+      <StoryEditor
+        draft={draft}
+        onClose={() => setDraft(undefined)}
+        onPosted={() => router.back()}
+      />
+    );
+  }
+
+  if (!permission) {
+    return <View style={styles.container} />;
+  }
+
+  // Without the camera, the library and text stories still work.
+  if (!permission.granted) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: 'white', textAlign: 'center', marginBottom: sz(20) }}>
+          We need your permission to show the camera
+        </Text>
+        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+          <Text style={{ color: 'white', fontWeight: '600' }}>Grant Permission</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={{ marginTop: sz(20) }} onPress={handlePickImage}>
+          <Text style={{ color: 'white', fontSize: sz(16) }}>Choose from library</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={{ marginTop: sz(16) }} onPress={() => setDraft(null)}>
+          <Text style={{ color: 'white', fontSize: sz(16) }}>Create a text story</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={{ marginTop: sz(16) }} onPress={() => router.back()}>
+          <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: sz(16) }}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -104,24 +111,18 @@ export default function StoryCameraScreen() {
               <Ionicons name={flash === 'on' ? "flash" : "flash-off"} size={sz(26)} color="white" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.iconButton}>
-              <Ionicons name="settings-outline" size={sz(26)} color="white" />
-            </TouchableOpacity>
+            <View style={styles.iconButton} />
           </View>
 
           {/* Side Toolbar */}
           <View style={styles.sideToolbar}>
-            <TouchableOpacity style={styles.toolButton}>
+            <TouchableOpacity
+              style={styles.toolButton}
+              onPress={() => setDraft(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Create a text story"
+            >
               <Text style={{ color: 'white', fontSize: sz(20), fontWeight: 'bold' }}>Aa</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.toolButton}>
-              <Ionicons name="infinite" size={sz(26)} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.toolButton}>
-              <MaterialCommunityIcons name="view-grid-outline" size={sz(26)} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.toolButton}>
-              <Feather name="stop-circle" size={sz(26)} color="white" />
             </TouchableOpacity>
           </View>
 
@@ -131,7 +132,7 @@ export default function StoryCameraScreen() {
             <TouchableOpacity
               style={styles.galleryButton}
               onPress={handlePickImage}
-              disabled={isUploading}
+              disabled={isCapturing}
               accessibilityRole="button"
               accessibilityLabel="Choose from library"
             >
@@ -140,8 +141,8 @@ export default function StoryCameraScreen() {
 
             {/* Capture Button */}
             <View style={styles.captureButtonContainer}>
-              <TouchableOpacity style={styles.captureButtonInner} onPress={handleCapture} disabled={isUploading}>
-                {isUploading && <ActivityIndicator color="#000" size="large" />}
+              <TouchableOpacity style={styles.captureButtonInner} onPress={handleCapture} disabled={isCapturing}>
+                {isCapturing && <ActivityIndicator color="#000" size="large" />}
               </TouchableOpacity>
             </View>
 

@@ -15,9 +15,8 @@ import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 
-import { getFeedStories, getPostFeed, uploadImage, uploadStory } from '@/api';
+import { getFeedStories, getPostFeed } from '@/api';
 import { syncLike } from '@/utils/likeSync';
 import { StoryViewer } from '@/components/StoryViewer';
 import CommentsSheet from '@/components/CommentsSheet';
@@ -480,24 +479,12 @@ export default function InfluencerHomeScreen() {
     setViewerVisible(true);
   }, []);
 
-  const handleAddStory = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.5,
-    });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      try {
-        // Uploads the file itself; base64 made the picker hand a multi-MB
-        // string across the bridge and froze the JS thread.
-        await uploadStory(await uploadImage(result.assets[0].uri));
-        fetchStories();
-      } catch (err) {
-        console.error('Failed to upload story', err);
-        showAlert('Story not posted', 'Something went wrong while uploading. Please try again.');
-      }
-    }
-  }, [fetchStories]);
+  // The story camera has the library, the camera and text stories, and opens
+  // the editor; coming back refreshes the row so the new story shows.
+  const handleAddStory = useCallback(() => {
+    refreshOnFocusRef.current = true;
+    router.push('/story-camera');
+  }, [router]);
 
   const handleStoryPress = useCallback((item: any, index: number) => {
     if (!item.isMe) {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -27,12 +27,17 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { recordStoryView, getStoryViewers } from '@/api';
+import { StoryCanvas } from '@/features/story/StoryCanvas';
+import { readLayout, useCanvasFrame } from '@/features/story/layout';
 import { openSafetyMenu } from '@/components/safetyMenu';
 import { sz } from '@/theme/scale';
 
 type StoryItem = {
   id: string;
-  media_url: string;
+  /** Null for a text-only story. */
+  media_url: string | null;
+  /** What the editor placed over the photo; missing on stories posted before it. */
+  layout?: unknown;
 };
 
 type StoryGroup = {
@@ -55,6 +60,8 @@ interface StoryViewerProps {
 }
 
 const STORY_DURATION = 5000; // 5 seconds per story
+/** Room under the story for the reply bar; the story itself is never cropped. */
+const REPLY_BAR = sz(64);
 
 /** Nearest group at or after `from` (stepping by `dir`) that has something to show. */
 function findGroup(stories: StoryGroup[], from: number, dir: 1 | -1): number {
@@ -66,6 +73,7 @@ function findGroup(stories: StoryGroup[], from: number, dir: 1 | -1): number {
 
 export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }: StoryViewerProps) {
   const { width, height } = useWindowDimensions();
+  const frame = useCanvasFrame(REPLY_BAR);
 
   // Seeded from props rather than reset in an effect: an effect runs after the
   // first paint, which flashed the previously viewed group and recorded a view
@@ -95,6 +103,12 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
   const itemId = item?.id;
   const loaded = !!itemId && loadedId === itemId;
   const paused = userPaused || held || inputFocused || showViewers;
+  const layout = useMemo(() => (item ? readLayout(item.layout, !!item.media_url) : null), [item]);
+
+  // A text-only story has nothing to load, so its timer starts straight away.
+  useEffect(() => {
+    if (item && !item.media_url) setLoadedId(item.id);
+  }, [item]);
 
   // Empty the bar before the index changes: the next story's bar otherwise
   // renders one frame full, before the run effect below resets it.
@@ -189,7 +203,8 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
     const urls = group.items.slice(itemIndex + 1, itemIndex + 3).map((i) => i.media_url);
     const nextGroup = stories[findGroup(stories, groupIndex + 1, 1)];
     if (nextGroup) urls.push(nextGroup.items[0].media_url);
-    if (urls.length) Image.prefetch(urls, 'memory-disk').catch(() => {});
+    const toFetch = urls.filter((u): u is string => !!u);
+    if (toFetch.length) Image.prefetch(toFetch, 'memory-disk').catch(() => {});
   }, [visible, group, groupIndex, itemIndex, stories]);
 
   const handlePress = (evt: any) => {
@@ -249,15 +264,14 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
             onPressOut={() => setHeld(false)}
             delayLongPress={200}
           >
-            <Image
+            <StoryCanvas
               // Remounted per story so onLoad fires even when two stories
               // share a URL, and the last photo never lingers under the next.
               key={item.id}
-              recyclingKey={item.id}
-              source={{ uri: item.media_url }}
-              style={styles.image}
-              contentFit="cover"
-              cachePolicy="memory-disk"
+              layout={layout!}
+              mediaUri={item.media_url}
+              frame={frame}
+              style={[styles.canvas, { top: frame.top, left: frame.left }]}
               onLoad={() => setLoadedId(item.id)}
               // A broken photo still counts down, or the viewer would hang.
               onError={() => {
@@ -439,10 +453,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  image: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#000',
+  canvas: {
+    position: 'absolute',
+    borderRadius: sz(10),
   },
   imageStatus: {
     ...StyleSheet.absoluteFill,

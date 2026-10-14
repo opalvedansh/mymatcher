@@ -157,8 +157,9 @@ app.use(shrinkRay({
 // Global JSON limit is intentionally small — file uploads use presigned S3 URLs
 // and never send large bodies through this API.
 const jsonParser = express.json({ limit: '50kb' });
-// Face verification carries a base64 selfie and parses its own larger body.
-const LARGE_BODY_PATHS = new Set(['/api/profiles/verify-face']);
+// Face verification carries a base64 selfie, and a story its drawing; both
+// parse their own larger bodies.
+const LARGE_BODY_PATHS = new Set(['/api/profiles/verify-face', '/api/stories']);
 app.use((req, res, next) => (LARGE_BODY_PATHS.has(req.path) ? next() : jsonParser(req, res, next)));
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 app.use(globalLimiter);

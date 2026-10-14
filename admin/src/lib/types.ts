@@ -133,7 +133,7 @@ export type ResolvedTarget =
   | { deleted: true }
   | { id: string; name?: string | null; email?: string; banned?: boolean; avatar_url?: string | null; bio?: string | null; created_at?: string }
   | { id: string; user_id: string; image_url: string; caption: string | null; likes_count: number; created_at: string }
-  | { id: string; user_id: string; media_url: string; created_at: string; expires_at: string; expired: boolean }
+  | { id: string; user_id: string; media_url: string | null; caption: string | null; created_at: string; expires_at: string; expired: boolean }
   | { id: string; match_id: string; sender_id: string; created_at: string; content: null; content_available: true };
 
 export interface ReportRow {
@@ -192,7 +192,10 @@ export interface StoryRow {
   id: string;
   user_id: string;
   author_name: string | null;
-  media_url: string;
+  /** Null for a text-only story. */
+  media_url: string | null;
+  /** The text written on the story. */
+  caption: string | null;
   created_at: string;
   expires_at: string;
   expired: boolean;

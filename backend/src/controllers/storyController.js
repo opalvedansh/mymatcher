@@ -1,20 +1,37 @@
 const db = require('../config/db');
 const { isOwnUploadUrl } = require('../utils/storage');
+const { sanitizeLayout, LayoutError } = require('../utils/storyLayout');
 
 async function uploadStory(req, res, next) {
   try {
     const userId = req.user.id;
-    const { media_url } = req.body;
+    const { media_url, layout } = req.body;
+    const hasMedia = media_url != null;
 
-    if (!isOwnUploadUrl(media_url, userId)) {
+    if (hasMedia && !isOwnUploadUrl(media_url, userId)) {
       return res.status(400).json({ error: 'media_url must be an image you uploaded' });
+    }
+    // Apps from before the editor send only a photo; a text-only story is
+    // nothing but its layout.
+    if (!hasMedia && layout == null) {
+      return res.status(400).json({ error: 'A story needs a photo or a layout' });
+    }
+
+    let cleanLayout = null;
+    if (layout != null) {
+      try {
+        cleanLayout = sanitizeLayout(layout, { hasMedia });
+      } catch (err) {
+        if (err instanceof LayoutError) return res.status(400).json({ error: err.message });
+        throw err;
+      }
     }
 
     const { rows } = await db.query(
-      `INSERT INTO stories (user_id, media_url) 
-       VALUES ($1, $2) 
+      `INSERT INTO stories (user_id, media_url, layout)
+       VALUES ($1, $2, $3)
        RETURNING *`,
-      [userId, media_url]
+      [userId, hasMedia ? media_url : null, cleanLayout ? JSON.stringify(cleanLayout) : null]
     );
 
     res.json(rows[0]);
@@ -45,7 +62,7 @@ async function getFeedStories(req, res, next) {
     const allowedUserIds = [userId, ...matchedUserIds];
 
     const { rows } = await db.query(`
-      SELECT s.id, s.user_id, s.media_url, s.created_at, s.expires_at,
+      SELECT s.id, s.user_id, s.media_url, s.layout, s.created_at, s.expires_at,
              u.role,
              COALESCE(bp.name, ip.name) as name,
              COALESCE(bp.logo_url, ip.avatar_url) as avatar
@@ -74,6 +91,7 @@ async function getFeedStories(req, res, next) {
       groupedStories[story.user_id].items.push({
         id: story.id,
         media_url: story.media_url,
+        layout: story.layout,
         created_at: story.created_at,
         expires_at: story.expires_at
       });

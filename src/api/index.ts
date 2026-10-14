@@ -6,6 +6,7 @@
  */
 
 import api from './client';
+import type { StoryLayout } from '@/features/story/layout';
 import type {
   ApiUser,
   AnyProfile,
@@ -230,8 +231,12 @@ export function muteChat(matchId: string, duration: MuteDuration | null) {
 
 // ─── Stories ──────────────────────────────────────────────────────
 
-export function uploadStory(media_url: string) {
-  return api.post('/api/stories', { media_url });
+/**
+ * `layout` is what the editor placed over the photo (text, stickers, drawing,
+ * filter, position). A text-only story has no photo, so `media_url` is null.
+ */
+export function uploadStory(media_url: string | null, layout?: StoryLayout) {
+  return api.post('/api/stories', { media_url, layout });
 }
 
 /**

@@ -106,6 +106,9 @@ async function listStories(req, res, next) {
     const { rows } = await db.query(
       `SELECT s.id, s.user_id, s.media_url, s.created_at, s.expires_at,
               (s.expires_at < now()) AS expired,
+              -- The words written on the story, so a text story can be reviewed.
+              (SELECT string_agg(l->>'text', ' · ') FROM jsonb_array_elements(COALESCE(s.layout->'layers', '[]'::jsonb)) l
+                WHERE l->>'type' = 'text') AS caption,
               COALESCE(bp.name, ip.name) AS author_name,
               (SELECT count(*) FROM story_views v WHERE v.story_id = s.id)::int AS view_count,
               (SELECT count(*) FROM reports r
