@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, BackHandler, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { BlurView } from 'expo-blur';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getStoryAudience, uploadImage, uploadStory, uploadStoryVideo, type StoryAudienceMember } from '@/api';
 import { showAlert } from '@/components/ActionSheet';
 import { canSaveToCameraRoll, getMediaLibrary, getViewShot, tapFeedback } from '@/utils/optionalModules';
@@ -42,6 +42,7 @@ import { VerticalSlider } from './VerticalSlider';
 import { CLOSE_FRIENDS_GREEN, CloseFriendsSheet, MentionSheet, MusicSheet } from './StorySheets';
 import { ClipSlider } from './ClipSlider';
 import { useStoryMusic } from './media';
+import { Icon, type IconName } from './icons';
 
 /** A photo or video to edit, or null for a text-only story on a coloured background. */
 export type StoryDraft = {
@@ -595,7 +596,7 @@ export function StoryEditor({
           pointerEvents="none"
           style={[styles.trash, { left: trash.x - sz(28), top: trash.y - sz(28) }, trashStyle]}
         >
-          <Ionicons name="trash-outline" size={sz(26)} color="#FFF" />
+          <Icon.trash size={sz(26)} />
         </Animated.View>
       )}
 
@@ -603,47 +604,47 @@ export function StoryEditor({
       {showChrome && mode === 'idle' && (
         <>
           <View style={[styles.closeBtn, { top: frame.top + sz(8), left: frame.left + sz(8) }]} pointerEvents={posting ? 'none' : 'auto'}>
-            <ToolButton icon={<Ionicons name="close" size={sz(30)} color="#FFF" />} label="Close" onPress={close} />
+            <ToolButton icon={<Icon.close size={sz(26)} />} label="Close" onPress={close} />
           </View>
           <View style={[styles.toolColumn, { top: frame.top + sz(8), right: frame.left + sz(8) }]} pointerEvents={posting ? 'none' : 'box-none'}>
-            <ToolButton icon={<Text style={styles.aa}>Aa</Text>} label="Text" onPress={() => startText()} />
+            <ToolButton icon={<Icon.text />} label="Text" onPress={() => startText()} />
             <ToolButton
-              icon={<MaterialCommunityIcons name="sticker-emoji" size={sz(25)} color="#FFF" />}
+              icon={<Icon.stickers />}
               label="Stickers"
               onPress={() => setSheet('stickers')}
             />
             <ToolButton
-              icon={<Ionicons name="musical-notes" size={sz(23)} color="#FFF" />}
+              icon={<Icon.music />}
               label="Music"
               onPress={() => (layout.music ? setMode('music') : setSheet('music'))}
             />
             {photo && (
               <ToolButton
-                icon={<Ionicons name="color-filter-outline" size={sz(24)} color="#FFF" />}
+                icon={<Icon.filters />}
                 label="Filters"
                 onPress={() => setMode('filters')}
               />
             )}
             <ToolButton
-              icon={<MaterialCommunityIcons name="draw" size={sz(25)} color="#FFF" />}
+              icon={<Icon.draw />}
               label="Draw"
               onPress={() => setMode('draw')}
             />
             <ToolButton
-              icon={<MaterialCommunityIcons name="format-color-fill" size={sz(24)} color="#FFF" />}
+              icon={<Icon.background />}
               label="Background"
               onPress={cycleBackground}
             />
             {isVideo && !layout.music && (
               <ToolButton
-                icon={<Ionicons name={layout.videoMuted ? 'volume-mute' : 'volume-high'} size={sz(23)} color="#FFF" />}
+                icon={layout.videoMuted ? <Icon.soundOff /> : <Icon.soundOn />}
                 label={layout.videoMuted ? 'Turn sound on' : 'Mute video'}
                 onPress={() => setLayout((l) => ({ ...l, videoMuted: !l.videoMuted }))}
               />
             )}
             {canSave && (
               <ToolButton
-                icon={saving ? <ActivityIndicator color="#FFF" /> : <Ionicons name="download-outline" size={sz(24)} color="#FFF" />}
+                icon={saving ? <ActivityIndicator color="#FFF" /> : <Icon.save />}
                 label="Save to camera roll"
                 onPress={save}
                 disabled={saving}
@@ -658,7 +659,7 @@ export function StoryEditor({
         <>
           <View style={[styles.topBar, { top: frame.top + sz(8) }]} pointerEvents="box-none">
             <ToolButton
-              icon={<Ionicons name="arrow-undo" size={sz(24)} color={history.length ? '#FFF' : 'rgba(255,255,255,0.35)'} />}
+              icon={<Icon.undo color={history.length ? '#FFF' : 'rgba(255,255,255,0.35)'} />}
               label="Undo"
               onPress={undoDraw}
               disabled={!history.length}
@@ -733,7 +734,7 @@ export function StoryEditor({
       {mode === 'music' && layout.music && (
         <View style={[styles.musicPanel, { top: frame.top + frame.height - sz(150), left: frame.left + sz(12), right: frame.left + sz(12) }]}>
           <View style={styles.musicHeader}>
-            <Ionicons name="musical-notes" size={sz(16)} color="#FF6B2B" />
+            <Icon.music size={sz(16)} color="#FF6B2B" weight="fill" />
             <Text style={styles.musicName} numberOfLines={1}>
               {layout.music.title} · <Text style={styles.musicArtistName}>{layout.music.artist}</Text>
             </Text>
@@ -775,7 +776,7 @@ export function StoryEditor({
             ) : (
               <>
                 <View style={styles.cfStar}>
-                  <Ionicons name="star" size={sz(13)} color="#FFF" />
+                  <Icon.star size={sz(13)} />
                 </View>
                 <Text style={styles.cfText}>Close Friends</Text>
               </>
@@ -794,7 +795,7 @@ export function StoryEditor({
               <>
                 <Text style={styles.shareText}>Your story</Text>
                 <View style={styles.shareArrow}>
-                  <Ionicons name="arrow-forward" size={sz(18)} color="#FFF" />
+                  <Icon.next size={sz(18)} />
                 </View>
               </>
             )}
@@ -854,14 +855,17 @@ function ToolButton({
 }) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.toolBtn, pressed && styles.pressed]}
+      style={({ pressed }) => pressed && styles.pressed}
       onPress={onPress}
       disabled={disabled}
       hitSlop={sz(4)}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      {icon}
+      {/* Frosted, like the story camera's controls. */}
+      <BlurView intensity={40} tint="dark" style={styles.toolBtn}>
+        {icon}
+      </BlurView>
     </Pressable>
   );
 }
@@ -872,7 +876,7 @@ function BrushButton({
   selected,
   onPress,
 }: {
-  icon: string;
+  icon: IconName;
   label: string;
   selected: boolean;
   onPress: () => void;
@@ -885,7 +889,7 @@ function BrushButton({
       accessibilityLabel={label}
       accessibilityState={{ selected }}
     >
-      <MaterialCommunityIcons name={icon as any} size={sz(20)} color={selected ? '#111' : '#FFF'} />
+      {React.createElement(Icon[icon], { size: sz(19), color: selected ? '#111' : '#FFF' })}
     </Pressable>
   );
 }
@@ -1060,12 +1064,10 @@ const styles = StyleSheet.create({
     borderRadius: sz(21),
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.28)',
-  },
-  aa: {
-    color: '#FFF',
-    fontSize: sz(18),
-    fontWeight: '700',
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(20,20,20,0.25)',
   },
   brushRow: {
     flex: 1,

@@ -1,6 +1,5 @@
 import React, { memo } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { G, Path } from 'react-native-svg';
@@ -20,6 +19,7 @@ import {
   type TextLayer,
 } from './layout';
 import { StoryVideo } from './media';
+import { Icon } from './icons';
 
 // The pieces of a story, drawn at canvas scale `k` (screen points per canvas
 // unit). The viewer draws them as they are; the editor wraps the photo and the
@@ -205,7 +205,7 @@ export const LayerContent = memo(function LayerContent({
     if (layer.style === 'mini') {
       return (
         <View style={[styles.pill, styles.row, { paddingHorizontal: px * 0.45, paddingVertical: px * 0.25, borderRadius: px, gap: px * 0.3, maxWidth: 900 * k }]}>
-          <Ionicons name="musical-notes" size={px} color="#FF6B2B" />
+          <Icon.music size={px} color="#FF6B2B" weight="fill" />
           <Text style={[styles.musicTitle, { fontSize: px * 0.8 }]} numberOfLines={1}>
             {music.title} · <Text style={styles.musicArtist}>{music.artist}</Text>
           </Text>
@@ -218,7 +218,7 @@ export const LayerContent = memo(function LayerContent({
           <Image source={{ uri: music.artwork }} style={{ width: px * 1.8, height: px * 1.8, borderRadius: px * 0.2 }} cachePolicy="memory-disk" />
         ) : (
           <View style={[styles.artFallback, { width: px * 1.8, height: px * 1.8, borderRadius: px * 0.2 }]}>
-            <Ionicons name="musical-notes" size={px} color="#FFF" />
+            <Icon.music size={px} weight="fill" />
           </View>
         )}
         <View style={styles.flexShrink}>

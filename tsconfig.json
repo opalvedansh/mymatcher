@@ -3,7 +3,10 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // Icons are imported one by one so the bundle doesn't carry all 1,500;
+      // that path is raw .tsx, so types come from the package's .d.ts files.
+      "phosphor-react-native/src/icons/*": ["./node_modules/phosphor-react-native/lib/typescript/icons/*"]
     }
   },
   "exclude": ["node_modules", "backend", "mymatcher", "scratch"]

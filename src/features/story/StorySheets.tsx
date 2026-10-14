@@ -14,11 +14,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
 import { getStoryAudience, searchStoryMusic, setCloseFriends, type StoryAudienceMember } from '@/api';
 import { getAudio } from '@/utils/optionalModules';
 import { sz } from '@/theme/scale';
 import type { Track } from './layout';
+import { Icon } from './icons';
 
 const ACCENT = '#FF6B2B';
 export const CLOSE_FRIENDS_GREEN = '#1DB954';
@@ -47,7 +47,7 @@ function Sheet({
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={sz(10)} accessibilityRole="button" accessibilityLabel="Close">
-              <Ionicons name="close" size={sz(24)} color="#FFF" />
+              <Icon.close size={sz(22)} />
             </Pressable>
           </View>
           {children}
@@ -61,7 +61,7 @@ function Sheet({
 function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <View style={styles.search}>
-      <Ionicons name="search" size={sz(17)} color="rgba(255,255,255,0.5)" />
+      <Icon.search size={sz(17)} color="rgba(255,255,255,0.5)" />
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -73,7 +73,7 @@ function SearchBox({ value, onChange, placeholder }: { value: string; onChange: 
       />
       {!!value && (
         <Pressable onPress={() => onChange('')} hitSlop={sz(8)} accessibilityLabel="Clear search">
-          <Ionicons name="close-circle" size={sz(17)} color="rgba(255,255,255,0.5)" />
+          <Icon.clear size={sz(17)} color="rgba(255,255,255,0.5)" />
         </Pressable>
       )}
     </View>
@@ -172,7 +172,7 @@ export function MusicSheet({ visible, onClose, onPick }: { visible: boolean; onC
                 <Image source={{ uri: t.artwork }} style={styles.artwork} cachePolicy="memory-disk" />
               ) : (
                 <View style={[styles.artwork, styles.artworkFallback]}>
-                  <Ionicons name="musical-notes" size={sz(20)} color="#FFF" />
+                  <Icon.music size={sz(20)} weight="fill" />
                 </View>
               )}
               <View style={styles.rowText}>
@@ -187,7 +187,7 @@ export function MusicSheet({ visible, onClose, onPick }: { visible: boolean; onC
                   accessibilityRole="button"
                   accessibilityLabel={previewing === t.id ? 'Stop preview' : 'Play preview'}
                 >
-                  <Ionicons name={previewing === t.id ? 'pause' : 'play'} size={sz(18)} color="#FFF" />
+                  {previewing === t.id ? <Icon.pause size={sz(16)} /> : <Icon.play size={sz(16)} />}
                 </Pressable>
               )}
             </Pressable>
@@ -222,7 +222,7 @@ function Avatar({ uri }: { uri: string | null }) {
     <Image source={{ uri }} style={styles.avatar} cachePolicy="memory-disk" />
   ) : (
     <View style={[styles.avatar, styles.avatarFallback]}>
-      <Ionicons name="person" size={sz(18)} color="#777" />
+      <Icon.person size={sz(18)} color="#777" />
     </View>
   );
 }
@@ -387,7 +387,7 @@ export function CloseFriendsSheet({
                   <Text style={styles.rowSub}>{p.role === 'brand' ? 'Brand' : 'Creator'}</Text>
                 </View>
                 <View style={[styles.check, on && styles.checkOn]}>
-                  {on && <Ionicons name="checkmark" size={sz(16)} color="#FFF" />}
+                  {on && <Icon.check size={sz(15)} />}
                 </View>
               </Pressable>
             );

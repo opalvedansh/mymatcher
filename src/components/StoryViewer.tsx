@@ -26,12 +26,12 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { recordStoryView, getStoryViewers } from '@/api';
 import { StoryCanvas, mentionAt } from '@/features/story/StoryCanvas';
 import { MUSIC_CLIP_SECONDS, readLayout, useCanvasFrame, type StoryMusic } from '@/features/story/layout';
 import { useStoryMusic } from '@/features/story/media';
+import { Icon } from '@/features/story/icons';
 import { CLOSE_FRIENDS_GREEN } from '@/features/story/StorySheets';
 import { openSafetyMenu } from '@/components/safetyMenu';
 import { showAlert } from '@/components/ActionSheet';
@@ -394,7 +394,7 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
             )}
             {failedId === item.id && (
               <View style={styles.imageStatus} pointerEvents="none">
-                <Ionicons name="image-outline" size={sz(34)} color="rgba(255,255,255,0.5)" />
+                <Icon.brokenImage size={sz(34)} color="rgba(255,255,255,0.5)" />
                 <Text style={styles.failedText}>Couldn't load this story</Text>
               </View>
             )}
@@ -454,7 +454,7 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                     <Text style={styles.timeElapsed}>2 h</Text>
                     {item.close_friends && (
                       <View style={styles.cfBadge} accessibilityLabel="Close Friends">
-                        <Ionicons name="star" size={sz(10)} color="#FFF" />
+                        <Icon.star size={sz(10)} />
                       </View>
                     )}
                   </View>
@@ -474,7 +474,7 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                     style={styles.headerIconBtn}
                     accessibilityLabel={muted ? 'Turn sound on' : 'Mute'}
                   >
-                    <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={sz(22)} color="#FFF" />
+                    {muted ? <Icon.soundOff size={sz(22)} /> : <Icon.soundOn size={sz(22)} />}
                   </Pressable>
                 )}
                 <Pressable
@@ -482,7 +482,7 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                   style={styles.headerIconBtn}
                   accessibilityLabel={userPaused ? 'Play' : 'Pause'}
                 >
-                  <Ionicons name={userPaused ? 'play' : 'pause'} size={sz(22)} color="#FFF" />
+                  {userPaused ? <Icon.play size={sz(20)} /> : <Icon.pause size={sz(20)} />}
                 </Pressable>
                 {!group.isMe && (
                   <Pressable
@@ -501,11 +501,11 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                       });
                     }}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={sz(24)} color="#FFF" />
+                    <Icon.more size={sz(24)} />
                   </Pressable>
                 )}
                 <Pressable accessibilityLabel="Close" onPress={onClose} style={styles.headerIconBtn}>
-                  <Ionicons name="close" size={sz(26)} color="#FFF" />
+                  <Icon.close size={sz(24)} />
                 </Pressable>
               </View>
             </View>
@@ -524,12 +524,12 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
               {group.isMe ? (
                 <View style={styles.viewersBarContainer}>
                   <Pressable style={styles.viewersBtn} onPress={handleOpenViewers}>
-                    <Ionicons name="eye-outline" size={sz(24)} color="#FFF" />
+                    <Icon.viewers size={sz(24)} />
                     <Text style={styles.viewersText}>Viewers</Text>
                   </Pressable>
                   {canSave && (
                     <Pressable style={styles.actionBtn} onPress={handleMore} accessibilityLabel="More">
-                      <Ionicons name="ellipsis-horizontal" size={sz(28)} color="#FFF" />
+                      <Icon.more size={sz(28)} />
                     </Pressable>
                   )}
                 </View>
@@ -552,10 +552,10 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                   {!inputFocused && (
                     <View style={styles.actionButtons}>
                       <Pressable style={styles.actionBtn} onPress={handleLike}>
-                        <Ionicons name="heart-outline" size={sz(30)} color="#FFF" />
+                        <Icon.like size={sz(28)} />
                       </Pressable>
                       <Pressable style={styles.actionBtn} onPress={handleShare}>
-                        <Ionicons name="paper-plane-outline" size={sz(28)} color="#FFF" />
+                        <Icon.send size={sz(26)} />
                       </Pressable>
                     </View>
                   )}

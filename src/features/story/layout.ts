@@ -270,11 +270,11 @@ export const FILTERS: Record<FilterId, { label: string; passes: FilterPass[] }> 
 };
 export const FILTER_ORDER: FilterId[] = ['normal', 'clarendon', 'juno', 'lark', 'gingham', 'mono', 'sepia', 'cool', 'warm', 'fade'];
 
-export const BRUSHES: Record<BrushId, { label: string; icon: string; defaultWidth: number }> = {
-  pen: { label: 'Pen', icon: 'pencil', defaultWidth: 14 },
+export const BRUSHES: Record<BrushId, { label: string; icon: 'pen' | 'marker' | 'neon' | 'arrow'; defaultWidth: number }> = {
+  pen: { label: 'Pen', icon: 'pen', defaultWidth: 14 },
   marker: { label: 'Marker', icon: 'marker', defaultWidth: 36 },
-  neon: { label: 'Neon', icon: 'lightbulb-on-outline', defaultWidth: 16 },
-  arrow: { label: 'Arrow', icon: 'arrow-top-right', defaultWidth: 14 },
+  neon: { label: 'Neon', icon: 'neon', defaultWidth: 16 },
+  arrow: { label: 'Arrow', icon: 'arrow', defaultWidth: 14 },
 };
 export const BRUSH_ORDER: BrushId[] = ['pen', 'arrow', 'marker', 'neon'];
 

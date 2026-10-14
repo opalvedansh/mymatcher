@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { getAudio, getVideo } from '@/utils/optionalModules';
 import { sz } from '@/theme/scale';
 import { MUSIC_CLIP_SECONDS, type StoryMusic } from './layout';
+import { Icon } from './icons';
 
 /**
  * A story's video, filling its box. Playback follows `paused`, and it starts
@@ -31,7 +31,7 @@ function NoVideo({ onLoad }: { onLoad?: () => void }) {
   }, [onLoad]);
   return (
     <View style={styles.fallback}>
-      <Ionicons name="videocam-outline" size={sz(30)} color="rgba(255,255,255,0.6)" />
+      <Icon.video size={sz(30)} color="rgba(255,255,255,0.6)" />
       <Text style={styles.fallbackText}>Update Matchr to watch video stories</Text>
     </View>
   );

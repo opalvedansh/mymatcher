@@ -11,11 +11,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FONT_ORDER, FONTS, type TextAlign, type TextBg, type TextLayer } from './layout';
 import { textLayerStyles } from './StoryCanvas';
 import { PaletteRow } from './PaletteRow';
 import { VerticalSlider } from './VerticalSlider';
+import { Icon } from './icons';
 import { sz } from '@/theme/scale';
 
 const MIN_SIZE = 36;
@@ -58,7 +58,7 @@ export function TextComposer({
               onPress={() => set({ align: NEXT_ALIGN[layer.align] })}
               accessibilityLabel={`Align ${NEXT_ALIGN[layer.align]}`}
             >
-              <MaterialCommunityIcons name={`format-align-${layer.align}`} size={sz(26)} color="#FFF" />
+              {layer.align === 'left' ? <Icon.alignLeft size={sz(26)} /> : layer.align === 'right' ? <Icon.alignRight size={sz(26)} /> : <Icon.alignCenter size={sz(26)} />}
             </Pressable>
             <Pressable
               style={styles.topBtn}

@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -23,6 +22,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { BOTTOM_BAR, StoryEditor, type StoryDraft } from '@/features/story/StoryEditor';
 import { CloseFriendsSheet, CLOSE_FRIENDS_GREEN } from '@/features/story/StorySheets';
 import { useCanvasFrame } from '@/features/story/layout';
+import { Icon } from '@/features/story/icons';
 import { showAlert } from '@/components/ActionSheet';
 import { getMediaLibrary, tapFeedback } from '@/utils/optionalModules';
 import { sz } from '@/theme/scale';
@@ -266,11 +266,11 @@ export default function StoryCameraScreen() {
           accessibilityRole="button"
           accessibilityLabel="Close"
         >
-          <Ionicons name="close" size={sz(28)} color="#FFF" />
+          <Icon.close size={sz(26)} />
         </Pressable>
         <View style={styles.permBody}>
           <View style={styles.permIcon}>
-            <Ionicons name="camera" size={sz(34)} color={ACCENT} />
+            <Icon.camera size={sz(34)} color={ACCENT} weight="fill" />
           </View>
           <Text style={styles.permTitle}>Share what you're working on</Text>
           <Text style={styles.permText}>
@@ -291,7 +291,7 @@ export default function StoryCameraScreen() {
               style={({ pressed }) => [styles.permAlt, pressed && styles.pressed]}
               accessibilityRole="button"
             >
-              <Ionicons name="images-outline" size={sz(18)} color="#FFF" />
+              <Icon.library size={sz(18)} />
               <Text style={styles.permAltText}>Library</Text>
             </Pressable>
             <Pressable
@@ -336,7 +336,7 @@ export default function StoryCameraScreen() {
         {/* Top: close and flash; while recording, the timer in the middle. */}
         <View style={styles.topRow} pointerEvents="box-none">
           <View style={styles.topSlot}>
-            {!recording && <GlassButton icon="close" iconSize={sz(26)} label="Close" onPress={() => router.back()} />}
+            {!recording && <GlassButton icon={<Icon.close size={sz(22)} />} label="Close" onPress={() => router.back()} />}
           </View>
           {recording && (
             <View
@@ -351,10 +351,9 @@ export default function StoryCameraScreen() {
           <View style={[styles.topSlot, styles.topSlotRight]}>
             {!recording && (
               <GlassButton
-                icon={flash === 'on' ? 'flash' : 'flash-off'}
+                icon={flash === 'on' ? <Icon.flashOn size={sz(21)} color="#FFD60A" /> : <Icon.flashOff size={sz(21)} />}
                 label={flash === 'on' ? 'Flash on' : 'Flash off'}
                 onPress={() => setFlash((f) => (f === 'on' ? 'off' : 'on'))}
-                active={flash === 'on'}
               />
             )}
           </View>
@@ -364,10 +363,10 @@ export default function StoryCameraScreen() {
         {!recording && (
           <View style={styles.rail} pointerEvents="box-none">
             <RailItem label="Create" onPress={() => setDraft(null)}>
-              <Text style={styles.railAa}>Aa</Text>
+              <Icon.text size={sz(20)} />
             </RailItem>
             <RailItem label="Close Friends" onPress={() => setCloseFriendsOpen(true)}>
-              <Ionicons name="star" size={sz(17)} color={CLOSE_FRIENDS_GREEN} />
+              <Icon.star size={sz(18)} color={CLOSE_FRIENDS_GREEN} />
             </RailItem>
           </View>
         )}
@@ -385,7 +384,7 @@ export default function StoryCameraScreen() {
               <Image source={{ uri: latestThumb }} style={styles.libraryThumb} contentFit="cover" />
             ) : (
               <BlurView intensity={40} tint="dark" style={styles.libraryBlur}>
-                <Ionicons name="images-outline" size={sz(20)} color="#FFF" />
+                <Icon.library size={sz(20)} />
               </BlurView>
             )}
           </Pressable>
@@ -425,7 +424,7 @@ export default function StoryCameraScreen() {
           </Pressable>
 
           <View style={recording ? styles.hidden : undefined} pointerEvents={recording ? 'none' : 'auto'}>
-            <GlassButton icon="camera-reverse-outline" iconSize={sz(24)} label="Flip camera" onPress={flipCamera} size={sz(48)} />
+            <GlassButton icon={<Icon.flip size={sz(24)} />} label="Flip camera" onPress={flipCamera} size={sz(48)} />
           </View>
         </View>
       </View>
@@ -472,16 +471,12 @@ function GlassButton({
   icon,
   label,
   onPress,
-  iconSize = sz(22),
   size = GLASS,
-  active = false,
 }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: React.ReactNode;
   label: string;
   onPress: () => void;
-  iconSize?: number;
   size?: number;
-  active?: boolean;
 }) {
   return (
     <Pressable
@@ -492,7 +487,7 @@ function GlassButton({
       accessibilityLabel={label}
     >
       <BlurView intensity={40} tint="dark" style={[styles.glass, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Ionicons name={icon} size={iconSize} color={active ? '#FFD60A' : '#FFF'} />
+        {icon}
       </BlurView>
     </Pressable>
   );
@@ -600,11 +595,6 @@ const styles = StyleSheet.create({
     width: sz(40),
     height: sz(40),
     borderRadius: sz(20),
-  },
-  railAa: {
-    color: '#FFF',
-    fontSize: sz(16),
-    fontWeight: '800',
   },
   railLabel: {
     color: '#FFF',
