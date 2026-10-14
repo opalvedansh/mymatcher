@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { uploadImage, uploadStory } from '@/api';
+import { getStoryAudience, uploadImage, uploadStory, uploadStoryVideo, type StoryAudienceMember } from '@/api';
 import { showAlert } from '@/components/ActionSheet';
-import { tapFeedback } from '@/utils/optionalModules';
+import { canSaveToCameraRoll, getMediaLibrary, getViewShot, tapFeedback } from '@/utils/optionalModules';
 import { sz } from '@/theme/scale';
 import {
   BRUSH_ORDER,
@@ -30,6 +30,8 @@ import {
   type StoryLayout,
   type Stroke,
   type TextLayer,
+  type Track,
+  MUSIC_CLIP_SECONDS,
 } from './layout';
 import { LayerContent, PhotoContent, StoryBackgroundView, StrokesView } from './StoryCanvas';
 import { Transformable, type DragInfo } from './Transformable';
@@ -37,11 +39,27 @@ import { TextComposer } from './TextComposer';
 import { StickerSheet, clockNow, dateNow } from './StickerSheet';
 import { PaletteRow } from './PaletteRow';
 import { VerticalSlider } from './VerticalSlider';
+import { CLOSE_FRIENDS_GREEN, CloseFriendsSheet, MentionSheet, MusicSheet } from './StorySheets';
+import { ClipSlider } from './ClipSlider';
+import { useStoryMusic } from './media';
 
-/** A photo to edit, or null for a text-only story on a coloured background. */
-export type StoryDraft = { uri: string; width: number; height: number; fit: 'contain' | 'cover' } | null;
+/** A photo or video to edit, or null for a text-only story on a coloured background. */
+export type StoryDraft = {
+  uri: string;
+  width: number;
+  height: number;
+  fit: 'contain' | 'cover';
+  kind?: 'image' | 'video';
+  /** A video's length. */
+  durationMs?: number;
+} | null;
 
-type Mode = 'idle' | 'draw' | 'filters';
+type Mode = 'idle' | 'draw' | 'filters' | 'music';
+type Sheet = 'stickers' | 'music' | 'mention' | 'closeFriends' | 'closeFriendsShare' | null;
+/** A video's own background: it can't be blurred behind itself. */
+const VIDEO_BG: [string, string] = ['#232526', '#0F0F0F'];
+/** Seconds of the 30-second preview the clip can start at. */
+const MAX_CLIP_START = 30 - MUSIC_CLIP_SECONDS;
 type Eraser = 'eraser';
 
 const BOTTOM_BAR = sz(72);
@@ -97,12 +115,15 @@ export function StoryEditor({
   const insets = useSafeAreaInsets();
   const k = frame.k;
 
+  const isVideo = draft?.kind === 'video';
   const [layout, setLayout] = useState<StoryLayout>(() => ({
     v: 1,
-    bg: draft ? { kind: 'blur' } : { kind: 'gradient', colors: GRADIENTS[0] },
+    bg: isVideo ? { kind: 'gradient', colors: VIDEO_BG } : draft ? { kind: 'blur' } : { kind: 'gradient', colors: GRADIENTS[0] },
     photo: draft ? fitPhoto(draft.width, draft.height, draft.fit) : null,
     strokes: [],
     layers: [],
+    music: null,
+    videoMuted: false,
   }));
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -112,9 +133,12 @@ export function StoryEditor({
   const [editing, setEditing] = useState<{ layer: TextLayer; isNew: boolean } | null>(() =>
     draft ? null : { layer: { ...DEFAULT_TEXT, id: newId(), text: '' }, isNew: true },
   );
-  const [stickersOpen, setStickersOpen] = useState(false);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const stickersOpen = sheet === 'stickers';
+  const setStickersOpen = (open: boolean) => setSheet(open ? 'stickers' : null);
   const [dragging, setDragging] = useState<'layer' | 'photo' | null>(null);
-  const [posting, setPosting] = useState(false);
+  /** Which share button is posting, if any. */
+  const [posting, setPosting] = useState<false | 'all' | 'close_friends'>(false);
 
   // The text style used last, so the next text starts from it.
   const lastText = useRef(DEFAULT_TEXT);
@@ -127,7 +151,11 @@ export function StoryEditor({
 
   const removeLayer = useCallback((id: string) => {
     tapFeedback();
-    setLayout((l) => ({ ...l, layers: l.layers.filter((x) => x.id !== id) }));
+    setLayout((l) => {
+      // Throwing away the music sticker takes the song off the story.
+      const gone = l.layers.find((x) => x.id === id);
+      return { ...l, layers: l.layers.filter((x) => x.id !== id), music: gone?.type === 'music' ? null : l.music };
+    });
   }, []);
 
   const addLayer = useCallback((layer: Layer) => {
@@ -174,6 +202,51 @@ export function StoryEditor({
       rotation: 0,
     });
   };
+
+  const addMention = (p: StoryAudienceMember) => {
+    setSheet(null);
+    addLayer({ id: newId(), type: 'mention', userId: p.id, text: `@${p.name}`, size: 72, x: CANVAS_W / 2, y: CANVAS_H / 2, scale: 1, rotation: 0 });
+  };
+
+  // ─── Music ─────────────────────────────────────────────────────
+
+  const pickTrack = (t: Track) => {
+    setSheet(null);
+    const { duration_ms: _d, ...song } = t;
+    setLayout((l) => ({
+      ...l,
+      music: { ...song, start: 0 },
+      // One song per story, so one music sticker.
+      layers: [
+        ...l.layers.filter((x) => x.type !== 'music'),
+        { id: newId(), type: 'music', text: '', style: 'card', size: 64, x: CANVAS_W / 2, y: CANVAS_H * 0.72, scale: 1, rotation: 0 },
+      ],
+    }));
+    setMode('music');
+  };
+
+  const removeMusic = () => {
+    setLayout((l) => ({ ...l, music: null, layers: l.layers.filter((x) => x.type !== 'music') }));
+    setMode('idle');
+  };
+
+  const setClipStart = (start: number) => {
+    setLayout((l) => (l.music ? { ...l, music: { ...l.music, start } } : l));
+  };
+
+  // The song plays while the story is being made, as it will for viewers;
+  // it stops while another song is being picked.
+  useStoryMusic(layout.music, !posting && sheet !== 'music');
+
+
+  // ─── Close Friends ─────────────────────────────────────────────
+
+  const [closeFriends, setCloseFriendsCount] = useState<number | null>(null);
+  useEffect(() => {
+    getStoryAudience()
+      .then((people) => setCloseFriendsCount(people.filter((p: StoryAudienceMember) => p.close_friend).length))
+      .catch(() => setCloseFriendsCount(null));
+  }, []);
 
   // ─── Dragging, trash and centre guides ─────────────────────────
 
@@ -277,16 +350,19 @@ export function StoryEditor({
 
   // ─── Filters and background ────────────────────────────────────
 
-  const [filterToast, setFilterToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+  const showToast = useCallback((text: string, ms = 900) => {
+    setToast(text);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), ms);
+  }, []);
 
   const setFilter = useCallback((f: FilterId) => {
     setLayout((l) => (l.photo ? { ...l, photo: { ...l.photo, filter: f } } : l));
-    setFilterToast(FILTERS[f].label);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setFilterToast(null), 900);
-  }, []);
+    showToast(FILTERS[f].label);
+  }, [showToast]);
 
   const stepFilter = useCallback((dir: 1 | -1) => {
     const current = layoutRef.current.photo?.filter ?? 'normal';
@@ -308,12 +384,49 @@ export function StoryEditor({
 
   const cycleBackground = () => {
     setLayout((l) => {
-      const options = [...(l.photo ? [{ kind: 'blur' as const }] : []), ...GRADIENTS.map((c) => ({ kind: 'gradient' as const, colors: c }))];
+      const gradients = [...(isVideo ? [VIDEO_BG] : []), ...GRADIENTS].map((c) => ({ kind: 'gradient' as const, colors: c }));
+      const options = [...(l.photo && !isVideo ? [{ kind: 'blur' as const }] : []), ...gradients];
       const i = options.findIndex((o) =>
         o.kind === l.bg.kind && (o.kind === 'blur' || (l.bg.kind === 'gradient' && o.colors[0] === l.bg.colors[0])),
       );
       return { ...l, bg: options[(i + 1) % options.length] };
     });
+  };
+
+  // ─── Saving to the camera roll ─────────────────────────────────
+
+  const captureRef = useRef<View>(null);
+  const [saving, setSaving] = useState(false);
+  // A video is saved as it was recorded: drawing over a video needs a video
+  // encoder, which the app doesn't have.
+  const canSave = isVideo ? !!getMediaLibrary() : canSaveToCameraRoll();
+
+  const save = async () => {
+    const library = getMediaLibrary();
+    if (!library || saving) return;
+    setSaving(true);
+    try {
+      const perm = await library.requestPermissionsAsync(true);
+      if (!perm.granted) {
+        showAlert('Allow saving photos', 'Turn on photo access for Matchr in Settings to save your story.');
+        return;
+      }
+      let uri = draft?.uri;
+      if (!isVideo) {
+        const shot = getViewShot();
+        if (!shot || !captureRef.current) return;
+        // Full story resolution, whatever the screen size.
+        uri = await shot.captureRef(captureRef, { format: 'jpg', quality: 0.95, width: CANVAS_W, height: CANVAS_H, result: 'tmpfile' });
+      }
+      if (!uri) return;
+      await library.saveToLibraryAsync(uri);
+      showToast(isVideo ? 'Video saved (without stickers)' : 'Saved', 1400);
+    } catch (err) {
+      console.error('Failed to save story', err);
+      showAlert('Couldn\'t save', 'Something went wrong while saving. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ─── Leaving and posting ───────────────────────────────────────
@@ -337,20 +450,26 @@ export function StoryEditor({
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (posting) return true;
       if (editing) setEditing(null);
-      else if (stickersOpen) setStickersOpen(false);
+      else if (sheet) setSheet(null);
       else if (mode !== 'idle') setMode('idle');
       else close();
       return true;
     });
     return () => sub.remove();
-  }, [editing, stickersOpen, mode, posting, close]);
+  }, [editing, sheet, mode, posting, close]);
 
-  const post = async () => {
+  const post = async (audience: 'all' | 'close_friends' = 'all') => {
     if (posting || isEmpty) return;
-    setPosting(true);
+    setPosting(audience);
     try {
-      const mediaUrl = draft ? await uploadImage(draft.uri) : null;
-      await uploadStory(mediaUrl, compact(layoutRef.current));
+      const mediaUrl = !draft ? null : isVideo ? await uploadStoryVideo(draft.uri) : await uploadImage(draft.uri);
+      await uploadStory({
+        media_url: mediaUrl,
+        layout: compact(layoutRef.current),
+        media_type: isVideo ? 'video' : 'image',
+        duration_ms: isVideo ? draft?.durationMs ?? null : null,
+        audience,
+      });
       onPosted();
     } catch (err) {
       console.error('Failed to post story', err);
@@ -366,12 +485,17 @@ export function StoryEditor({
   const editingId = editing && !editing.isNew ? editing.layer.id : null;
   const photo = layout.photo;
   const mediaUri = draft?.uri ?? null;
+  const videoPlayback = isVideo
+    ? { paused: !!posting, muted: !!layout.videoMuted || !!layout.music, loop: true }
+    : undefined;
 
   const canvasStyle = { top: frame.top, left: frame.left, width: frame.width, height: frame.height };
 
   return (
     <View style={styles.screen}>
       <View style={[styles.canvas, canvasStyle]}>
+        {/* Everything the story shows, and nothing else: saving captures this view. */}
+        <View ref={captureRef} collapsable={false} style={StyleSheet.absoluteFill}>
         {/* Tapping the background starts text, like tapping a story in the camera. */}
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -379,7 +503,7 @@ export function StoryEditor({
           disabled={!idle}
           accessibilityLabel="Add text"
         >
-          <StoryBackgroundView bg={layout.bg} mediaUri={mediaUri} />
+          <StoryBackgroundView bg={layout.bg} mediaUri={isVideo ? null : mediaUri} />
         </Pressable>
 
         {photo && mediaUri && (
@@ -395,7 +519,7 @@ export function StoryEditor({
             onDragEnd={onDragEnd}
           >
             <View style={{ width: photo.w * k, height: photo.h * k }}>
-              <PhotoContent uri={mediaUri} photo={photo} />
+              <PhotoContent uri={mediaUri} photo={photo} video={videoPlayback} />
             </View>
           </Transformable>
         )}
@@ -416,15 +540,24 @@ export function StoryEditor({
               trash={trash}
               drag={drag}
               onCommit={(p) => updateLayer(layer.id, p)}
-              onTap={layer.type === 'text' ? () => editText(layer) : undefined}
+              onTap={
+                layer.type === 'text'
+                  ? () => editText(layer)
+                  : layer.type === 'music'
+                    // Tapping the music sticker switches its look, as on Instagram.
+                    ? () => updateLayer(layer.id, { style: layer.style === 'card' ? 'mini' : 'card' })
+                    : undefined
+              }
               onDragStart={onLayerDragStart}
               onDragEnd={onDragEnd}
               onDelete={() => removeLayer(layer.id)}
             >
-              <LayerContent layer={layer} k={k} />
+              <LayerContent layer={layer} k={k} music={layout.music} />
             </Transformable>
           ),
         )}
+
+        </View>
 
         {!photo && !layout.layers.length && !editing && (
           <View style={styles.placeholder} pointerEvents="none">
@@ -447,9 +580,9 @@ export function StoryEditor({
           </GestureDetector>
         )}
 
-        {filterToast && (
+        {toast && (
           <View style={styles.toast} pointerEvents="none">
-            <Text style={styles.toastText}>{filterToast}</Text>
+            <Text style={styles.toastText}>{toast}</Text>
           </View>
         )}
       </View>
@@ -464,35 +597,58 @@ export function StoryEditor({
         </Animated.View>
       )}
 
-      {/* ── Top toolbar ── */}
+      {/* ── Close, and the tools down the right side ── */}
       {showChrome && mode === 'idle' && (
-        <View style={[styles.topBar, { top: frame.top + sz(8) }]} pointerEvents={posting ? 'none' : 'box-none'}>
-          <ToolButton icon={<Ionicons name="close" size={sz(30)} color="#FFF" />} label="Close" onPress={close} />
-          <View style={styles.flex} />
-          <ToolButton
-            icon={<MaterialCommunityIcons name="format-color-fill" size={sz(25)} color="#FFF" />}
-            label="Background"
-            onPress={cycleBackground}
-          />
-          {photo && (
+        <>
+          <View style={[styles.closeBtn, { top: frame.top + sz(8), left: frame.left + sz(8) }]} pointerEvents={posting ? 'none' : 'auto'}>
+            <ToolButton icon={<Ionicons name="close" size={sz(30)} color="#FFF" />} label="Close" onPress={close} />
+          </View>
+          <View style={[styles.toolColumn, { top: frame.top + sz(8), right: frame.left + sz(8) }]} pointerEvents={posting ? 'none' : 'box-none'}>
+            <ToolButton icon={<Text style={styles.aa}>Aa</Text>} label="Text" onPress={() => startText()} />
             <ToolButton
-              icon={<Ionicons name="color-filter-outline" size={sz(25)} color="#FFF" />}
-              label="Filters"
-              onPress={() => setMode('filters')}
+              icon={<MaterialCommunityIcons name="sticker-emoji" size={sz(25)} color="#FFF" />}
+              label="Stickers"
+              onPress={() => setSheet('stickers')}
             />
-          )}
-          <ToolButton
-            icon={<MaterialCommunityIcons name="sticker-emoji" size={sz(26)} color="#FFF" />}
-            label="Stickers"
-            onPress={() => setStickersOpen(true)}
-          />
-          <ToolButton
-            icon={<MaterialCommunityIcons name="draw" size={sz(26)} color="#FFF" />}
-            label="Draw"
-            onPress={() => setMode('draw')}
-          />
-          <ToolButton icon={<Text style={styles.aa}>Aa</Text>} label="Text" onPress={() => startText()} />
-        </View>
+            <ToolButton
+              icon={<Ionicons name="musical-notes" size={sz(23)} color="#FFF" />}
+              label="Music"
+              onPress={() => (layout.music ? setMode('music') : setSheet('music'))}
+            />
+            {photo && (
+              <ToolButton
+                icon={<Ionicons name="color-filter-outline" size={sz(24)} color="#FFF" />}
+                label="Filters"
+                onPress={() => setMode('filters')}
+              />
+            )}
+            <ToolButton
+              icon={<MaterialCommunityIcons name="draw" size={sz(25)} color="#FFF" />}
+              label="Draw"
+              onPress={() => setMode('draw')}
+            />
+            <ToolButton
+              icon={<MaterialCommunityIcons name="format-color-fill" size={sz(24)} color="#FFF" />}
+              label="Background"
+              onPress={cycleBackground}
+            />
+            {isVideo && !layout.music && (
+              <ToolButton
+                icon={<Ionicons name={layout.videoMuted ? 'volume-mute' : 'volume-high'} size={sz(23)} color="#FFF" />}
+                label={layout.videoMuted ? 'Turn sound on' : 'Mute video'}
+                onPress={() => setLayout((l) => ({ ...l, videoMuted: !l.videoMuted }))}
+              />
+            )}
+            {canSave && (
+              <ToolButton
+                icon={saving ? <ActivityIndicator color="#FFF" /> : <Ionicons name="download-outline" size={sz(24)} color="#FFF" />}
+                label="Save to camera roll"
+                onPress={save}
+                disabled={saving}
+              />
+            )}
+          </View>
+        </>
       )}
 
       {/* ── Draw tools ── */}
@@ -544,6 +700,19 @@ export function StoryEditor({
               contentContainerStyle={styles.filterRow}
               renderItem={({ item: f }) => {
                 const selected = photo.filter === f;
+                if (isVideo) {
+                  // One video player per thumbnail would be too heavy; names only.
+                  return (
+                    <Pressable
+                      onPress={() => setFilter(f)}
+                      style={[styles.filterChip, selected && styles.filterChipSelected]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                    >
+                      <Text style={[styles.filterChipText, selected && { color: '#111' }]}>{FILTERS[f].label}</Text>
+                    </Pressable>
+                  );
+                }
                 return (
                   <Pressable onPress={() => setFilter(f)} style={styles.filterItem} accessibilityRole="button" accessibilityState={{ selected }}>
                     <View style={[styles.filterThumb, selected && styles.filterThumbSelected]}>
@@ -558,17 +727,66 @@ export function StoryEditor({
         </>
       )}
 
+      {/* ── Music: which 15 seconds play ── */}
+      {mode === 'music' && layout.music && (
+        <View style={[styles.musicPanel, { top: frame.top + frame.height - sz(150), left: frame.left + sz(12), right: frame.left + sz(12) }]}>
+          <View style={styles.musicHeader}>
+            <Ionicons name="musical-notes" size={sz(16)} color="#FF6B2B" />
+            <Text style={styles.musicName} numberOfLines={1}>
+              {layout.music.title} · <Text style={styles.musicArtistName}>{layout.music.artist}</Text>
+            </Text>
+          </View>
+          <ClipSlider
+            value={layout.music.start / MAX_CLIP_START}
+            windowFraction={MUSIC_CLIP_SECONDS / 30}
+            onChange={(v) => setClipStart(Math.round(v * MAX_CLIP_START * 10) / 10)}
+          />
+          <View style={styles.musicActions}>
+            <Pressable onPress={removeMusic} hitSlop={sz(8)} accessibilityRole="button">
+              <Text style={styles.musicRemove}>Remove</Text>
+            </Pressable>
+            <Pressable onPress={() => setSheet('music')} hitSlop={sz(8)} accessibilityRole="button">
+              <Text style={styles.musicChange}>Change song</Text>
+            </Pressable>
+            <Pressable onPress={() => setMode('idle')} hitSlop={sz(8)} accessibilityRole="button">
+              <Text style={styles.musicDone}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       {/* ── Share ── */}
       {showChrome && mode === 'idle' && (
         <View style={[styles.bottomBar, { top: frame.top + frame.height, paddingBottom: insets.bottom }]}>
           <Pressable
-            style={({ pressed }) => [styles.shareBtn, (isEmpty || posting) && styles.shareBtnDisabled, pressed && styles.pressed]}
-            onPress={post}
-            disabled={isEmpty || posting}
+            style={({ pressed }) => [styles.cfBtn, (isEmpty || !!posting) && styles.shareBtnDisabled, pressed && styles.pressed]}
+            // With nobody on the list yet, picking them comes first.
+            onPress={() => (closeFriends ? post('close_friends') : setSheet('closeFriendsShare'))}
+            onLongPress={() => setSheet('closeFriends')}
+            disabled={isEmpty || !!posting}
+            accessibilityRole="button"
+            accessibilityLabel="Share to Close Friends"
+            accessibilityHint="Long press to edit your Close Friends list"
+          >
+            {posting === 'close_friends' ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <>
+                <View style={styles.cfStar}>
+                  <Ionicons name="star" size={sz(13)} color="#FFF" />
+                </View>
+                <Text style={styles.cfText}>Close Friends</Text>
+              </>
+            )}
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.shareBtn, (isEmpty || !!posting) && styles.shareBtnDisabled, pressed && styles.pressed]}
+            onPress={() => post('all')}
+            disabled={isEmpty || !!posting}
             accessibilityRole="button"
             accessibilityLabel="Share to your story"
           >
-            {posting ? (
+            {posting === 'all' ? (
               <ActivityIndicator color="#111" />
             ) : (
               <>
@@ -600,6 +818,21 @@ export function StoryEditor({
         onTextSticker={(prefix) => {
           setStickersOpen(false);
           startText(prefix, true);
+        }}
+        onMention={() => setSheet('mention')}
+        onMusic={() => setSheet('music')}
+      />
+      <MusicSheet visible={sheet === 'music'} onClose={() => setSheet(null)} onPick={pickTrack} />
+      <MentionSheet visible={sheet === 'mention'} onClose={() => setSheet(null)} onPick={addMention} />
+      <CloseFriendsSheet
+        visible={sheet === 'closeFriends' || sheet === 'closeFriendsShare'}
+        shareLabel={sheet === 'closeFriendsShare' ? 'Share to Close Friends' : undefined}
+        onClose={() => setSheet(null)}
+        onSaved={(ids) => {
+          const share = sheet === 'closeFriendsShare';
+          setSheet(null);
+          setCloseFriendsCount(ids.length);
+          if (share && ids.length) post('close_friends');
         }}
       />
     </View>
@@ -721,6 +954,96 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  closeBtn: {
+    position: 'absolute',
+  },
+  toolColumn: {
+    position: 'absolute',
+    gap: sz(10),
+    alignItems: 'center',
+  },
+  filterChip: {
+    paddingHorizontal: sz(14),
+    height: sz(34),
+    borderRadius: sz(17),
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignSelf: 'center',
+  },
+  filterChipSelected: {
+    backgroundColor: '#FFF',
+  },
+  filterChipText: {
+    color: '#FFF',
+    fontSize: sz(13),
+    fontWeight: '600',
+  },
+  musicPanel: {
+    position: 'absolute',
+    padding: sz(14),
+    borderRadius: sz(16),
+    backgroundColor: 'rgba(20,20,20,0.88)',
+    gap: sz(12),
+  },
+  musicHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: sz(8),
+  },
+  musicName: {
+    flex: 1,
+    color: '#FFF',
+    fontSize: sz(14),
+    fontWeight: '700',
+  },
+  musicArtistName: {
+    color: 'rgba(255,255,255,0.65)',
+    fontWeight: '500',
+  },
+  musicActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  musicRemove: {
+    color: '#ED4956',
+    fontSize: sz(14),
+    fontWeight: '600',
+  },
+  musicChange: {
+    color: '#FFF',
+    fontSize: sz(14),
+    fontWeight: '600',
+  },
+  musicDone: {
+    color: '#FF6B2B',
+    fontSize: sz(15),
+    fontWeight: '700',
+  },
+  cfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: sz(8),
+    height: sz(46),
+    paddingHorizontal: sz(14),
+    borderRadius: sz(23),
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    minWidth: sz(140),
+    justifyContent: 'center',
+  },
+  cfStar: {
+    width: sz(24),
+    height: sz(24),
+    borderRadius: sz(12),
+    backgroundColor: CLOSE_FRIENDS_GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cfText: {
+    color: '#FFF',
+    fontSize: sz(15),
+    fontWeight: '700',
+  },
   topBar: {
     position: 'absolute',
     left: sz(8),
@@ -813,7 +1136,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    gap: sz(10),
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: sz(14),
   },

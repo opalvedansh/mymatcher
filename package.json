@@ -23,6 +23,7 @@
     "expo-image-picker": "^57.0.2",
     "expo-linear-gradient": "^57.0.0",
     "expo-linking": "~57.0.7",
+    "expo-media-library": "~57.0.5",
     "expo-notifications": "~57.0.12",
     "expo-router": "~57.0.14",
     "expo-status-bar": "~57.0.0",
@@ -38,6 +39,7 @@
     "react-native-screens": "~4.26.0",
     "react-native-svg": "^15.15.5",
     "react-native-url-polyfill": "^2.0.0",
+    "react-native-view-shot": "5.1.0",
     "react-native-web": "^0.21.2",
     "socket.io-client": "^4.8.3"
   },

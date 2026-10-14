@@ -16,11 +16,12 @@ import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { getFeedStories, getPostFeed } from '@/api';
 import { syncLike } from '@/utils/likeSync';
 import { StoryViewer } from '@/components/StoryViewer';
+import { CLOSE_FRIENDS_GREEN } from '@/features/story/StorySheets';
 import CommentsSheet from '@/components/CommentsSheet';
 import { sharePost as sharePostToOS } from '@/utils/postShare';
 import { Avatar } from '@/components/ChatAvatar';
@@ -32,6 +33,8 @@ import { sz, tabBarClearance } from '@/theme/scale';
 import { tapFeedback } from '@/utils/optionalModules';
 
 const ACCENT = '#FF6B2B';
+// A ring with any Close Friends story in it is green, as on Instagram.
+const CLOSE_FRIENDS_RING: [string, string] = [CLOSE_FRIENDS_GREEN, '#7BE495'];
 const PAGE_SIZE = 20;
 // Coming back to the tab after this long refetches quietly in the background.
 const STALE_MS = 60_000;
@@ -253,7 +256,7 @@ const StoryBubble = memo(function StoryBubble({
       onPress={() => onPress(item, index)}
     >
       {hasStory ? (
-        <LinearGradient colors={[ACCENT, '#FF9A3D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.ring}>
+        <LinearGradient colors={item.items?.some((s: any) => s.close_friends) ? CLOSE_FRIENDS_RING : [ACCENT, '#FF9A3D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.ring}>
           <View style={st.logoCircle}>
             <Avatar uri={avatar} name={item.name || '?'} size={sz(54)} />
           </View>
@@ -474,6 +477,22 @@ export default function BrandHomeScreen() {
     setViewerKey(k => k + 1);
     setViewerVisible(true);
   }, []);
+
+  // A story @mention notification opens the author's stories. The row is
+  // refetched first: the story is new, so a cached row wouldn't have it.
+  const { story: storyParam } = useLocalSearchParams<{ story?: string }>();
+  const [pendingStory, setPendingStory] = useState<string | null>(null);
+  useEffect(() => {
+    if (!storyParam) return;
+    router.setParams({ story: undefined });
+    fetchStories(true).then(() => setPendingStory(storyParam));
+  }, [storyParam, fetchStories, router]);
+  useEffect(() => {
+    if (!pendingStory) return;
+    setPendingStory(null);
+    const index = stories.findIndex((g: any) => g.id === pendingStory && g.items?.length);
+    if (index !== -1) openViewer(index);
+  }, [pendingStory, stories, openViewer]);
 
   // The story camera has the library, the camera and text stories, and opens
   // the editor; coming back refreshes the row so the new story shows.

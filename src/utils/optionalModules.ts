@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 import { requireOptionalNativeModule } from 'expo';
 
 // Native modules added after the first 1.0.0 binaries shipped. runtimeVersion
@@ -29,6 +29,32 @@ export const getDocumentPicker = lazy<typeof import('expo-document-picker')>('Ex
 export const getClipboard = lazy<typeof import('expo-clipboard')>('ExpoClipboard', () => require('expo-clipboard'));
 export const getVideo = lazy<typeof import('expo-video')>('ExpoVideo', () => require('expo-video'));
 export const getHaptics = lazy<typeof import('expo-haptics')>('ExpoHaptics', () => require('expo-haptics'));
+export const getMediaLibrary = lazy<typeof import('expo-media-library')>('ExpoMediaLibrary', () => require('expo-media-library'));
+
+let viewShot: typeof import('react-native-view-shot') | null | undefined;
+/**
+ * Captures a view as an image (saving a story to the camera roll). A React
+ * Native module rather than an Expo one, so it is looked up differently, and
+ * it has no web implementation.
+ */
+export function getViewShot() {
+  if (viewShot === undefined) {
+    const present = Platform.OS !== 'web'
+      && (NativeModules.RNViewShot != null || TurboModuleRegistry.get('RNViewShot') != null);
+    try {
+      viewShot = present ? require('react-native-view-shot') : null;
+    } catch (err) {
+      console.warn('[optionalModules] RNViewShot unavailable', err);
+      viewShot = null;
+    }
+  }
+  return viewShot ?? null;
+}
+
+/** Saving a story needs both the view capture and the photo library. */
+export function canSaveToCameraRoll() {
+  return !!getViewShot() && !!getMediaLibrary();
+}
 
 /** Voice notes need a microphone API; some browsers (and old binaries) have none. */
 export function canRecordAudio() {

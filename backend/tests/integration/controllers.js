@@ -249,6 +249,81 @@ async function main() {
   const i1Stories = r.body?.find?.((g) => g.id === I1)?.items || [];
   check('feed returns story layouts', i1Stories.some((s) => s.layout?.layers?.length === 2) && i1Stories.some((s) => s.media_url === null), JSON.stringify(i1Stories.map((s) => !!s.layout)));
 
+  // Video stories: only an uploaded video, with its length.
+  const ownVideo = own.replace(/a\.jpg$/, 'v.mp4');
+  const gradient = { kind: 'gradient', colors: ['#000000', '#222222'] };
+  const videoLayout = { ...photoLayout, bg: gradient, photo: { ...photoLayout.photo, filter: 'normal' } };
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: ownVideo, media_type: 'video', duration_ms: 95000, layout: videoLayout } });
+  check('video story is created, capped at 60 seconds', r.status === 200 && r.body.media_type === 'video' && r.body.duration_ms === 60000, r.err?.message || JSON.stringify(r.body));
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: own, media_type: 'video', duration_ms: 5000 } });
+  check('a photo posted as a video is rejected', r.status === 400);
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: ownVideo } });
+  check('a video posted as a photo is rejected', r.status === 400);
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: ownVideo, media_type: 'video', duration_ms: 5000, layout: { ...videoLayout, bg: { kind: 'blur' } } } });
+  check('a video story cannot have a blurred background', r.status === 400);
+
+  // Mentions: matches only, shown under their real name, and notified.
+  const mention = (userId) => ({ id: `m${userId.length}`, type: 'mention', userId, text: '@Someone Else', size: 70, x: 540, y: 300, scale: 1, rotation: 0 });
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: null, layout: { v: 1, bg: gradient, photo: null, strokes: [], layers: [mention(B)] } } });
+  const mentionStoryId = r.body?.id;
+  check('mentioning a match shows their real name', r.status === 200 && r.body.layout.layers[0].text !== '@Someone Else' && r.body.layout.layers[0].text.startsWith('@'), r.err?.message || JSON.stringify(r.body?.layout?.layers));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const { rows: mentionNotes } = await pg.query(`SELECT type, story_id, actor_id FROM notifications WHERE user_id = $1 AND type = 'story_mention'`, [B]);
+  check('the mentioned person is notified', mentionNotes.some((n) => n.story_id === mentionStoryId && n.actor_id === I1), JSON.stringify(mentionNotes));
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: null, layout: { v: 1, bg: gradient, photo: null, strokes: [], layers: [mention(I2)] } } });
+  check('mentioning someone you have not matched with is rejected', r.status === 400);
+
+  // Music: Apple previews only.
+  const song = { id: 1, title: 'Song', artist: 'Artist', artwork: 'https://is1-ssl.mzstatic.com/a/300x300bb.jpg', preview: 'https://audio-ssl.itunes.apple.com/a.m4a', url: 'https://music.apple.com/in/song/1', start: 10 };
+  const musicSticker = { id: 'mu', type: 'music', style: 'card', size: 60, x: 540, y: 1400, scale: 1, rotation: 0 };
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: own, layout: { ...photoLayout, music: song, layers: [musicSticker] } } });
+  check('story with music is created', r.status === 200 && r.body.layout.music?.start === 10, r.err?.message || JSON.stringify(r.body));
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: own, layout: { ...photoLayout, music: { ...song, preview: 'https://example.com/a.m4a' } } } });
+  check('music from outside Apple is rejected', r.status === 400);
+
+  const realFetch = global.fetch;
+  const fetched = [];
+  global.fetch = async (url) => {
+    fetched.push(String(url));
+    const json = String(url).includes('rss.marketingtools.apple.com')
+      ? { feed: { results: [{ id: '7' }, { id: '8' }] } }
+      : { results: [
+        { trackId: 7, trackName: 'Hit', artistName: 'Star', artworkUrl100: 'https://is1-ssl.mzstatic.com/x/100x100bb.jpg', previewUrl: 'https://audio-ssl.itunes.apple.com/7.m4a', trackViewUrl: 'https://music.apple.com/7' },
+        { trackId: 8, trackName: 'No preview', artistName: 'Star' },
+      ] };
+    return { ok: true, json: async () => json };
+  };
+  try {
+    r = await call(stories.searchMusic, { user: { id: I1 }, query: { q: 'hit' } });
+    check('music search returns songs with previews only', r.status === 200 && r.body.length === 1 && r.body[0].artwork.includes('300x300bb'), JSON.stringify(r.body));
+    r = await call(stories.searchMusic, { user: { id: I1 }, query: {} });
+    check('popular music comes from the chart, looked up for previews', r.status === 200 && r.body.length === 1 && fetched.some((u) => u.includes('lookup?')), JSON.stringify(r.body));
+    const calls = fetched.length;
+    r = await call(stories.searchMusic, { user: { id: I1 }, query: { q: 'hit' } });
+    check('music search is cached', r.status === 200 && fetched.length === calls);
+  } finally {
+    global.fetch = realFetch;
+  }
+
+  // Close Friends: the list is matches only, and only it sees those stories.
+  r = await call(stories.getAudience, { user: { id: I1 } });
+  check('audience lists your matches', r.status === 200 && r.body.some((u) => u.id === B && u.close_friend === false) && !r.body.some((u) => u.id === I2), JSON.stringify(r.body));
+  r = await call(stories.uploadStory, { user: { id: I1 }, body: { media_url: own, audience: 'close_friends' } });
+  const cfStoryId = r.body?.id;
+  check('close friends story is created', r.status === 200 && r.body.audience === 'close_friends', r.err?.message || '');
+  r = await call(stories.getFeedStories, { user: { id: B } });
+  check('someone off the list does not see a close friends story', !(r.body.find((g) => g.id === I1)?.items || []).some((s) => s.id === cfStoryId));
+  r = await call(stories.setCloseFriends, { user: { id: I1 }, body: { ids: [B, I2, I1] } });
+  check('close friends keeps only matches', r.status === 200 && r.body.ids.length === 1 && r.body.ids[0] === B, JSON.stringify(r.body));
+  r = await call(stories.getFeedStories, { user: { id: B } });
+  const cfItem = (r.body.find((g) => g.id === I1)?.items || []).find((s) => s.id === cfStoryId);
+  check('a close friend sees the story, marked as close friends', cfItem?.close_friends === true, JSON.stringify(cfItem));
+  r = await call(stories.getFeedStories, { user: { id: I1 } });
+  check('the author sees their own close friends story', (r.body[0]?.items || []).some((s) => s.id === cfStoryId));
+  r = await call(stories.setCloseFriends, { user: { id: I1 }, body: { ids: [] } });
+  r = await call(stories.getFeedStories, { user: { id: B } });
+  check('removing someone from the list hides it again', !(r.body.find((g) => g.id === I1)?.items || []).some((s) => s.id === cfStoryId));
+
 
   // ── Blocks, reports, account deletion ───────────────────────
   const safety = require(`${BACKEND}/src/controllers/safetyController`);

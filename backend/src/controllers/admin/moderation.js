@@ -55,7 +55,7 @@ async function resolveTargets(reports) {
       ? db.query(
         // Stories are never deleted, only filtered by expires_at, so a
         // reported story stays reviewable after it has stopped being shown.
-        `SELECT s.id, s.user_id, s.media_url, s.created_at, s.expires_at,
+        `SELECT s.id, s.user_id, s.media_url, s.media_type, s.created_at, s.expires_at,
                 (s.expires_at < now()) AS expired,
                 (SELECT string_agg(l->>'text', ' · ') FROM jsonb_array_elements(COALESCE(s.layout->'layers', '[]'::jsonb)) l
                   WHERE l->>'type' = 'text') AS caption

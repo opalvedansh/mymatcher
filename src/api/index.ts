@@ -6,7 +6,7 @@
  */
 
 import api from './client';
-import type { StoryLayout } from '@/features/story/layout';
+import type { MediaType, StoryLayout, Track } from '@/features/story/layout';
 import type {
   ApiUser,
   AnyProfile,
@@ -35,18 +35,29 @@ import type {
 // ─── Upload ───────────────────────────────────────────────────────
 
 export async function uploadImage(uri: string): Promise<string> {
+  return uploadFile(uri, 'image/jpeg');
+}
+
+/** A story's video (mp4/mov), which only story uploads accept. */
+export function uploadStoryVideo(uri: string): Promise<string> {
+  return uploadFile(uri, 'video/mp4', 'story');
+}
+
+async function uploadFile(uri: string, fallbackType: string, purpose?: 'story'): Promise<string> {
   try {
     // Get file info
     const response = await fetch(uri);
     const blob = await response.blob();
-    const contentType = blob.type || 'image/jpeg';
+    // Some pickers report no type, or a generic one, for a local file.
+    const contentType = blob.type && blob.type !== 'application/octet-stream' ? blob.type : fallbackType;
     const ext = contentType.split('/')[1] || 'jpg';
     const filename = `upload.${ext}`;
 
     // Get presigned URL
     const data = await api.post<{ signedUrl: string; publicUrl: string }>('/api/upload/presigned-url', {
       filename,
-      contentType
+      contentType,
+      purpose,
     });
 
     // Upload to Supabase Storage
@@ -234,9 +245,33 @@ export function muteChat(matchId: string, duration: MuteDuration | null) {
 /**
  * `layout` is what the editor placed over the photo (text, stickers, drawing,
  * filter, position). A text-only story has no photo, so `media_url` is null.
+ * `audience: 'close_friends'` shows it only to your Close Friends list.
  */
-export function uploadStory(media_url: string | null, layout?: StoryLayout) {
-  return api.post('/api/stories', { media_url, layout });
+export function uploadStory(story: {
+  media_url: string | null;
+  layout?: StoryLayout;
+  media_type?: MediaType;
+  duration_ms?: number | null;
+  audience?: 'all' | 'close_friends';
+}) {
+  return api.post('/api/stories', story);
+}
+
+/** Someone who can see your stories (a match), for Close Friends and @mentions. */
+export type StoryAudienceMember = { id: string; role: string; name: string; avatar: string | null; close_friend: boolean };
+
+export function getStoryAudience() {
+  return api.get<StoryAudienceMember[]>('/api/stories/audience', { ttlMs: 30_000 });
+}
+
+/** Replaces your Close Friends list. */
+export function setCloseFriends(ids: string[]) {
+  return api.put<{ ids: string[] }>('/api/stories/close-friends', { ids });
+}
+
+/** Songs with 30-second previews; an empty query lists what's popular. */
+export function searchStoryMusic(q: string) {
+  return api.get<Track[]>(`/api/stories/music?q=${encodeURIComponent(q)}`, { ttlMs: 5 * 60_000 });
 }
 
 /**

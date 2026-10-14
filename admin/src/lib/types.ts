@@ -196,6 +196,9 @@ export interface StoryRow {
   media_url: string | null;
   /** The text written on the story. */
   caption: string | null;
+  media_type: 'image' | 'video';
+  /** 'close_friends' stories were shown to the author's Close Friends only. */
+  audience: 'all' | 'close_friends';
   created_at: string;
   expires_at: string;
   expired: boolean;

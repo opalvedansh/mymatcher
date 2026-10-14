@@ -16,9 +16,10 @@
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Matchr uses the camera to take profile photos and photos or videos you send in chats.",
+        "NSCameraUsageDescription": "Matchr uses the camera to take profile photos, photos or videos you send in chats, and your stories.",
         "NSPhotoLibraryUsageDescription": "Matchr uses your photo library to upload profile photos and to send photos and videos in chats.",
-        "NSMicrophoneUsageDescription": "Matchr uses the microphone to record voice messages and videos you send in chats."
+        "NSMicrophoneUsageDescription": "Matchr uses the microphone to record voice messages, and the sound of videos you send in chats or post to your story.",
+        "NSPhotoLibraryAddUsageDescription": "Matchr saves the stories you make to your photo library when you tap Save."
       }
     },
     "android": {
@@ -78,10 +79,22 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Matchr uses the microphone to record voice messages and videos you send in chats."
+          "microphonePermission": "Matchr uses the microphone to record voice messages, and the sound of videos you send in chats or post to your story."
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Matchr uses your photo library to upload profile photos and to send photos and videos in chats.",
+          "savePhotosPermission": "Matchr saves the stories you make to your photo library when you tap Save.",
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": [
+            "photo",
+            "video"
+          ]
+        }
+      ]
     ]
   }
 }

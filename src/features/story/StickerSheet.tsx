@@ -13,7 +13,7 @@ const EMOJI = (
 
 type Special = { key: string; label: string; onPress: () => void };
 
-/** The sticker tray: time, date, mention, hashtag and location stickers, then emoji. */
+/** The sticker tray: music, mention, time, date, hashtag and location stickers, then emoji. */
 export function StickerSheet({
   visible,
   onClose,
@@ -21,21 +21,27 @@ export function StickerSheet({
   onTime,
   onDate,
   onTextSticker,
+  onMention,
+  onMusic,
 }: {
   visible: boolean;
   onClose: () => void;
   onEmoji: (e: string) => void;
   onTime: () => void;
   onDate: () => void;
-  /** Mention, hashtag and location open the text tool with this prefix. */
+  /** Hashtag and location open the text tool with this prefix. */
   onTextSticker: (prefix: string) => void;
+  /** Opens the picker of matches to @mention. */
+  onMention: () => void;
+  onMusic: () => void;
 }) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const specials: Special[] = [
+    { key: 'music', label: '♪ MUSIC', onPress: onMusic },
+    { key: 'mention', label: '@MENTION', onPress: onMention },
     { key: 'time', label: clockNow(), onPress: onTime },
     { key: 'date', label: dateNow(), onPress: onDate },
-    { key: 'mention', label: '@MENTION', onPress: () => onTextSticker('@') },
     { key: 'hashtag', label: '#HASHTAG', onPress: () => onTextSticker('#') },
     { key: 'location', label: '📍 LOCATION', onPress: () => onTextSticker('📍 ') },
   ];

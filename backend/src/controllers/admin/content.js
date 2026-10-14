@@ -104,7 +104,7 @@ async function listStories(req, res, next) {
     }
 
     const { rows } = await db.query(
-      `SELECT s.id, s.user_id, s.media_url, s.created_at, s.expires_at,
+      `SELECT s.id, s.user_id, s.media_url, s.media_type, s.audience, s.created_at, s.expires_at,
               (s.expires_at < now()) AS expired,
               -- The words written on the story, so a text story can be reviewed.
               (SELECT string_agg(l->>'text', ' · ') FROM jsonb_array_elements(COALESCE(s.layout->'layers', '[]'::jsonb)) l

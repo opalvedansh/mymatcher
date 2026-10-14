@@ -86,7 +86,9 @@ export default function Content() {
 
                 return (
                   <div className="media-tile" key={row.id}>
-                    {url ? (
+                    {url && !isPost && (row as StoryRow).media_type === 'video' ? (
+                      <video src={url} controls muted preload="metadata" />
+                    ) : url ? (
                       <a href={url} target="_blank" rel="noreferrer noopener">
                         <img src={url} alt="" loading="lazy" />
                       </a>
@@ -101,6 +103,7 @@ export default function Content() {
                       <div className="row" style={{ gap: 5, flexWrap: 'wrap' }}>
                         {row.report_count > 0 && <Badge tone="danger">{row.report_count} reports</Badge>}
                         {expired && <Badge>Expired</Badge>}
+                        {!isPost && (row as StoryRow).audience === 'close_friends' && <Badge>Close Friends</Badge>}
                         {isPost && <Badge>{fmtNum((row as PostRow).likes_count)} likes</Badge>}
                         {!isPost && <Badge>{fmtNum((row as StoryRow).view_count)} views</Badge>}
                       </div>

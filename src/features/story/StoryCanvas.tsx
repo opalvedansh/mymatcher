@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { G, Path } from 'react-native-svg';
@@ -15,8 +16,10 @@ import {
   type StoryLayout,
   type StoryPhoto,
   type Stroke,
+  type StoryMusic,
   type TextLayer,
 } from './layout';
+import { StoryVideo } from './media';
 
 // The pieces of a story, drawn at canvas scale `k` (screen points per canvas
 // unit). The viewer draws them as they are; the editor wraps the photo and the
@@ -55,11 +58,15 @@ export function photoBoxStyle(photo: StoryPhoto, k: number): ViewStyle {
   };
 }
 
-/** The photo with its filter, filling whatever box it is put in. */
+/** Playback of a video story's media. */
+export type VideoPlayback = { paused: boolean; muted: boolean; loop?: boolean; onBuffering?: (buffering: boolean) => void };
+
+/** The photo (or video) with its filter, filling whatever box it is put in. */
 export const PhotoContent = memo(function PhotoContent({
   uri,
   photo,
   fit = 'contain',
+  video,
   onLoad,
   onError,
 }: {
@@ -67,6 +74,8 @@ export const PhotoContent = memo(function PhotoContent({
   photo: StoryPhoto;
   /** `cover` for the filter thumbnails; the photo's box already has its aspect ratio. */
   fit?: 'contain' | 'cover';
+  /** Set when the media is a video. */
+  video?: VideoPlayback;
   onLoad?: () => void;
   onError?: () => void;
 }) {
@@ -74,14 +83,27 @@ export const PhotoContent = memo(function PhotoContent({
   return (
     // Isolated so the filter blends only with the photo, not the background.
     <View style={styles.photoInner}>
-      <Image
-        source={{ uri }}
-        style={StyleSheet.absoluteFill}
-        contentFit={fit}
-        cachePolicy="memory-disk"
-        onLoad={onLoad}
-        onError={onError}
-      />
+      {video ? (
+        <StoryVideo
+          uri={uri}
+          fit={fit}
+          paused={video.paused}
+          muted={video.muted}
+          loop={video.loop}
+          onBuffering={video.onBuffering}
+          onLoad={onLoad}
+          onError={onError}
+        />
+      ) : (
+        <Image
+          source={{ uri }}
+          style={StyleSheet.absoluteFill}
+          contentFit={fit}
+          cachePolicy="memory-disk"
+          onLoad={onLoad}
+          onError={onError}
+        />
+      )}
       {passes.map((p, i) => (
         <View
           key={i}
@@ -157,7 +179,55 @@ export function layerAnchorStyle(x: number, y: number, frame: Pick<CanvasFrame, 
 /** Text wraps at this width (canvas units) before any zoom, like a story's margins. */
 export const TEXT_WRAP = CANVAS_W - 120;
 
-export const LayerContent = memo(function LayerContent({ layer, k }: { layer: Layer; k: number }) {
+export const LayerContent = memo(function LayerContent({
+  layer,
+  k,
+  music,
+}: {
+  layer: Layer;
+  k: number;
+  /** The story's song, for the music sticker. */
+  music?: StoryMusic | null;
+}) {
+  if (layer.type === 'mention') {
+    const px = layer.size * k;
+    return (
+      <View style={[styles.pill, { paddingHorizontal: px * 0.4, paddingVertical: px * 0.14, borderRadius: px * 0.3 }]}>
+        <Text style={[styles.mentionText, { fontSize: px, lineHeight: px * 1.15 }]} numberOfLines={1}>
+          {layer.text.toUpperCase()}
+        </Text>
+      </View>
+    );
+  }
+  if (layer.type === 'music') {
+    if (!music) return null;
+    const px = layer.size * k;
+    if (layer.style === 'mini') {
+      return (
+        <View style={[styles.pill, styles.row, { paddingHorizontal: px * 0.45, paddingVertical: px * 0.25, borderRadius: px, gap: px * 0.3, maxWidth: 900 * k }]}>
+          <Ionicons name="musical-notes" size={px} color="#FF6B2B" />
+          <Text style={[styles.musicTitle, { fontSize: px * 0.8 }]} numberOfLines={1}>
+            {music.title} · <Text style={styles.musicArtist}>{music.artist}</Text>
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <View style={[styles.pill, styles.row, { padding: px * 0.25, borderRadius: px * 0.35, gap: px * 0.35, width: px * 9 }]}>
+        {music.artwork ? (
+          <Image source={{ uri: music.artwork }} style={{ width: px * 1.8, height: px * 1.8, borderRadius: px * 0.2 }} cachePolicy="memory-disk" />
+        ) : (
+          <View style={[styles.artFallback, { width: px * 1.8, height: px * 1.8, borderRadius: px * 0.2 }]}>
+            <Ionicons name="musical-notes" size={px} color="#FFF" />
+          </View>
+        )}
+        <View style={styles.flexShrink}>
+          <Text style={[styles.musicTitle, { fontSize: px * 0.7 }]} numberOfLines={1}>{music.title}</Text>
+          <Text style={[styles.musicArtist, { fontSize: px * 0.6 }]} numberOfLines={1}>{music.artist}</Text>
+        </View>
+      </View>
+    );
+  }
   if (layer.type === 'sticker') {
     if (layer.kind === 'emoji') {
       return <Text style={{ fontSize: layer.size * k, lineHeight: layer.size * k * 1.2 }}>{layer.text}</Text>;
@@ -225,37 +295,71 @@ export function placementTransform(p: { scale: number; rotation: number }) {
 export function StoryCanvas({
   layout,
   mediaUri,
+  video,
   frame,
   style,
+  viewRef,
   onLoad,
   onError,
 }: {
   layout: StoryLayout;
   mediaUri: string | null;
+  /** Set when the media is a video. */
+  video?: VideoPlayback;
   frame: CanvasFrame;
   style?: StyleProp<ViewStyle>;
+  /** The canvas view, for saving it as an image. */
+  viewRef?: React.Ref<View>;
   onLoad?: () => void;
   onError?: () => void;
 }) {
   const { photo } = layout;
   return (
-    <View style={[{ width: frame.width, height: frame.height }, styles.canvas, style]} pointerEvents="none">
-      <StoryBackgroundView bg={layout.bg} mediaUri={mediaUri} />
+    <View
+      ref={viewRef}
+      collapsable={false}
+      style={[{ width: frame.width, height: frame.height }, styles.canvas, style]}
+      pointerEvents="none"
+    >
+      {/* A video can't be blurred behind itself. */}
+      <StoryBackgroundView bg={layout.bg} mediaUri={video ? null : mediaUri} />
       {photo && mediaUri && (
         <View style={[photoBoxStyle(photo, frame.k), { transform: placementTransform(photo) }]}>
-          <PhotoContent uri={mediaUri} photo={photo} onLoad={onLoad} onError={onError} />
+          <PhotoContent uri={mediaUri} photo={photo} video={video} onLoad={onLoad} onError={onError} />
         </View>
       )}
       <StrokesView strokes={layout.strokes} frame={frame} />
       {layout.layers.map((layer) => (
         <View key={layer.id} style={layerAnchorStyle(layer.x, layer.y, frame)}>
           <View style={{ transform: placementTransform(layer) }}>
-            <LayerContent layer={layer} k={frame.k} />
+            <LayerContent layer={layer} k={frame.k} music={layout.music} />
           </View>
         </View>
       ))}
     </View>
   );
+}
+
+/**
+ * Where each @mention sits on the canvas, roughly, for tapping it in the
+ * viewer. Text isn't measured, so the box is estimated from its length.
+ */
+export function mentionAt(layout: StoryLayout, x: number, y: number) {
+  for (let i = layout.layers.length - 1; i >= 0; i--) {
+    const l = layout.layers[i];
+    if (l.type !== 'mention') continue;
+    // Into the sticker's own frame: undo its move, turn and zoom.
+    const dx = x - l.x;
+    const dy = y - l.y;
+    const cos = Math.cos(-l.rotation);
+    const sin = Math.sin(-l.rotation);
+    const lx = (dx * cos - dy * sin) / l.scale;
+    const ly = (dx * sin + dy * cos) / l.scale;
+    const halfW = (l.text.length * l.size * 0.62 + l.size * 0.8) / 2 + 20;
+    const halfH = l.size * 0.75 + 20;
+    if (Math.abs(lx) <= halfW && Math.abs(ly) <= halfH) return l;
+  }
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -272,6 +376,30 @@ const styles = StyleSheet.create({
   },
   pill: {
     backgroundColor: '#FFFFFF',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  flexShrink: {
+    flexShrink: 1,
+  },
+  mentionText: {
+    color: '#FF6B2B',
+    fontWeight: '800',
+  },
+  musicTitle: {
+    color: '#111111',
+    fontWeight: '700',
+  },
+  musicArtist: {
+    color: '#6B6B6B',
+    fontWeight: '500',
+  },
+  artFallback: {
+    backgroundColor: '#FF6B2B',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pillText: {
     color: '#111111',

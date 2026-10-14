@@ -26,6 +26,11 @@ const TYPE_ICON: Record<AppNotification['type'], React.ComponentProps<typeof Ion
   new_match: 'people',
   new_like: 'heart',
   new_message: 'chatbubble',
+  announcement: 'megaphone',
+  post_like: 'heart',
+  post_comment: 'chatbubble-ellipses',
+  comment_reply: 'return-down-forward',
+  story_mention: 'at',
 };
 
 function NotificationIcon({ item }: { item: AppNotification }) {
@@ -105,7 +110,7 @@ export function NotificationsScreen() {
 
   const openItem = (item: AppNotification) => {
     if (!item.read_at) markRead([item.id]);
-    router.navigate(notificationHref(onboardingData?.role, item.type, item.match_id));
+    router.navigate(notificationHref(onboardingData?.role, item.type, item.match_id, item.actor_id));
   };
 
   const hasUnread = items.some(i => !i.read_at);

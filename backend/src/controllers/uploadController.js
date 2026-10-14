@@ -11,6 +11,14 @@ const EXTENSION_BY_TYPE = {
   'image/webp': 'webp',
 };
 
+// Stories may be videos (up to 60s). Only a story upload accepts them, so a
+// post or a profile photo can't be a video.
+const STORY_VIDEO_EXTENSIONS = {
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/x-m4v': 'm4v',
+};
+
 let bucketReady = null;
 
 /**
@@ -26,7 +34,8 @@ async function generatePresignedUrl(req, res, next) {
       return res.status(400).json({ error: 'filename and contentType are required' });
     }
 
-    const ext = EXTENSION_BY_TYPE[contentType];
+    const ext = EXTENSION_BY_TYPE[contentType]
+      ?? (req.body.purpose === 'story' ? STORY_VIDEO_EXTENSIONS[contentType] : undefined);
     if (!ext) {
       return res.status(400).json({ error: 'Invalid content type. Only JPEG, PNG, WEBP allowed.' });
     }

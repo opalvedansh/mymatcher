@@ -11,8 +11,10 @@ import {
   Alert,
   FlatList,
   ActivityIndicator,
+  Linking,
   useWindowDimensions,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   cancelAnimation,
@@ -27,9 +29,13 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { recordStoryView, getStoryViewers } from '@/api';
-import { StoryCanvas } from '@/features/story/StoryCanvas';
-import { readLayout, useCanvasFrame } from '@/features/story/layout';
+import { StoryCanvas, mentionAt } from '@/features/story/StoryCanvas';
+import { MUSIC_CLIP_SECONDS, readLayout, useCanvasFrame, type StoryMusic } from '@/features/story/layout';
+import { useStoryMusic } from '@/features/story/media';
+import { CLOSE_FRIENDS_GREEN } from '@/features/story/StorySheets';
 import { openSafetyMenu } from '@/components/safetyMenu';
+import { showAlert } from '@/components/ActionSheet';
+import { canSaveToCameraRoll, getMediaLibrary, getViewShot } from '@/utils/optionalModules';
 import { sz } from '@/theme/scale';
 
 type StoryItem = {
@@ -38,6 +44,10 @@ type StoryItem = {
   media_url: string | null;
   /** What the editor placed over the photo; missing on stories posted before it. */
   layout?: unknown;
+  media_type?: 'image' | 'video';
+  duration_ms?: number | null;
+  /** Shared to the author's Close Friends only. */
+  close_friends?: boolean;
 };
 
 type StoryGroup = {
@@ -59,7 +69,20 @@ interface StoryViewerProps {
   onClose: () => void;
 }
 
-const STORY_DURATION = 5000; // 5 seconds per story
+const STORY_DURATION = 5000; // 5 seconds per photo story
+const MAX_VIDEO_MS = 60_000;
+
+/** How long a story stays up: a video's length, a song's clip, or five seconds. */
+function durationOf(item: StoryItem, music: StoryMusic | null | undefined) {
+  if (item.media_type === 'video') return Math.min(item.duration_ms || STORY_DURATION, MAX_VIDEO_MS);
+  return music ? MUSIC_CLIP_SECONDS * 1000 : STORY_DURATION;
+}
+
+/** Plays a story's song; keyed per story so each starts at the top of its clip. */
+function StoryMusicPlayer({ music, playing }: { music: StoryMusic; playing: boolean }) {
+  useStoryMusic(music, playing);
+  return null;
+}
 /** Room under the story for the reply bar; the story itself is never cropped. */
 const REPLY_BAR = sz(64);
 
@@ -74,6 +97,8 @@ function findGroup(stories: StoryGroup[], from: number, dir: 1 | -1): number {
 export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }: StoryViewerProps) {
   const { width, height } = useWindowDimensions();
   const frame = useCanvasFrame(REPLY_BAR);
+  const router = useRouter();
+  const canvasRef = useRef<View>(null);
 
   // Seeded from props rather than reset in an effect: an effect runs after the
   // first paint, which flashed the previously viewed group and recorded a view
@@ -92,6 +117,11 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
   const [held, setHeld] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [showViewers, setShowViewers] = useState(false);
+  const [buffering, setBuffering] = useState(false);
+  // A tapped @mention shows a "View profile" bubble and holds the story.
+  const [mentionTip, setMentionTip] = useState<{ userId: string; name: string; x: number; y: number } | null>(null);
+  // Sound is on by default, as on Instagram; this is for the whole session.
+  const [muted, setMuted] = useState(false);
 
   const [replyText, setReplyText] = useState('');
   const [viewersList, setViewersList] = useState<any[] | null>(null);
@@ -102,8 +132,17 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
   const item = group?.items[itemIndex];
   const itemId = item?.id;
   const loaded = !!itemId && loadedId === itemId;
-  const paused = userPaused || held || inputFocused || showViewers;
+  const paused = userPaused || held || inputFocused || showViewers || !!mentionTip;
   const layout = useMemo(() => (item ? readLayout(item.layout, !!item.media_url) : null), [item]);
+  const isVideo = item?.media_type === 'video';
+  const duration = item ? durationOf(item, layout?.music) : STORY_DURATION;
+  const hasSound = isVideo || !!layout?.music;
+
+  // A new story starts unbuffered and with no bubble.
+  useEffect(() => {
+    setBuffering(false);
+    setMentionTip(null);
+  }, [itemId]);
 
   // A text-only story has nothing to load, so its timer starts straight away.
   useEffect(() => {
@@ -172,7 +211,7 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
       cancelAnimation(progress);
       progress.value = 0;
     }
-    if (!visible || !loaded || paused || !itemId) return;
+    if (!visible || !loaded || paused || buffering || !itemId) return;
     // Writes reach the UI thread asynchronously, so a fresh run can't read
     // back the reset above; only a resume reads where the bar stopped.
     const from = runStartedRef.current ? progress.value : 0;
@@ -180,13 +219,13 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
     const id = itemId;
     progress.value = withTiming(
       1,
-      { duration: Math.max(0, STORY_DURATION * (1 - from)), easing: Easing.linear },
+      { duration: Math.max(0, duration * (1 - from)), easing: Easing.linear },
       (finished) => {
         if (finished) runOnJS(onTimerDone)(id);
       },
     );
     return () => cancelAnimation(progress);
-  }, [runKey, visible, loaded, paused, itemId, progress, onTimerDone]);
+  }, [runKey, visible, loaded, paused, buffering, itemId, progress, onTimerDone, duration]);
 
   // Counted once the photo is actually showing, once per story per open.
   const viewedRef = useRef(new Set<string>());
@@ -200,15 +239,30 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
   // the network.
   useEffect(() => {
     if (!visible || !group) return;
-    const urls = group.items.slice(itemIndex + 1, itemIndex + 3).map((i) => i.media_url);
+    // Photos only: a video streams as it plays.
+    const photoUrl = (i?: StoryItem) => (i && i.media_type !== 'video' ? i.media_url : null);
+    const urls = group.items.slice(itemIndex + 1, itemIndex + 3).map(photoUrl);
     const nextGroup = stories[findGroup(stories, groupIndex + 1, 1)];
-    if (nextGroup) urls.push(nextGroup.items[0].media_url);
+    if (nextGroup) urls.push(photoUrl(nextGroup.items[0]));
     const toFetch = urls.filter((u): u is string => !!u);
     if (toFetch.length) Image.prefetch(toFetch, 'memory-disk').catch(() => {});
   }, [visible, group, groupIndex, itemIndex, stories]);
 
   const handlePress = (evt: any) => {
     const x = evt.nativeEvent.locationX;
+    const y = evt.nativeEvent.locationY;
+    if (mentionTip) {
+      // Tapping anywhere else puts the bubble away and carries on.
+      setMentionTip(null);
+      return;
+    }
+    if (layout) {
+      const hit = mentionAt(layout, (x - frame.left) / frame.k, (y - frame.top) / frame.k);
+      if (hit) {
+        setMentionTip({ userId: hit.userId, name: hit.text.replace(/^@/, ''), x, y });
+        return;
+      }
+    }
     if (x < width / 2) {
       goToPrev();
     } else {
@@ -227,8 +281,51 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
     Alert.alert('Liked', 'You liked this story!');
   };
 
+  const openMention = () => {
+    if (!mentionTip) return;
+    const id = mentionTip.userId;
+    setMentionTip(null);
+    onClose();
+    router.push(`/profile/${id}`);
+  };
+
+  // Your own photo story can be saved; a video is saved from the editor.
+  const canSave = !!group?.isMe && !isVideo && canSaveToCameraRoll();
+  const saveStory = async () => {
+    const library = getMediaLibrary();
+    const shot = getViewShot();
+    if (!library || !shot || !canvasRef.current) return;
+    setUserPaused(true);
+    try {
+      const perm = await library.requestPermissionsAsync(true);
+      if (!perm.granted) {
+        showAlert('Allow saving photos', 'Turn on photo access for Matchr in Settings to save your story.');
+        return;
+      }
+      const uri = await shot.captureRef(canvasRef, { format: 'jpg', quality: 0.95, width: 1080, height: 1920, result: 'tmpfile' });
+      await library.saveToLibraryAsync(uri);
+      showAlert('Saved', 'Your story is in your photo library.');
+    } catch (err) {
+      console.error('Failed to save story', err);
+      showAlert('Couldn\'t save', 'Something went wrong while saving. Please try again.');
+    }
+  };
+
+  const handleMore = () => {
+    setUserPaused(true);
+    showAlert('Your story', undefined, [
+      { text: 'Save to camera roll', icon: 'download-outline', onPress: saveStory },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const handleShare = () => {
     Alert.alert('Share', 'Share functionality coming soon!');
+  };
+
+  const openSong = () => {
+    const url = layout?.music?.url;
+    if (url) Linking.openURL(url).catch(() => {});
   };
 
   const handleOpenViewers = async () => {
@@ -270,6 +367,16 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
               key={item.id}
               layout={layout!}
               mediaUri={item.media_url}
+              viewRef={canvasRef}
+              video={
+                isVideo
+                  ? {
+                      paused: !visible || paused,
+                      muted: muted || !!layout?.videoMuted || !!layout?.music,
+                      onBuffering: setBuffering,
+                    }
+                  : undefined
+              }
               frame={frame}
               style={[styles.canvas, { top: frame.top, left: frame.left }]}
               onLoad={() => setLoadedId(item.id)}
@@ -291,6 +398,29 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
               </View>
             )}
           </Pressable>
+
+          {layout?.music && (
+            <StoryMusicPlayer
+              key={item.id}
+              music={layout.music}
+              playing={visible && loaded && !paused && !buffering && !muted}
+            />
+          )}
+
+          {mentionTip && (
+            <Pressable
+              onPress={openMention}
+              style={[
+                styles.mentionTip,
+                { top: Math.max(frame.top + sz(80), mentionTip.y - sz(64)), left: Math.min(Math.max(sz(12), mentionTip.x - sz(90)), width - sz(192)) },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${mentionTip.name}'s profile`}
+            >
+              <Text style={styles.mentionTipText} numberOfLines={1}>{mentionTip.name}</Text>
+              <Text style={styles.mentionTipAction}>View profile ›</Text>
+            </Pressable>
+          )}
 
           {/* Top Gradient for header readability */}
           <LinearGradient
@@ -317,10 +447,35 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
             <View style={styles.header}>
               <View style={styles.userInfo}>
                 <Image source={{ uri: group.avatar }} style={styles.avatar} cachePolicy="memory-disk" />
-                <Text style={styles.username}>{group.name}</Text>
-                <Text style={styles.timeElapsed}>2 h</Text>
+                <View style={styles.userText}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.username} numberOfLines={1}>{group.name}</Text>
+                    <Text style={styles.timeElapsed}>2 h</Text>
+                    {item.close_friends && (
+                      <View style={styles.cfBadge} accessibilityLabel="Close Friends">
+                        <Ionicons name="star" size={sz(10)} color="#FFF" />
+                      </View>
+                    )}
+                  </View>
+                  {layout?.music && (
+                    <Pressable onPress={openSong} hitSlop={sz(6)} accessibilityRole="link" accessibilityLabel={`${layout.music.title} by ${layout.music.artist}, listen on Apple Music`}>
+                      <Text style={styles.songLine} numberOfLines={1}>
+                        ♪ {layout.music.title} · {layout.music.artist}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
               <View style={styles.headerRight}>
+                {hasSound && (
+                  <Pressable
+                    onPress={() => setMuted((m) => !m)}
+                    style={styles.headerIconBtn}
+                    accessibilityLabel={muted ? 'Turn sound on' : 'Mute'}
+                  >
+                    <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={sz(22)} color="#FFF" />
+                  </Pressable>
+                )}
                 <Pressable
                   onPress={() => setUserPaused((p) => !p)}
                   style={styles.headerIconBtn}
@@ -371,9 +526,11 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
                     <Ionicons name="eye-outline" size={sz(24)} color="#FFF" />
                     <Text style={styles.viewersText}>Viewers</Text>
                   </Pressable>
-                  <Pressable style={styles.actionBtn} onPress={handleShare}>
-                    <Ionicons name="ellipsis-horizontal" size={sz(28)} color="#FFF" />
-                  </Pressable>
+                  {canSave && (
+                    <Pressable style={styles.actionBtn} onPress={handleMore} accessibilityLabel="More">
+                      <Ionicons name="ellipsis-horizontal" size={sz(28)} color="#FFF" />
+                    </Pressable>
+                  )}
                 </View>
               ) : (
                 <>
@@ -521,6 +678,51 @@ const styles = StyleSheet.create({
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: sz(8),
+  },
+  userText: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cfBadge: {
+    marginLeft: sz(8),
+    width: sz(18),
+    height: sz(18),
+    borderRadius: sz(9),
+    backgroundColor: CLOSE_FRIENDS_GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  songLine: {
+    color: '#FFF',
+    fontSize: sz(12),
+    marginTop: sz(2),
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: sz(2),
+  },
+  mentionTip: {
+    position: 'absolute',
+    width: sz(180),
+    paddingHorizontal: sz(14),
+    paddingVertical: sz(10),
+    borderRadius: sz(12),
+    backgroundColor: 'rgba(20,20,20,0.92)',
+  },
+  mentionTipText: {
+    color: '#FFF',
+    fontSize: sz(14),
+    fontWeight: '700',
+  },
+  mentionTipAction: {
+    color: '#FF6B2B',
+    fontSize: sz(13),
+    fontWeight: '600',
+    marginTop: sz(2),
   },
   avatar: {
     width: sz(34),

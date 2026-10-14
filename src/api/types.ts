@@ -404,7 +404,9 @@ export type ProfileUpdate = BrandProfileUpdate | InfluencerProfileUpdate;
 
 // ── Notifications ─────────────────────────────────────────────────
 
-export type NotificationType = 'new_match' | 'new_like' | 'new_message';
+export type NotificationType =
+  | 'new_match' | 'new_like' | 'new_message' | 'announcement'
+  | 'post_like' | 'post_comment' | 'comment_reply' | 'story_mention';
 
 export interface AppNotification {
   id: string;

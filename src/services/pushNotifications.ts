@@ -1,9 +1,10 @@
+import type { NotificationType } from '@/api/types';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import api from '@/api/client';
 
-export type PushData = { type?: 'new_match' | 'new_like' | 'new_message'; matchId?: string | null };
+export type PushData = { type?: NotificationType; matchId?: string | null; /** Who mentioned you, for a story mention. */ authorId?: string | null };
 
 // Push is native-only; the web app still has the in-app inbox.
 export const pushSupported = Platform.OS === 'ios' || Platform.OS === 'android';

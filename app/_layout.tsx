@@ -104,7 +104,7 @@ function PushResponseHandler() {
       if (!data || !id || handled.current.has(id)) return;
       handled.current.add(id);
       refreshUnreadNotifications();
-      router.navigate(notificationHref(role, data.type, data.matchId));
+      router.navigate(notificationHref(role, data.type, data.matchId, data.authorId));
     };
 
     Notifications.getLastNotificationResponseAsync().then(open).catch(() => {});

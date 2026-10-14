@@ -50,7 +50,43 @@ export type StickerLayer = Placement & {
   size: number;
 };
 
-export type Layer = TextLayer | StickerLayer;
+/** An @mention of a match; viewers tap it to open their profile. */
+export type MentionLayer = Placement & {
+  id: string;
+  type: 'mention';
+  userId: string;
+  /** "@Name"; the server replaces it with the person's real name. */
+  text: string;
+  size: number;
+};
+
+/** The music sticker: shows the story's song (`StoryLayout.music`). */
+export type MusicLayer = Placement & {
+  id: string;
+  type: 'music';
+  text: '';
+  style: 'card' | 'mini';
+  size: number;
+};
+
+export type Layer = TextLayer | StickerLayer | MentionLayer | MusicLayer;
+
+/** A song from GET /api/stories/music: an Apple Music 30-second preview. */
+export type Track = {
+  id: number;
+  title: string;
+  artist: string;
+  artwork: string | null;
+  preview: string;
+  url: string | null;
+  duration_ms?: number | null;
+};
+
+/** The story's song and which part of the preview plays. */
+export type StoryMusic = Omit<Track, 'duration_ms'> & { start: number };
+
+/** How long a song plays on a photo story; the preview is 30 seconds. */
+export const MUSIC_CLIP_SECONDS = 15;
 
 export type Stroke = {
   brush: BrushId;
@@ -75,10 +111,16 @@ export type StoryPhoto = Placement & {
 export type StoryLayout = {
   v: 1;
   bg: StoryBackground;
+  /** The photo or video's place on the canvas. */
   photo: StoryPhoto | null;
   strokes: Stroke[];
   layers: Layer[];
+  music?: StoryMusic | null;
+  /** A video's own sound is off (always, when there is music). */
+  videoMuted?: boolean;
 };
+
+export type MediaType = 'image' | 'video';
 
 // ─── Canvas geometry ──────────────────────────────────────────────
 

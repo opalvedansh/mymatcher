@@ -125,9 +125,9 @@ async function sendBulkNotifications(notifications) {
  * Failures are logged, never thrown, so the push still goes out.
  *
  * @param {Array<{ userId: string,
- *   type: 'new_match'|'new_like'|'new_message'|'post_like'|'post_comment'|'comment_reply',
+ *   type: 'new_match'|'new_like'|'new_message'|'post_like'|'post_comment'|'comment_reply'|'story_mention',
  *   actorId?: string|null, matchId?: string|null, postId?: string|null,
- *   commentId?: string|null, title: string, body?: string }>} items
+ *   commentId?: string|null, storyId?: string|null, title: string, body?: string }>} items
  */
 async function recordNotifications(items) {
   if (!items.length) return;
@@ -135,8 +135,8 @@ async function recordNotifications(items) {
     const others = items.filter(i => i.type !== 'new_message');
     if (others.length) {
       await db.query(
-        `INSERT INTO notifications (user_id, type, actor_id, match_id, post_id, comment_id, title, body)
-         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::uuid[], $5::uuid[], $6::uuid[], $7::text[], $8::text[])`,
+        `INSERT INTO notifications (user_id, type, actor_id, match_id, post_id, comment_id, title, body, story_id)
+         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::uuid[], $5::uuid[], $6::uuid[], $7::text[], $8::text[], $9::uuid[])`,
         [
           others.map(i => i.userId),
           others.map(i => i.type),
@@ -146,6 +146,7 @@ async function recordNotifications(items) {
           others.map(i => i.commentId ?? null),
           others.map(i => i.title),
           others.map(i => i.body ?? ''),
+          others.map(i => i.storyId ?? null),
         ]
       );
     }
@@ -363,8 +364,30 @@ async function sendCommentNotification({ postId, commentId, commentBody, actorId
   }
 }
 
+/**
+ * Tells each person mentioned in a story. The caller passes only people who
+ * can see the story. Never throws: a failed notification must not fail the post.
+ */
+async function sendStoryMentionNotifications({ storyId, authorId, mentionedIds }) {
+  const recipients = [...new Set(mentionedIds)].filter((id) => id && id !== authorId);
+  if (!recipients.length) return;
+  try {
+    const name = await displayName(authorId);
+    const title = `${name} mentioned you in their story`;
+    await recordNotifications(recipients.map((userId) => (
+      { userId, actorId: authorId, type: 'story_mention', storyId, title, body: '' }
+    )));
+    await sendBulkNotifications(recipients.map((userId) => (
+      { userId, title, body: '', data: { type: 'story_mention', storyId, authorId } }
+    )));
+  } catch (err) {
+    console.error('[Push] Error sending story mention notification:', err);
+  }
+}
+
 module.exports = {
   recordNotifications,
+  sendStoryMentionNotifications,
   sendNotification,
   sendLikeNotification,
   sendBulkNotifications,
