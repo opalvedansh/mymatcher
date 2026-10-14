@@ -10,6 +10,14 @@ import { notificationHref } from '@/services/notificationRoutes';
 import { refreshUnreadNotifications } from '@/hooks/useUnreadNotifications';
 import { setPendingDeepLink, takePendingDeepLink } from '@/services/pendingDeepLink';
 import { colors } from '@/theme/colors';
+import * as SplashScreen from 'expo-splash-screen';
+
+// The dark splash stays up until we know where the user belongs, so launch
+// never flashes a blank screen or the wrong one first. On builds without the
+// splash module these calls do nothing.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+// Never hold it for long if auth is slow or offline.
+const SPLASH_MAX_MS = 6000;
 
 // Without a dark navigation theme, stack cards and tab scenes paint React
 // Navigation's light grey behind every transition and keyboard resize.
@@ -27,6 +35,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   // Segments are file names ("[id]"); the pathname is the real URL to replay.
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (!loading) SplashScreen.hideAsync().catch(() => {});
+  }, [loading]);
+  useEffect(() => {
+    const t = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), SPLASH_MAX_MS);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (loading) return;

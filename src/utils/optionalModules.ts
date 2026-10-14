@@ -29,6 +29,7 @@ export const getDocumentPicker = lazy<typeof import('expo-document-picker')>('Ex
 export const getClipboard = lazy<typeof import('expo-clipboard')>('ExpoClipboard', () => require('expo-clipboard'));
 export const getVideo = lazy<typeof import('expo-video')>('ExpoVideo', () => require('expo-video'));
 export const getHaptics = lazy<typeof import('expo-haptics')>('ExpoHaptics', () => require('expo-haptics'));
+export const getImageManipulator = lazy<typeof import('expo-image-manipulator')>('ExpoImageManipulator', () => require('expo-image-manipulator'));
 export const getMediaLibrary = lazy<typeof import('expo-media-library')>('ExpoMediaLibrary', () => require('expo-media-library'));
 
 let viewShot: typeof import('react-native-view-shot') | null | undefined;

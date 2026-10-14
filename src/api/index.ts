@@ -6,6 +6,7 @@
  */
 
 import api from './client';
+import { getImageManipulator } from '@/utils/optionalModules';
 import type { MediaType, StoryLayout, Track } from '@/features/story/layout';
 import type {
   ApiUser,
@@ -35,7 +36,38 @@ import type {
 // ─── Upload ───────────────────────────────────────────────────────
 
 export async function uploadImage(uri: string): Promise<string> {
-  return uploadFile(uri, 'image/jpeg');
+  return uploadFile(await shrinkPhoto(uri), 'image/jpeg');
+}
+
+/** Longest side, in pixels, of a photo as uploaded. Plenty for any phone screen. */
+const MAX_PHOTO_EDGE = 1440;
+
+/**
+ * Phone photos are 3-8 MB; scaled to 1440px and recompressed they are a few
+ * hundred KB, which uploads in a fraction of the time and loads faster for
+ * everyone who sees it. PNGs stay PNG so a logo keeps its transparency. Builds
+ * without the image module, and any failure here, upload the original.
+ */
+async function shrinkPhoto(uri: string): Promise<string> {
+  const manipulator = getImageManipulator();
+  if (!manipulator) return uri;
+  try {
+    const { ImageManipulator, SaveFormat } = manipulator;
+    const original = await ImageManipulator.manipulate(uri).renderAsync();
+    const longest = Math.max(original.width, original.height);
+    const isPng = /\.png($|\?)/i.test(uri);
+    if (longest <= MAX_PHOTO_EDGE && isPng) return uri;
+    const image = longest > MAX_PHOTO_EDGE
+      ? await ImageManipulator.manipulate(original)
+        .resize(original.width >= original.height ? { width: MAX_PHOTO_EDGE } : { height: MAX_PHOTO_EDGE })
+        .renderAsync()
+      : original;
+    const saved = await image.saveAsync(isPng ? { format: SaveFormat.PNG } : { format: SaveFormat.JPEG, compress: 0.75 });
+    return saved.uri;
+  } catch (err) {
+    console.warn('[upload] could not shrink photo, uploading the original', err);
+    return uri;
+  }
 }
 
 /** A story's video (mp4/mov), which only story uploads accept. */

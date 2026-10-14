@@ -94,7 +94,22 @@
             "video"
           ]
         }
-      ]
-    ]
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0F0F0F",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 150,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#0F0F0F",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
+      "expo-system-ui"
+    ],
+    "backgroundColor": "#0F0F0F"
   }
 }
