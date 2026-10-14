@@ -62,7 +62,8 @@ const VIDEO_BG: [string, string] = ['#232526', '#0F0F0F'];
 const MAX_CLIP_START = 30 - MUSIC_CLIP_SECONDS;
 type Eraser = 'eraser';
 
-const BOTTOM_BAR = sz(72);
+/** Room under the canvas for the share buttons; the story camera frames to the same canvas. */
+export const BOTTOM_BAR = sz(72);
 const DEFAULT_TEXT: Omit<TextLayer, 'id' | 'text'> = {
   type: 'text',
   font: 'classic',
@@ -419,7 +420,8 @@ export function StoryEditor({
         uri = await shot.captureRef(captureRef, { format: 'jpg', quality: 0.95, width: CANVAS_W, height: CANVAS_H, result: 'tmpfile' });
       }
       if (!uri) return;
-      await library.saveToLibraryAsync(uri);
+      // SDK 57's saveToLibraryAsync is a stub that throws; Asset.create saves the file.
+      await library.Asset.create(uri);
       showToast(isVideo ? 'Video saved (without stickers)' : 'Saved', 1400);
     } catch (err) {
       console.error('Failed to save story', err);

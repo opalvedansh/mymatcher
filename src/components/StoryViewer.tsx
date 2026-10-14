@@ -303,7 +303,8 @@ export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }
         return;
       }
       const uri = await shot.captureRef(canvasRef, { format: 'jpg', quality: 0.95, width: 1080, height: 1920, result: 'tmpfile' });
-      await library.saveToLibraryAsync(uri);
+      // SDK 57's saveToLibraryAsync is a stub that throws; Asset.create saves the file.
+      await library.Asset.create(uri);
       showAlert('Saved', 'Your story is in your photo library.');
     } catch (err) {
       console.error('Failed to save story', err);
