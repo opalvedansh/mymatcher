@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import {
   Pressable,
@@ -7,7 +7,9 @@ import {
   TextInput,
   View,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -41,9 +43,26 @@ export function BrandBioInputScreen({
   const isValid = charCount > 0 && !isOverLimit;
   const counterColor = isOverLimit ? DANGER : charCount >= NEAR_LIMIT ? '#FFB27A' : '#8A8A8A';
 
+  // With the keyboard up there is less room than the heading and the box
+  // need, so the form scrolls to the box as the keyboard opens.
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', () => scrollRef.current?.scrollToEnd({ animated: true }));
+    return () => sub.remove();
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* The form scrolls while Continue stays pinned above the keyboard. */}
+        <ScrollView
+          ref={scrollRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+        >
         <DismissKeyboard>
           <View style={styles.container}>
             <View style={styles.header}>
@@ -99,9 +118,11 @@ export function BrandBioInputScreen({
                 </Text>
               </View>
             </View>
+          </View>
+        </DismissKeyboard>
+        </ScrollView>
 
-            <View style={{ flex: 1 }} />
-
+        <View style={styles.footer}>
             <Pressable
               style={({ pressed }) => [styles.nextButton, !isValid && styles.nextButtonDisabled, pressed && styles.pressed]}
               disabled={!isValid}
@@ -114,8 +135,7 @@ export function BrandBioInputScreen({
             >
               <Text style={[styles.nextButtonText, !isValid && styles.nextButtonTextDisabled]}>Continue</Text>
             </Pressable>
-          </View>
-        </DismissKeyboard>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -123,6 +143,7 @@ export function BrandBioInputScreen({
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#0A0A0A' },
+  scrollContent: { flexGrow: 1 },
   container: {
     flex: 1,
     width: '100%',
@@ -130,7 +151,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: sz(24),
     paddingTop: sz(16),
-    paddingBottom: sz(32),
+    paddingBottom: sz(16),
+  },
+  footer: {
+    width: '100%',
+    maxWidth: sz(520),
+    alignSelf: 'center',
+    paddingHorizontal: sz(24),
+    paddingTop: sz(8),
+    paddingBottom: sz(16),
   },
   header: {
     flexDirection: 'row',
@@ -173,8 +202,12 @@ const styles = StyleSheet.create({
     lineHeight: sz(23),
     paddingRight: sz(8),
   },
+  // Full height with room to spare; shrinks (down to a few lines) when the
+  // keyboard takes the bottom of the screen.
   inputCard: {
-    height: sz(240),
+    flex: 1,
+    minHeight: sz(150),
+    maxHeight: sz(240),
     backgroundColor: '#111111',
     borderRadius: sz(20),
     borderWidth: 1,
