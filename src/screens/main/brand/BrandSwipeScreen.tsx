@@ -342,13 +342,15 @@ const card = StyleSheet.create({
   verifiedTxt: { color: '#FFF', fontSize: sz(11), fontWeight: '600' },
   // info panel
   // Room for the X / heart row below: its bottom offset + the 50pt heart + a gap.
-  infoPanel: { paddingHorizontal: sz(20), paddingTop: sz(14), paddingBottom: sz(18 + 50 + 16), backgroundColor: 'transparent' },
+  infoPanel: { paddingHorizontal: sz(20), paddingTop: sz(14), paddingBottom: sz(18 + 50 + 24), backgroundColor: 'transparent' },
   infoName: { color: '#fff', fontSize: sz(28), fontWeight: '800' },
   infoCats: { color: 'rgba(255,255,255,0.8)', fontSize: sz(14), marginTop: sz(3) },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: sz(6), gap: sz(4) },
   locationTxt: { color: '#ccc', fontSize: sz(12) },
-  tagsScroll: { marginTop: sz(16), flexGrow: 0, height: sz(44) },
-  tagsContent: { gap: sz(10), paddingRight: sz(16), alignItems: 'center', height: '100%' },
+  // Runs out to the card's edges, so chips scroll off the card rather than
+  // being cut off at the text column; the padding keeps the first one aligned.
+  tagsScroll: { marginTop: sz(16), marginHorizontal: -sz(20), flexGrow: 0, height: sz(44) },
+  tagsContent: { gap: sz(10), paddingHorizontal: sz(20), alignItems: 'center', height: '100%' },
   pill: { paddingHorizontal: sz(16), paddingVertical: sz(8), borderRadius: sz(22), backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
   // A caption for the row that follows, not a chip you can choose.
   pillLabel: { backgroundColor: 'transparent', borderColor: 'transparent', paddingLeft: 0, paddingRight: sz(4) },
