@@ -19,3 +19,15 @@
   for = "/app/sw.js"
   [headers.values]
     Cache-Control = "no-cache"
+
+# Browser-side hardening. frame-ancestors/X-Frame-Options stop other sites from
+# framing the app (clickjacking a "Delete account" tap); the CSP only lets the
+# bundle talk to the API and Supabase and run its own scripts.
+[[headers]]
+  for = "/app/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://api.mymatchr.in wss://api.mymatchr.in https://*.supabase.co wss://*.supabase.co; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(self), microphone=(self), geolocation=(self), payment=()"

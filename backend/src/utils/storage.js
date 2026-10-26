@@ -10,16 +10,23 @@ function publicUploadPrefix(userId) {
  * data: URIs, third-party hosts, other users' files — is rejected, so stored
  * media can't be used for tracking pixels, phishing links or DB bloat.
  */
+// One file directly in the user's folder: uploads are "<uuid>.<ext>", reel
+// thumbnails "reel-<shortcode>.<ext>". URL parsing resolves literal `..`, but
+// not a percent-encoded "/" ("..%2Fother-user%2Fx.jpg"), which storage decodes;
+// only allowing a plain file name closes that.
+const OWN_FILE_NAME = /^[A-Za-z0-9_-]+\.[A-Za-z0-9]+$/;
+
 function isOwnUploadUrl(url, userId) {
   if (typeof url !== 'string' || !process.env.SUPABASE_URL) return false;
   let normalized;
   try {
-    // URL parsing resolves `..` segments, so a path can't escape the prefix.
     normalized = new URL(url).href;
   } catch {
     return false;
   }
-  return normalized.startsWith(publicUploadPrefix(userId));
+  const prefix = publicUploadPrefix(userId);
+  return normalized.startsWith(prefix)
+    && OWN_FILE_NAME.test(normalized.slice(prefix.length).split(/[?#]/)[0]);
 }
 
 /**

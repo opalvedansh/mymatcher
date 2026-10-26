@@ -41,6 +41,10 @@ function esc(value) {
  */
 async function sharePage(req, res) {
   const { postId } = req.params;
+  // The page is static HTML with inline styles and no scripts; if an escaping
+  // bug ever let markup through, the browser still runs nothing.
+  res.set('Content-Security-Policy',
+    "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
 
   // A malformed id is a 404 page, not a database error.
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(postId)) {

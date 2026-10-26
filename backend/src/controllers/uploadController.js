@@ -19,6 +19,15 @@ const STORY_VIDEO_EXTENSIONS = {
   'video/x-m4v': 'm4v',
 };
 
+// Enforced by storage itself, since the client PUTs the file straight to the
+// signed URL: without these a caller could store any size or content type.
+// 50 MB matches the app's story video cap (app/story-camera.tsx).
+const BUCKET_SETTINGS = {
+  public: true,
+  fileSizeLimit: 50 * 1024 * 1024,
+  allowedMimeTypes: [...Object.keys(EXTENSION_BY_TYPE), ...Object.keys(STORY_VIDEO_EXTENSIONS)],
+};
+
 let bucketReady = null;
 
 /**
@@ -45,7 +54,11 @@ async function generatePresignedUrl(req, res, next) {
 
     const client = getSupabaseAdmin();
     // Creating the bucket is a network call; do it once per process, not per upload.
-    bucketReady ??= client.storage.createBucket(UPLOAD_BUCKET, { public: true }).catch(() => {});
+    // An existing bucket gets its limits brought in line instead.
+    bucketReady ??= client.storage.createBucket(UPLOAD_BUCKET, BUCKET_SETTINGS)
+      .then(({ error }) => error && client.storage.updateBucket(UPLOAD_BUCKET, BUCKET_SETTINGS))
+      .then((result) => result?.error && logger.warn({ err: result.error.message }, '[Upload] could not apply bucket limits'))
+      .catch(() => {});
     await bucketReady;
 
     const { data, error } = await client
