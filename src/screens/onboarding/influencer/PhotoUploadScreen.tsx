@@ -59,12 +59,16 @@ export function PhotoUploadScreen({
           key={i} 
           style={({ pressed }) => [styles.photoSlot, pressed && styles.slotPressed]}
           onPress={() => pickImage(i)}
+          accessibilityRole="button"
+          accessibilityLabel={uri ? `Photo ${i + 1}, change` : `Add photo ${i + 1}`}
         >
           {uri ? (
             <>
               <Image source={{ uri }} style={styles.image} contentFit="cover" transition={150} />
               <Pressable 
                 style={styles.removeButton}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove photo ${i + 1}`}
                 onPress={(e) => {
                   e.stopPropagation();
                   removePhoto(i);
@@ -131,6 +135,8 @@ export function PhotoUploadScreen({
               }
             }}
             disabled={photos.length === 0}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: photos.length === 0 }}
           >
             <Text style={[
               styles.nextButtonText,

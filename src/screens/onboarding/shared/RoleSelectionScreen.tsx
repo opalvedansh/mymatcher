@@ -64,6 +64,8 @@ export function RoleSelectionScreen({
                 pressed && styles.cardPressed,
               ]}
               onPress={() => selectRole('Brand')}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selectedRole === 'Brand' }}
             >
               <Text style={[styles.optionText, selectedRole === 'Brand' && styles.optionTextSelected]}>Brand</Text>
               <View style={[styles.checkbox, selectedRole === 'Brand' && styles.checkboxSelected]}>
@@ -78,6 +80,8 @@ export function RoleSelectionScreen({
                 pressed && styles.cardPressed,
               ]}
               onPress={() => selectRole('Influencer')}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selectedRole === 'Influencer' }}
             >
               <Text style={[styles.optionText, selectedRole === 'Influencer' && styles.optionTextSelected]}>Influencer</Text>
               <View style={[styles.checkbox, selectedRole === 'Influencer' && styles.checkboxSelected]}>
@@ -96,6 +100,8 @@ export function RoleSelectionScreen({
               pressed && styles.pressed,
             ]}
             disabled={!selectedRole}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !selectedRole }}
             onPress={() => {
               tapFeedback();
               onNext?.(selectedRole);

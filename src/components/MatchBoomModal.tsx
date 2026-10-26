@@ -125,10 +125,10 @@ export function MatchBoomModal({
             },
           ]}
         >
-          <Pressable style={styles.button} onPress={onIntroduce}>
+          <Pressable style={styles.button} onPress={onIntroduce} accessibilityRole="button">
             <Text style={styles.buttonText}>Introduce yourself...</Text>
           </Pressable>
-          <Pressable style={styles.closeButton} onPress={onClose}>
+          <Pressable style={styles.closeButton} onPress={onClose} accessibilityRole="button">
             <Text style={styles.closeButtonText}>Keep Swiping</Text>
           </Pressable>
         </Animated.View>
