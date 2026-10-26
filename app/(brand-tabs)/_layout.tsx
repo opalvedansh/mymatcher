@@ -20,6 +20,7 @@ export default function BrandTabsLayout() {
         },
         tabBarActiveTintColor: '#FF6B2B',
         tabBarInactiveTintColor: '#666',
+        // Icons only, so each screen sets tabBarAccessibilityLabel for screen readers.
         tabBarShowLabel: false,
         // Hidden tabs stop re-rendering on context and socket updates.
         freezeOnBlur: true,
@@ -32,6 +33,7 @@ export default function BrandTabsLayout() {
         name="match"
         options={{
           title: 'Match',
+          tabBarAccessibilityLabel: 'Match',
           tabBarIcon: ({ color, size }) => <NavMatchIcon size={sz(24)} color={color as string} />,
         }}
       />
@@ -39,6 +41,7 @@ export default function BrandTabsLayout() {
         name="home"
         options={{
           title: 'Home',
+          tabBarAccessibilityLabel: 'Home',
           tabBarIcon: ({ color, size }) => <NavHomeIcon size={sz(24)} color={color as string} />,
         }}
       />
@@ -46,6 +49,7 @@ export default function BrandTabsLayout() {
         name="likes"
         options={{
           title: 'Likes',
+          tabBarAccessibilityLabel: 'Likes',
           tabBarIcon: ({ color, size }) => <NavHeartIcon size={sz(26)} color={color as string} />,
         }}
       />
@@ -53,6 +57,7 @@ export default function BrandTabsLayout() {
         name="messages"
         options={{
           title: 'Messages',
+          tabBarAccessibilityLabel: 'Messages',
           tabBarIcon: ({ color, size }) => <NavMessageIcon size={sz(24)} color={color as string} />,
         }}
       />
@@ -60,6 +65,7 @@ export default function BrandTabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
+          tabBarAccessibilityLabel: 'Profile',
           tabBarIcon: ({ color, size }) => <NavProfileIcon size={sz(24)} color={color as string} />,
         }}
       />
