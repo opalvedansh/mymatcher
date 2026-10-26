@@ -1,6 +1,6 @@
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ActionSheetHost } from '@/components/ActionSheet';
-import { DarkTheme, Stack, ThemeProvider, usePathname, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider, useGlobalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform, View } from 'react-native';
@@ -37,6 +37,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   // Segments are file names ("[id]"); the pathname is the real URL to replay.
   const pathname = usePathname();
+  const params = useGlobalSearchParams();
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync().catch(() => {});
@@ -93,13 +94,21 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     // (/profile, /home, ...), so a reload can resolve into the wrong one.
     const inWrongTabs = group === (isBrand ? '(influencer-tabs)' : '(brand-tabs)');
 
-    if (inAuthGroup || inOnboarding || group === undefined || inWrongTabs) {
+    if (inWrongTabs) {
+      // Both groups have the same tabs, so stay on this one (and its params,
+      // e.g. ?matchId=) in the user's own group rather than dropping to home.
+      const ownGroup = isBrand ? '(brand-tabs)' : '(influencer-tabs)';
+      router.replace({ pathname: `/${ownGroup}/${(segments as string[])[1] ?? 'home'}`, params } as never);
+      return;
+    }
+
+    if (inAuthGroup || inOnboarding || group === undefined) {
       // Home first, so the parked screen has a feed to go back to.
       router.replace(isBrand ? '/(brand-tabs)/home' : '/(influencer-tabs)/home');
       const pending = takePendingDeepLink();
       if (pending) router.push(pending as never);
     }
-  }, [user, loading, onboardingComplete, onboardingData, userDataError, passwordRecovery, segments, pathname, router]);
+  }, [user, loading, onboardingComplete, onboardingData, userDataError, passwordRecovery, segments, pathname, params, router]);
 
   return <>{children}</>;
 }
