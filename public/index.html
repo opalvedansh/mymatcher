@@ -31,6 +31,16 @@
         height: 100%;
         flex: 1;
       }
+      /* react-native-web renders each <Modal> into its own div on <body>,
+         outside the centred 430px app column (app/_layout.tsx). Keep modals
+         in that column too; the transform makes this box the reference for
+         the modal's position: fixed layers. */
+      body > div:not(#root):not([style]) > div {
+        max-width: 430px;
+        margin: 0 auto;
+        transform: translateZ(0);
+        overflow: hidden;
+      }
     </style>
   </head>
 
