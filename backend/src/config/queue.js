@@ -10,6 +10,8 @@ const hasRedis = !!(process.env.REDIS_URL || process.env.REDIS_HOST) && process.
 let connection = null;
 let pushQueue = null;
 let feedQueue = null;
+let instagramQueue = null;
+let platformStatsQueue = null;
 const workers = [];
 
 // BullMQ needs its own connection with maxRetriesPerRequest: null, so it
@@ -37,10 +39,14 @@ if (hasRedis) {
     connection = createConnection({ failFast: true });
     pushQueue = new Queue('PushNotifications', { connection });
     feedQueue = new Queue('FeedDecks', { connection });
+    instagramQueue = new Queue('InstagramRefresh', { connection });
+    platformStatsQueue = new Queue('PlatformStats', { connection });
   } catch (err) {
     logger.error({ err: err.message }, '[Queue] Failed to initialize BullMQ — jobs will run inline');
     pushQueue = null;
     feedQueue = null;
+    instagramQueue = null;
+    platformStatsQueue = null;
   }
 } else if (process.env.NODE_ENV !== 'test') {
   logger.warn('[Queue] Redis not available — background jobs will run inline in the API process.');
@@ -64,6 +70,52 @@ async function warmFeedDeck(job) {
   await warm(job.data.userId, job.data.role);
 }
 
+async function refreshInstagram() {
+  const { refreshStaleInstagramStats } = require('../services/instagramRefresh');
+  return refreshStaleInstagramStats();
+}
+
+// Daily follower refresh, overnight in India when nobody is browsing. Only
+// scheduled where an Apify token exists, since every run is billed.
+const INSTAGRAM_REFRESH_CRON = process.env.INSTAGRAM_REFRESH_CRON || '0 3 * * *';
+
+async function scheduleInstagramRefresh() {
+  if (!instagramQueue) return;
+  if (!process.env.APIFY_API_TOKEN) {
+    logger.warn('[Queue] APIFY_API_TOKEN not set — daily Instagram refresh disabled');
+    return;
+  }
+  await instagramQueue.upsertJobScheduler(
+    'instagram-refresh-daily',
+    { pattern: INSTAGRAM_REFRESH_CRON, tz: 'Asia/Kolkata' },
+    { name: 'refresh', opts: { removeOnComplete: 30, removeOnFail: 30 } },
+  );
+}
+
+// 'sync' fetches one user's new accounts after a profile save; 'refresh' is
+// the daily run over every stale account.
+async function runPlatformStats(job) {
+  const { syncUserPlatforms, refreshStalePlatformStats } = require('../services/platformStats');
+  if (job.name === 'refresh') return refreshStalePlatformStats();
+  return syncUserPlatforms(job.data.userId, job.data.role);
+}
+
+// Half an hour after the Instagram refresh, so the two don't overlap.
+const PLATFORM_STATS_CRON = process.env.PLATFORM_STATS_CRON || '30 3 * * *';
+
+async function schedulePlatformStatsRefresh() {
+  if (!platformStatsQueue) return;
+  if (!process.env.APIFY_API_TOKEN) {
+    logger.warn('[Queue] APIFY_API_TOKEN not set — daily follower refresh disabled');
+    return;
+  }
+  await platformStatsQueue.upsertJobScheduler(
+    'platform-stats-daily',
+    { pattern: PLATFORM_STATS_CRON, tz: 'Asia/Kolkata' },
+    { name: 'refresh', opts: { removeOnComplete: 30, removeOnFail: 30 } },
+  );
+}
+
 /**
  * Starts the job workers in this process. The API runs them too unless
  * RUN_WORKERS=false (set that once `npm run worker` runs as its own service).
@@ -74,6 +126,8 @@ function startWorkers() {
   const specs = [
     ['PushNotifications', sendPush, 5],
     ['FeedDecks', warmFeedDeck, 2],
+    ['InstagramRefresh', refreshInstagram, 1],
+    ['PlatformStats', runPlatformStats, 2],
   ];
   for (const [name, processor, concurrency] of specs) {
     const worker = new Worker(name, processor, { connection: createConnection({ failFast: false }), concurrency });
@@ -81,7 +135,11 @@ function startWorkers() {
     worker.on('error', (err) => logger.error({ queue: name, err: err.message }, '[BullMQ] worker error'));
     workers.push(worker);
   }
-  logger.info('[Queue] Workers started: PushNotifications, FeedDecks');
+  logger.info('[Queue] Workers started: PushNotifications, FeedDecks, InstagramRefresh, PlatformStats');
+  scheduleInstagramRefresh()
+    .catch((err) => logger.error({ err: err.message }, '[Queue] Failed to schedule Instagram refresh'));
+  schedulePlatformStatsRefresh()
+    .catch((err) => logger.error({ err: err.message }, '[Queue] Failed to schedule follower refresh'));
 }
 
 async function stopWorkers() {
@@ -113,6 +171,28 @@ async function enqueueFeedWarm(userId, role) {
 }
 
 /**
+ * Fetches follower counts for a user's newly added or changed accounts in the
+ * background. The fixed job id coalesces a burst of saves into one run; the
+ * job reads what needs fetching from the profile when it runs.
+ */
+async function enqueuePlatformSync(userId, role) {
+  if (platformStatsQueue) {
+    await platformStatsQueue.add('sync', { userId, role }, {
+      jobId: `pstats-${userId}`,
+      delay: 3000,
+      removeOnComplete: true,
+      removeOnFail: 100,
+    });
+    return;
+  }
+  if (process.env.NODE_ENV === 'test' || !process.env.APIFY_API_TOKEN) return;
+  setTimeout(() => {
+    runPlatformStats({ name: 'sync', data: { userId, role } })
+      .catch((err) => logger.warn({ err: err.message, userId }, '[Queue] inline follower sync failed'));
+  }, 3000).unref();
+}
+
+/**
  * Job counts per queue, for the admin system page.
  *
  * Reports { configured: false } rather than throwing when Redis is absent, so
@@ -124,7 +204,7 @@ async function enqueueFeedWarm(userId, role) {
 async function getQueueStats() {
   if (!hasRedis) return { configured: false, queues: [] };
 
-  const entries = [['PushNotifications', pushQueue], ['FeedDecks', feedQueue]].filter(([, q]) => q);
+  const entries = [['PushNotifications', pushQueue], ['FeedDecks', feedQueue], ['InstagramRefresh', instagramQueue], ['PlatformStats', platformStatsQueue]].filter(([, q]) => q);
   const queues = await Promise.all(entries.map(async ([name, queue]) => {
     try {
       const counts = await queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
@@ -137,4 +217,4 @@ async function getQueueStats() {
   return { configured: true, queues };
 }
 
-module.exports = { pushQueue, enqueueFeedWarm, startWorkers, stopWorkers, getQueueStats, hasRedis };
+module.exports = { pushQueue, enqueueFeedWarm, enqueuePlatformSync, startWorkers, stopWorkers, getQueueStats, hasRedis };

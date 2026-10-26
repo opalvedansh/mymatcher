@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 
 const CROWN_SVG = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M4.5 16L3.5 9L8 11.5L12 4L16 11.5L20.5 9L19.5 16H4.5Z" stroke="#F05A28" stroke-width="2" stroke-linejoin="round"/>
@@ -28,21 +28,21 @@ const GENZ_SVG = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xm
 </svg>`;
 
 export function PremiumIcon({ size = 24 }: { size?: number }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(CROWN_SVG) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={CROWN_SVG} width={size} height={size} />;
 }
 
 export function MinimalIcon({ size = 24 }: { size?: number }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(MINIMAL_SVG) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={MINIMAL_SVG} width={size} height={size} />;
 }
 
 export function BoldIcon({ size = 24 }: { size?: number }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(BOLD_SVG) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={BOLD_SVG} width={size} height={size} />;
 }
 
 export function AuthenticIcon({ size = 24 }: { size?: number }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(AUTHENTIC_SVG) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={AUTHENTIC_SVG} width={size} height={size} />;
 }
 
 export function GenzIcon({ size = 24 }: { size?: number }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(GENZ_SVG) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={GENZ_SVG} width={size} height={size} />;
 }

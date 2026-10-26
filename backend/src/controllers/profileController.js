@@ -8,6 +8,8 @@ const feedDeck = require('../services/feedDeck');
 const { prepareReels, persistSyncedThumbnails } = require('../services/reelThumbnails');
 const { ageFromDob } = require('../utils/dob');
 const { parseLinkedinUrl } = require('../utils/linkedin');
+const { cleanPlatformFollowers, cleanPlatformHandles, dropStaleSynced, withSyncedInstagram } = require('../utils/platformFollowers');
+const { enqueuePlatformSync } = require('../config/queue');
 
 // ─── Helper: fetch full profile by userId + role (explicit columns) ──
 async function fetchProfile(userId, role) {
@@ -19,7 +21,7 @@ async function fetchProfile(userId, role) {
          p.budget_min, p.budget_max, p.campaign_days,
          p.deliverable_reels, p.deliverable_stories, p.deliverable_posts,
          p.payment_mode, p.payment_days,
-         p.campaign_types, p.vibes, p.website, p.photos, p.platforms, p.verified, p.updated_at,
+         p.campaign_types, p.vibes, p.website, p.photos, p.platforms, p.platform_followers, p.platform_handles, p.verified, p.updated_at,
          p.verification_status, p.verification_business_name, p.verification_note,
          (SELECT ROUND(AVG(score)::numeric, 1) FROM brand_ratings r WHERE r.brand_id = p.user_id) AS rating_avg,
          (SELECT COUNT(*)::int          FROM brand_ratings r WHERE r.brand_id = p.user_id) AS rating_count,
@@ -38,7 +40,7 @@ async function fetchProfile(userId, role) {
          -- Worked out from the date of birth on every read so it never goes
          -- stale; the date itself is never returned.
          COALESCE(date_part('year', age(p.dob))::int, p.age) AS age,
-         p.gender, p.platforms, p.photos, p.reels,
+         p.gender, p.platforms, p.platform_followers, p.platform_handles, p.photos, p.reels,
          p.followers, p.engagement_rate, p.avg_views,
          p.price_min, p.price_max, p.verified, p.updated_at,
          p.instagram_handle, p.instagram_synced_at, p.worked_with, p.linkedin_reviews,
@@ -49,8 +51,48 @@ async function fetchProfile(userId, role) {
        WHERE p.user_id = $1`,
       [userId]
     );
-    return rows[0] || null;
+    const profile = rows[0];
+    if (!profile) return null;
+    profile.platform_followers = withSyncedInstagram(
+      profile.platform_followers, profile.followers, profile.instagram_synced_at
+    );
+    return profile;
   }
+}
+
+const sameHandles = (a, b) =>
+  Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => a[k] === b[k]);
+
+// Validates the accounts and typed follower counts a save sent against what
+// is stored. Returns the JSON to store for each (null when it's unchanged)
+// and whether the accounts changed, or throws a 400 error.
+async function preparePlatformFields({ platform_followers, platform_handles }, userId, role) {
+  const sentFollowers = platform_followers !== undefined && platform_followers !== null;
+  const sentHandles = platform_handles !== undefined && platform_handles !== null;
+  if (!sentFollowers && !sentHandles) return { followersJson: null, handlesJson: null, handlesChanged: false };
+
+  const table = role === 'brand' ? 'brand_profiles' : 'influencer_profiles';
+  const extra = role === 'brand' ? '' : ', followers, instagram_synced_at';
+  const { rows: [current] } = await db.query(
+    `SELECT platform_followers, platform_handles${extra} FROM ${table} WHERE user_id = $1`,
+    [userId]
+  );
+
+  const storedHandles = current?.platform_handles || {};
+  const handles = sentHandles ? cleanPlatformHandles(platform_handles, role) : storedHandles;
+  // Counts fetched for an account the user replaced or removed are dropped
+  // first, so a typed count for that platform counts again.
+  let followers = dropStaleSynced(current?.platform_followers, handles);
+  if (sentFollowers) {
+    // A creator's synced Instagram count belongs to the Instagram sync.
+    const ignore = current?.followers > 0 && current?.instagram_synced_at ? ['instagram'] : [];
+    followers = cleanPlatformFollowers(platform_followers, followers, ignore);
+  }
+  return {
+    followersJson: JSON.stringify(followers),
+    handlesJson: sentHandles ? JSON.stringify(handles) : null,
+    handlesChanged: sentHandles && !sameHandles(handles, storedHandles),
+  };
 }
 
 // Fields only the owner may see. Exact coordinates would let anyone locate
@@ -194,6 +236,7 @@ async function getMyProfile(req, res, next) {
 async function updateMyProfile(req, res, next) {
   try {
     const { id: userId, role } = req.user;
+    let platformFields;
 
     if (role === 'brand') {
       // `verified` is deliberately not accepted: only face verification sets it.
@@ -202,6 +245,13 @@ async function updateMyProfile(req, res, next) {
         location, lat, lng, budget_min, budget_max, campaign_days, campaign_types, vibes, website, photos, platforms,
         deliverable_reels, deliverable_stories, deliverable_posts, payment_mode, payment_days
       } = req.body;
+
+      try {
+        platformFields = await preparePlatformFields(req.body, userId, role);
+      } catch (err) {
+        if (err.status === 400) return res.status(400).json({ error: err.message });
+        throw err;
+      }
 
       await db.query(
         `UPDATE brand_profiles SET
@@ -226,12 +276,14 @@ async function updateMyProfile(req, res, next) {
           deliverable_posts   = COALESCE($19, deliverable_posts),
           -- '' clears the mode; COALESCE alone could never unset it.
           payment_mode        = CASE WHEN $20 = '' THEN NULL ELSE COALESCE($20, payment_mode) END,
-          payment_days        = COALESCE($21, payment_days)
+          payment_days        = COALESCE($21, payment_days),
+          platform_followers  = COALESCE($23::jsonb, platform_followers),
+          platform_handles    = COALESCE($24::jsonb, platform_handles)
         WHERE user_id = $22`,
         [name, logo_url, cover_url, bio, categories,
          location, lat, lng, budget_min, budget_max, campaign_days, campaign_types, vibes, website, photos, platforms,
          deliverable_reels, deliverable_stories, deliverable_posts, payment_mode, payment_days,
-         userId]
+         userId, platformFields.followersJson, platformFields.handlesJson]
       );
     } else {
       // `verified`, `followers`, `engagement_rate` and `avg_views` are
@@ -269,6 +321,13 @@ async function updateMyProfile(req, res, next) {
         const prices = cleanPackageList.map((p) => p.price);
         price_min = prices.length ? Math.min(...prices) : 0;
         price_max = prices.length ? Math.max(...prices) : 0;
+      }
+
+      try {
+        platformFields = await preparePlatformFields(req.body, userId, role);
+      } catch (err) {
+        if (err.status === 400) return res.status(400).json({ error: err.message });
+        throw err;
       }
 
       let cleanPlatforms = null;
@@ -330,7 +389,9 @@ async function updateMyProfile(req, res, next) {
           worked_with     = COALESCE($17, worked_with),
           linkedin_reviews = COALESCE($18::jsonb, linkedin_reviews),
           dob             = COALESCE($20::date, dob),
-          packages        = COALESCE($21::jsonb, packages)
+          packages        = COALESCE($21::jsonb, packages),
+          platform_followers = COALESCE($22::jsonb, platform_followers),
+          platform_handles = COALESCE($23::jsonb, platform_handles)
         WHERE user_id = $19`,
         [name, avatar_url, cover_url, bio, categories,
          location, lat, lng, age, gender, cleanPlatforms, photos,
@@ -341,12 +402,19 @@ async function updateMyProfile(req, res, next) {
          cleanReviews ? JSON.stringify(cleanReviews) : null,
          userId,
          dob || null,
-         cleanPackageList ? JSON.stringify(cleanPackageList) : null]
+         cleanPackageList ? JSON.stringify(cleanPackageList) : null,
+         platformFields.followersJson,
+         platformFields.handlesJson]
       );
     }
 
     // Invalidate the public profile API endpoint cache in Redis
     await invalidateCache(`cache:/api/profiles/${userId}`);
+    // New or changed accounts get their follower counts fetched in the background.
+    if (platformFields?.handlesChanged) {
+      await enqueuePlatformSync(userId, role)
+        .catch((err) => logger.warn({ err: err.message, userId }, 'Could not queue follower sync'));
+    }
     // Categories, budget and location drive the user's own feed ranking.
     await feedDeck.refreshAfterProfileChange(userId, role);
 

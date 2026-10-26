@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -30,9 +30,11 @@ import { ApiError } from '@/api/client';
 import { openAccountMenu, openSafetyMenu } from '@/components/safetyMenu';
 import { showAlert } from '@/components/ActionSheet';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { InfluencerProfile } from '@/api/types';
+import { PlatformFollowerInputs } from '@/components/PlatformFollowerInputs';
+import { compactCount, followerDrafts, typedFollowers, handleDrafts, typedHandles } from '@/utils/followers';
 import { PackageIcon } from '@/components/PackageIcons';
 import { PackagePriceEditor } from '@/components/PackagePriceEditor';
 import { completePackages, describePackage, formatPrice, toPackageDrafts, type CreatorPackage, type PackageDraft } from '@/utils/packages';
@@ -634,6 +636,8 @@ export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
   const [isEditPackagesVisible, setIsEditPackagesVisible] = useState(false);
   const [isEditPlatformsVisible, setIsEditPlatformsVisible] = useState(false);
   const [draftPlatforms, setDraftPlatforms] = useState<string[]>([]);
+  const [draftFollowers, setDraftFollowers] = useState<Record<string, string>>({});
+  const [draftHandles, setDraftHandles] = useState<Record<string, string>>({});
   const [isSavingPlatforms, setIsSavingPlatforms] = useState(false);
   // Avatars picked on this device, so their local URI can show before upload finishes.
   const localPickedUris = useRef(new Set<string>());
@@ -722,6 +726,28 @@ export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
     }
     loadProfile();
   }, [reloadKey]);
+
+  // The tab stays mounted, so stats refreshed on the server (the daily
+  // Instagram refresh) are picked up when the creator comes back to it. Only
+  // the stats are merged, so an edit still saving isn't overwritten.
+  const firstFocusRef = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocusRef.current) {
+        firstFocusRef.current = false; // loadProfile already fetched it
+        return;
+      }
+      if (publicUserId) return;
+      getMyProfile()
+        .then((fresh) => {
+          if (unmountedRef.current) return;
+          // Counts fetched in the background since the last load land here.
+          const { followers, engagement_rate, avg_views, platform_followers } = fresh as InfluencerProfile;
+          setActiveProfile(prev => prev ? { ...prev, followers, engagement_rate, avg_views, platform_followers } : prev);
+        })
+        .catch(() => {});
+    }, [publicUserId]),
+  );
 
   if (loading) {
     // Skeleton in the shape of the loaded page: photo header, avatar, name, stats.
@@ -876,7 +902,12 @@ export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
   };
 
   const openEditPlatforms = () => {
-    setDraftPlatforms((activeProfile?.platforms || []).map(p => p.toLowerCase()));
+    const current = (activeProfile?.platforms || []).map(p => p.toLowerCase());
+    setDraftPlatforms(current);
+    // Every platform gets a field, so toggling one off and on keeps its count.
+    const allPlatforms = [...new Set([...PICKABLE_PLATFORMS, ...current])];
+    setDraftFollowers(followerDrafts(activeProfile?.platform_followers, allPlatforms));
+    setDraftHandles(handleDrafts(activeProfile?.platform_handles, allPlatforms));
     setIsEditPlatformsVisible(true);
   };
 
@@ -889,11 +920,21 @@ export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
     try {
       setIsSavingPlatforms(true);
       setActiveProfile(prev => prev ? { ...prev, platforms: draftPlatforms } : prev);
-      await updateMyProfile({ platforms: draftPlatforms });
+      const saved = await updateMyProfile({
+        platforms: draftPlatforms,
+        platform_followers: typedFollowers(draftFollowers, activeProfile?.platform_followers, draftPlatforms),
+        // Instagram has its own sync (the handle under the name).
+        platform_handles: typedHandles(draftHandles, draftPlatforms.filter(p => p !== 'instagram')),
+      }) as InfluencerProfile;
+      setActiveProfile(prev => prev ? {
+        ...prev,
+        platform_followers: saved.platform_followers,
+        platform_handles: saved.platform_handles,
+      } : prev);
       setIsEditPlatformsVisible(false);
     } catch (e) {
       setActiveProfile(prev => prev ? { ...prev, platforms: previous } : prev);
-      showAlert('Error', 'Could not update your platforms');
+      showAlert('Error', e instanceof ApiError && e.status === 400 ? e.message : 'Could not update your platforms');
     } finally {
       setIsSavingPlatforms(false);
     }
@@ -949,6 +990,7 @@ export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
     const matchedKey = Object.keys(PLATFORMS_DB).find(k => k.toLowerCase() === p.toLowerCase());
     return {
       name: p,
+      count: activeProfile.platform_followers?.[p.toLowerCase()]?.count,
       ...(matchedKey ? PLATFORMS_DB[matchedKey] : { label: p, bg: '#FF6B2B', icon: UNKNOWN_PLATFORM_ICON })
     };
   });
@@ -1185,8 +1227,16 @@ export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
             {platformsList.length > 0 ? (
               <View style={styles.platformRow}>
                 {platformsList.map((p) => (
-                  <View key={p.name} style={[styles.platformCircle, { backgroundColor: p.bg }]} accessibilityLabel={p.label}>
-                    {p.icon}
+                  <View
+                    key={p.name}
+                    style={styles.platformItem}
+                    accessible
+                    accessibilityLabel={p.count != null ? `${p.label}, ${p.count} followers` : p.label}
+                  >
+                    <View style={[styles.platformCircle, { backgroundColor: p.bg }]}>
+                      {p.icon}
+                    </View>
+                    {p.count != null && <Text style={styles.platformCount}>{compactCount(p.count)}</Text>}
                   </View>
                 ))}
               </View>
@@ -1607,10 +1657,13 @@ export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
                 <Ionicons name="close" size={sz(24)} color="#FFF" />
               </Pressable>
             </View>
-            <Text style={styles.modalSubtitle}>Select the platforms where brands can work with you.</Text>
+            <Text style={styles.modalSubtitle}>Select the platforms where brands can work with you, and how many followers you have on each.</Text>
 
-            <View style={{ maxHeight: sz(320), width: '100%', marginBottom: sz(20) }}>
-              <ScrollView contentContainerStyle={[styles.platformRow, { justifyContent: 'flex-start', gap: sz(8) }]}>
+            <ScrollView
+              style={{ maxHeight: sz(460), width: '100%', marginBottom: sz(20) }}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={[styles.platformRow, { justifyContent: 'flex-start', gap: sz(8) }]}>
                 {PICKABLE_PLATFORMS.map((key) => {
                   const selected = draftPlatforms.includes(key);
                   const platform = PLATFORMS_DB[key];
@@ -1629,8 +1682,37 @@ export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
                     </Pressable>
                   );
                 })}
-              </ScrollView>
-            </View>
+              </View>
+
+              {draftPlatforms.length > 0 && (
+                <>
+                  <Text style={styles.followersLabel}>Followers</Text>
+                  <Text style={styles.followersHint}>
+                    Add your account and we'll fetch your follower count, usually within a few minutes. You can type it yourself in the meantime.
+                  </Text>
+                  <PlatformFollowerInputs
+                    rows={draftPlatforms.map((key) => {
+                      const platform = PLATFORMS_DB[key];
+                      return {
+                        key,
+                        label: platform?.label ?? key,
+                        showHandle: key !== 'instagram',
+                        icon: (
+                          <View style={[styles.platformChipIcon, { backgroundColor: platform?.bg ?? '#FF6B2B' }]}>
+                            {platform?.icon ?? UNKNOWN_PLATFORM_ICON}
+                          </View>
+                        ),
+                      };
+                    })}
+                    drafts={draftFollowers}
+                    handles={draftHandles}
+                    followers={activeProfile.platform_followers}
+                    onChange={(key, text) => setDraftFollowers(prev => ({ ...prev, [key]: text }))}
+                    onHandleChange={(key, text) => setDraftHandles(prev => ({ ...prev, [key]: text }))}
+                  />
+                </>
+              )}
+            </ScrollView>
 
             <Pressable
               style={({ pressed }) => [styles.modalButton, pressed && styles.pressed, isSavingPlatforms && { opacity: 0.6 }]}
@@ -1871,6 +1953,28 @@ const styles = StyleSheet.create({
   platformChipText: {
     color: '#FFF',
     fontSize: sz(13),
+  },
+  platformItem: {
+    alignItems: 'center',
+    gap: sz(4),
+  },
+  platformCount: {
+    color: '#DDD',
+    fontSize: sz(12),
+    fontWeight: '600',
+  },
+  followersLabel: {
+    color: '#9A9A9A',
+    fontSize: sz(13),
+    fontWeight: '600',
+    marginTop: sz(20),
+    marginBottom: sz(4),
+  },
+  followersHint: {
+    color: '#777',
+    fontSize: sz(12),
+    lineHeight: sz(16),
+    marginBottom: sz(10),
   },
   platformCircle: {
     width: sz(36),

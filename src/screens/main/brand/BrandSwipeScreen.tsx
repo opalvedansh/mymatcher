@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
 import { showAlert } from '@/components/ActionSheet';
 import { sz } from '@/theme/scale';
+import { compactCount } from '@/utils/followers';
 import { TAB_BAR_HEIGHT } from '@/theme/tabBar';
 import { SwipeDeck, type SwipeDeckHandle, type SwipeDir } from '@/features/swipe/SwipeDeck';
 import { useSwipeQueue } from '@/features/swipe/useSwipeQueue';
@@ -26,11 +27,6 @@ const ACCENT = '#FF6B2B';
 // The tab bar covers the bottom safe area; the card stack clears the bar itself.
 const SAFE_EDGES: Edge[] = ['top', 'left', 'right'];
 
-/** 40000 → 40K. Never rounds a real number up into a bigger one. */
-const compact = (n: number) =>
-  n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M`
-  : n >= 1000 ? `${Math.floor(n / 1000)}K`
-  : String(n);
 
 type CardItem = {
   id: string;
@@ -167,9 +163,9 @@ const isValidUrl = (url?: string | null): url is string =>
 function toCardItem(p: InfluencerProfile): CardItem {
   const stats: CardItem['stats'] = [];
   if (p.stats_verified) {
-    if (p.followers > 0) stats.push({ value: compact(p.followers), label: 'Followers' });
+    if (p.followers > 0) stats.push({ value: compactCount(p.followers), label: 'Followers' });
     if (p.engagement_rate > 0) stats.push({ value: `${Number(p.engagement_rate).toFixed(1)}%`, label: 'Engagement' });
-    if (p.avg_views > 0) stats.push({ value: compact(p.avg_views), label: 'Avg views' });
+    if (p.avg_views > 0) stats.push({ value: compactCount(p.avg_views), label: 'Avg views' });
   }
 
   return {

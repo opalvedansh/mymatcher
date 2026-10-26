@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 
 const getTaskSvg = (color: string) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect x="4" y="3" width="16" height="18" rx="4" stroke="${color}" stroke-width="2"/>
@@ -36,21 +36,21 @@ const getEventSvg = (color: string) => `<svg width="24" height="24" viewBox="0 0
 </svg>`;
 
 export function TaskIcon({ size = 24, color = '#333' }: { size?: number; color?: string }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(getTaskSvg(color)) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={getTaskSvg(color)} width={size} height={size} />;
 }
 
 export function HeartBubbleIcon({ size = 24, color = '#333' }: { size?: number; color?: string }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(getHeartBubbleSvg(color)) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={getHeartBubbleSvg(color)} width={size} height={size} />;
 }
 
 export function UsersIcon({ size = 24, color = '#333' }: { size?: number; color?: string }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(getUsersSvg(color)) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={getUsersSvg(color)} width={size} height={size} />;
 }
 
 export function CashIcon({ size = 24, color = '#333' }: { size?: number; color?: string }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(getCashSvg(color)) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={getCashSvg(color)} width={size} height={size} />;
 }
 
 export function EventIcon({ size = 24, color = '#333' }: { size?: number; color?: string }) {
-  return <Image source={{ uri: 'data:image/svg+xml;base64,' + btoa(getEventSvg(color)) }} style={{ width: size, height: size }} resizeMode="contain" />;
+  return <SvgXml xml={getEventSvg(color)} width={size} height={size} />;
 }

@@ -9,9 +9,9 @@ export default function BrandTabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: TAB_BAR_STYLE,
+        // Fills the item's height so the icon sits centered in the pill.
+        tabBarIconStyle: { flex: 1 },
         tabBarItemStyle: {
-          height: sz(55),
-          paddingTop: sz(8),
           // @ts-ignore
           outlineStyle: 'none' as any,
           // @ts-ignore

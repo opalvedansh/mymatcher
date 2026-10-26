@@ -189,6 +189,91 @@ describe('Profile Routes', () => {
     });
   });
 
+  describe('PUT /api/profiles/me (follower counts per platform)', () => {
+    it('saves a brand\'s typed counts', async () => {
+      db.query.mockResolvedValueOnce({ rows: [{ platform_followers: {} }] }); // current counts
+      db.query.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+      db.query.mockResolvedValueOnce({ rows: [{ user_id: 'test-user-id-123' }] }); // re-fetch
+
+      const res = await request(server).put('/api/profiles/me').set('x-test-role', 'brand')
+        .send({ platform_followers: { instagram: 25000, youtube: 4000 } });
+
+      expect(res.status).toBe(200);
+      const saved = JSON.parse(db.query.mock.calls[1][1][22]);
+      expect(saved.instagram).toMatchObject({ count: 25000, source: 'self' });
+      expect(saved.youtube).toMatchObject({ count: 4000, source: 'self' });
+    });
+
+    it('ignores a creator\'s typed Instagram count once Instagram has synced', async () => {
+      db.query.mockResolvedValueOnce({
+        rows: [{ platform_followers: {}, followers: 4200, instagram_synced_at: '2026-10-20T00:00:00Z' }],
+      });
+      db.query.mockResolvedValueOnce({ rowCount: 1 });
+      db.query.mockResolvedValueOnce({ rows: [{ user_id: 'test-user-id-123', followers: 4200 }] });
+
+      const res = await request(server).put('/api/profiles/me').set('x-test-role', 'influencer')
+        .send({ platform_followers: { instagram: 999999, youtube: 300 } });
+
+      expect(res.status).toBe(200);
+      const saved = JSON.parse(db.query.mock.calls[1][1][21]);
+      expect(saved).not.toHaveProperty('instagram');
+      expect(saved.youtube).toMatchObject({ count: 300, source: 'self' });
+    });
+
+    it('saves accounts in normalized form', async () => {
+      db.query.mockResolvedValueOnce({ rows: [{ platform_followers: {}, platform_handles: {} }] });
+      db.query.mockResolvedValueOnce({ rowCount: 1 });
+      db.query.mockResolvedValueOnce({ rows: [{ user_id: 'test-user-id-123' }] });
+
+      const res = await request(server).put('/api/profiles/me').set('x-test-role', 'brand')
+        .send({ platform_handles: { youtube: 'https://www.youtube.com/@OrevaSkin', x: '@Oreva', tiktok: '' } });
+
+      expect(res.status).toBe(200);
+      expect(JSON.parse(db.query.mock.calls[1][1][23])).toEqual({ youtube: '@orevaskin', x: 'oreva' });
+    });
+
+    it('drops a fetched count when its account is replaced', async () => {
+      db.query.mockResolvedValueOnce({ rows: [{
+        platform_handles: { x: 'oldname' },
+        platform_followers: {
+          x: { count: 900, source: 'synced', handle: 'oldname', updated_at: '2026-10-01T00:00:00.000Z' },
+          youtube: { count: 50, source: 'self', updated_at: '2026-10-01T00:00:00.000Z' },
+        },
+      }] });
+      db.query.mockResolvedValueOnce({ rowCount: 1 });
+      db.query.mockResolvedValueOnce({ rows: [{ user_id: 'test-user-id-123' }] });
+
+      const res = await request(server).put('/api/profiles/me').set('x-test-role', 'brand')
+        .send({ platform_handles: { x: 'newname' } });
+
+      expect(res.status).toBe(200);
+      const followers = JSON.parse(db.query.mock.calls[1][1][22]);
+      expect(followers).not.toHaveProperty('x'); // fetched for oldname
+      expect(followers.youtube).toMatchObject({ count: 50, source: 'self' });
+    });
+
+    it('rejects an account link from the wrong platform with 400', async () => {
+      db.query.mockResolvedValueOnce({ rows: [{ platform_followers: {}, platform_handles: {} }] });
+
+      const res = await request(server).put('/api/profiles/me').set('x-test-role', 'brand')
+        .send({ platform_handles: { youtube: 'https://www.tiktok.com/@oreva' } });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/YouTube/);
+      expect(db.query).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a count that is not a whole number', async () => {
+      db.query.mockResolvedValueOnce({ rows: [{ platform_followers: {} }] });
+
+      const res = await request(server).put('/api/profiles/me').set('x-test-role', 'brand')
+        .send({ platform_followers: { youtube: -5 } });
+
+      expect(res.status).toBe(400);
+      expect(db.query).toHaveBeenCalledTimes(1); // nothing written
+    });
+  });
+
   describe('PUT /api/profiles/me (creator packages and date of birth)', () => {
     const asCreator = (body) =>
       request(server).put('/api/profiles/me').set('x-test-role', 'influencer').send(body);

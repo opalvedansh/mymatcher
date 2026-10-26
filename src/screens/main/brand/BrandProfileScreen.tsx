@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMyProfile, updateMyProfile, uploadImage, getProfileById, getMatches, getMatchStats, getMyResponsiveness, requestVerification, recordSwipe } from '@/api';
@@ -36,6 +36,8 @@ import { MatchrLogo } from '@/components/MatchrLogo';
 import { PremiumIcon, MinimalIcon, BoldIcon, AuthenticIcon, GenzIcon } from '@/components/VibeIcons';
 import { TaskIcon, HeartBubbleIcon, UsersIcon, CashIcon, EventIcon } from '@/components/CampaignIcons';
 import type { BrandProfile, MatchRecord, PaymentMode, Responsiveness } from '@/api/types';
+import { PlatformFollowerInputs } from '@/components/PlatformFollowerInputs';
+import { compactCount, followerDrafts, typedFollowers, handleDrafts, typedHandles, platformLabel } from '@/utils/followers';
 import { sz, tabBarClearance } from '@/theme/scale';
 
 const H = sz(20);
@@ -550,6 +552,131 @@ const CampaignDetailsSheet = memo(function CampaignDetailsSheet({
 });
 
 /**
+ * Follower counts for the brand's active platforms. Like the other sheets,
+ * typing stays local to it and it is remounted on each open via `key`.
+ */
+const FollowersSheet = memo(function FollowersSheet({
+  visible,
+  profile,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  profile: BrandProfile;
+  onClose: () => void;
+  onSaved: (profile: BrandProfile) => void;
+}) {
+  const platforms = profile.platforms || [];
+  const [drafts, setDrafts] = useState(() => followerDrafts(profile.platform_followers, platforms));
+  const [handles, setHandles] = useState(() => handleDrafts(profile.platform_handles, platforms));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await updateMyProfile({
+        platform_followers: typedFollowers(drafts, profile.platform_followers, platforms),
+        platform_handles: typedHandles(handles, platforms),
+      });
+      onSaved(res as BrandProfile);
+    } catch (err) {
+      setSaveError(err instanceof ApiError && err.status === 400
+        ? err.message
+        : 'Could not save. Check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const close = () => {
+    if (!saving) onClose();
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+      <View style={s.modalOverlay}>
+        <Pressable style={s.modalBackdrop} onPress={close} accessibilityLabel="Close followers" />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={s.modalSheetWrap}
+        >
+          <View style={s.modalContent}>
+            <View style={s.grabber} />
+
+            <View style={s.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.modalTitle} accessibilityRole="header">Followers</Text>
+                <Text style={s.modalSubtitle}>
+                  Add each account and we'll fetch its follower count, usually within a few minutes. You can type a count yourself in the meantime.
+                </Text>
+              </View>
+              <Pressable
+                onPress={close}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                style={(state: any) => [
+                  s.modalClose,
+                  webNoOutline,
+                  state.focused && s.modalCloseFocused,
+                  state.pressed && s.pressedSoft,
+                ]}
+              >
+                <Ionicons name="close" size={sz(20)} color="#DDD" />
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ flexGrow: 0 }} keyboardShouldPersistTaps="handled">
+              <PlatformFollowerInputs
+                rows={platforms.map((p) => ({
+                  key: p,
+                  label: platformLabel(p),
+                  icon: (
+                    <View style={s.followerIconBadge}>
+                      <FontAwesome6 name={PLATFORM_ICONS[p] || p} size={sz(13)} color="#FFF" />
+                    </View>
+                  ),
+                }))}
+                drafts={drafts}
+                handles={handles}
+                followers={profile.platform_followers}
+                onChange={(key, text) => setDrafts((prev) => ({ ...prev, [key]: text }))}
+                onHandleChange={(key, text) => setHandles((prev) => ({ ...prev, [key]: text }))}
+              />
+            </ScrollView>
+
+            {saveError && (
+              <View style={s.saveErrorRow}>
+                <Ionicons name="alert-circle" size={sz(16)} color={DANGER} />
+                <Text style={s.saveErrorText}>{saveError}</Text>
+              </View>
+            )}
+
+            <Pressable
+              style={({ pressed }) => [s.saveBtn, pressed && !saving && s.pressedSoft]}
+              onPress={save}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityState={{ busy: saving }}
+            >
+              {saving ? (
+                <View style={s.savingRow}>
+                  <ActivityIndicator color="#FFF" size="small" />
+                  <Text style={s.saveBtnTxt}>Saving</Text>
+                </View>
+              ) : (
+                <Text style={s.saveBtnTxt}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+});
+
+/**
  * Business verification sheet. Same idea as CampaignDetailsSheet: typing here
  * must not re-render the profile. Remounted on each open via `key`.
  */
@@ -747,6 +874,8 @@ export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
   // Business verification: details go to an admin, who grants the badge.
   const [verifyVisible, setVerifyVisible] = useState(false);
   const [verifySession, setVerifySession] = useState(0);
+  const [followersVisible, setFollowersVisible] = useState(false);
+  const [followersSession, setFollowersSession] = useState(0);
 
   // Matched creators, own profile only: /api/matches always answers for the
   // signed-in user, so there is no way to show someone else's matches here.
@@ -775,6 +904,25 @@ export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
     })();
     return () => { cancelled = true; };
   }, [publicUserId]);
+
+  // The tab stays mounted, so follower counts fetched in the background show
+  // up when the brand comes back to it. Only the counts are merged.
+  const firstFocusRef = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocusRef.current) {
+        firstFocusRef.current = false; // the load above already fetched it
+        return;
+      }
+      if (publicUserId) return;
+      getMyProfile()
+        .then((fresh) => {
+          const { platform_followers } = fresh as BrandProfile;
+          setProfile((prev) => (prev ? { ...prev, platform_followers } : prev));
+        })
+        .catch(() => {});
+    }, [publicUserId]),
+  );
 
   const loadMatches = useCallback(async () => {
     setMatchesLoading(true);
@@ -895,6 +1043,16 @@ export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
     setEditModalVisible(false);
   }, []);
 
+  const openFollowers = () => {
+    setFollowersSession((n) => n + 1);
+    setFollowersVisible(true);
+  };
+  const closeFollowers = useCallback(() => setFollowersVisible(false), []);
+  const handleFollowersSaved = useCallback((data: BrandProfile) => {
+    setProfile(data);
+    setFollowersVisible(false);
+  }, []);
+
   const closeVerifyModal = useCallback(() => setVerifyVisible(false), []);
   const handleVerificationSent = useCallback(
     (res: Awaited<ReturnType<typeof requestVerification>>) => {
@@ -956,9 +1114,9 @@ export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
   }
 
   // No stock-photo fallbacks: until the brand uploads its own images, show placeholders.
-  const coverImage = isShowableUrl(profile.logo_url, localPicks)
-    ? profile.logo_url
-    : isShowableUrl(profile.cover_url, localPicks) ? profile.cover_url : null;
+  // Never the logo: stretched to fill the hero, its edges showed through the
+  // top gradient as stray bars. It already has its own circle below.
+  const coverImage = isShowableUrl(profile.cover_url, localPicks) ? profile.cover_url : null;
   const logo = isShowableUrl(profile.logo_url, localPicks) ? profile.logo_url : null;
   const name = profile.name || 'Your Brand';
   const categoriesStr = (profile.categories || []).join(' · ') || 'Uncategorized';
@@ -1168,13 +1326,34 @@ export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
         {/* ════ PLATFORMS ════ */}
         {platforms.length > 0 && (
           <>
-            <Text style={s.sectionTitle}>Active Platforms</Text>
+            <View style={s.rowBetween}>
+              <Text style={s.sectionTitleNoMargin}>Active Platforms</Text>
+              {!publicUserId && (
+                <Pressable
+                  onPress={openFollowers}
+                  hitSlop={sz(10)}
+                  accessibilityRole="button"
+                  style={({ pressed }) => pressed && s.pressedSoft}
+                >
+                  <Text style={s.sectionLink}>
+                    {platforms.some((p: string) => profile.platform_followers?.[p]) ? 'Edit followers' : 'Add followers'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
             <View style={s.tagsWrap}>
               {platforms.map((p: string) => {
+                const count = profile.platform_followers?.[p]?.count;
                 return (
-                  <View key={p} style={[s.tagPill, { flexDirection: 'row', alignItems: 'center', gap: sz(6) }]}>
+                  <View
+                    key={p}
+                    style={[s.tagPill, { flexDirection: 'row', alignItems: 'center', gap: sz(6) }]}
+                    accessible
+                    accessibilityLabel={count != null ? `${platformLabel(p)}, ${count} followers` : platformLabel(p)}
+                  >
                     <FontAwesome6 name={PLATFORM_ICONS[p] || p} size={sz(14)} color="#FFF" />
-                    <Text style={s.tagTxt}>{p.charAt(0).toUpperCase() + p.slice(1)}</Text>
+                    <Text style={s.tagTxt}>{platformLabel(p)}</Text>
+                    {count != null && <Text style={s.tagCount}>{compactCount(count)}</Text>}
                   </View>
                 );
               })}
@@ -1643,6 +1822,17 @@ export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
         />
       )}
 
+      {/* ════ PLATFORM FOLLOWERS ════ */}
+      {!publicUserId && (
+        <FollowersSheet
+          key={`followers-${followersSession}`}
+          visible={followersVisible}
+          profile={profile}
+          onClose={closeFollowers}
+          onSaved={handleFollowersSaved}
+        />
+      )}
+
       {/* ════ BUSINESS VERIFICATION ════ */}
       {!publicUserId && (
         <VerifySheet
@@ -1706,6 +1896,12 @@ const s = StyleSheet.create({
     paddingVertical: sz(8), paddingHorizontal: sz(16),
   },
   tagTxt: { color: '#DDD', fontSize: sz(12) },
+  tagCount: { color: '#FFF', fontSize: sz(12), fontWeight: '700' },
+  sectionLink: { color: PRIMARY, fontSize: sz(13), fontWeight: '600' },
+  followerIconBadge: {
+    width: sz(28), height: sz(28), borderRadius: sz(14),
+    backgroundColor: '#2A2A2A', alignItems: 'center', justifyContent: 'center',
+  },
 
   twoCardRow: { flexDirection: 'row', marginHorizontal: H, marginBottom: sz(16), gap: sz(12) },
   miniCard: {

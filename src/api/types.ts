@@ -18,6 +18,16 @@ export type VerificationStatus = 'none' | 'pending' | 'approved' | 'rejected';
 
 // ── Profile types ─────────────────────────────────────────────────
 
+/** One platform's follower count: typed by the user, or fetched by the server. */
+export interface PlatformFollowerCount {
+  count: number;
+  source: 'self' | 'synced';
+  updated_at: string;
+}
+
+/** Follower counts keyed by platform id (the ids in `platforms`). */
+export type PlatformFollowers = Record<string, PlatformFollowerCount>;
+
 export interface BrandProfile {
   user_id: string;
   name: string | null;
@@ -49,6 +59,9 @@ export interface BrandProfile {
   vibes: string[];
   photos?: string[];
   platforms?: string[];
+  platform_followers?: PlatformFollowers;
+  /** The account given for each platform, normalized by the server. */
+  platform_handles?: Record<string, string>;
   website: string | null;
   verified: boolean;
   worked_with?: string[];
@@ -81,6 +94,9 @@ export interface InfluencerProfile {
   gender: string | null;
   instagram_handle?: string | null;
   platforms: string[];
+  platform_followers?: PlatformFollowers;
+  /** The account given for each platform, normalized by the server. */
+  platform_handles?: Record<string, string>;
   photos?: string[];
   reels?: {id: string, url: string, views: string, thumbnail_url?: string}[];
   followers: number;
@@ -367,6 +383,10 @@ export interface BrandProfileUpdate {
   vibes?: string[];
   photos?: string[];
   platforms?: string[];
+  /** Typed counts, replacing all earlier typed ones; synced counts are kept. */
+  platform_followers?: Record<string, number>;
+  /** Accounts to fetch follower counts for (links or usernames), replacing earlier ones. */
+  platform_handles?: Record<string, string>;
   website?: string;
   verified?: boolean;
   worked_with?: string[];
@@ -388,6 +408,10 @@ export interface InfluencerProfileUpdate {
   gender?: string;
   instagram_handle?: string;
   platforms?: string[];
+  /** Typed counts, replacing all earlier typed ones; synced counts are kept. */
+  platform_followers?: Record<string, number>;
+  /** Accounts to fetch follower counts for (links or usernames), replacing earlier ones. */
+  platform_handles?: Record<string, string>;
   photos?: string[];
   reels?: {id: string, url: string, views: string, thumbnail_url?: string}[];
   followers?: number;

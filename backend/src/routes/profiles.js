@@ -53,6 +53,8 @@ const profileRules = [
   body('vibes').optional().isArray({ max: 20 }),
   body('vibes.*').optional().isString().trim().isLength({ min: 1, max: 40 }),
   body('reels').optional().isArray(),
+  body('platform_followers').optional().isObject(), // cleanPlatformFollowers checks each count
+  body('platform_handles').optional().isObject(), // cleanPlatformHandles checks each account
 ];
 
 const verificationRules = [

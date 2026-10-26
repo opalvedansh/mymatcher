@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 
 const SVG_STRING = 
   `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">` +
@@ -7,18 +7,12 @@ const SVG_STRING =
   `<path d="M12 7V17M7 12H17" stroke="#F05A28" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>` +
   `</svg>`;
 
-const SVG_B64 = 'data:image/svg+xml;base64,' + btoa(SVG_STRING);
-
 interface StoriesIconProps {
   size?: number;
 }
 
 export function StoriesIcon({ size = 24 }: StoriesIconProps) {
   return (
-    <Image
-      source={{ uri: SVG_B64 }}
-      style={{ width: size, height: size }}
-      resizeMode="contain"
-    />
+    <SvgXml xml={SVG_STRING} width={size} height={size} />
   );
 }
