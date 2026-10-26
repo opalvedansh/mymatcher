@@ -22,7 +22,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons, MaterialIcons, Feather, MaterialCommunityIcons, FontAwesome6 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { getMyProfile, updateMyProfile, getProfileById, syncInstagram, uploadImage, recordSwipe } from '@/api';
@@ -41,7 +40,7 @@ import { completePackages, describePackage, formatPrice, toPackageDrafts, type C
 import { VerificationModal } from './VerificationModal';
 import { CreatorReviews } from './CreatorReviews';
 import { TouchableOpacity } from 'react-native';
-import { sz, tabBarClearance } from '@/theme/scale';
+import { sz, tabBarClearance, useAppDimensions } from '@/theme/scale';
 
 // ──────────────────────── Line Chart ────────────────────────
 const CHART_DATA = [100, 98, 85, 60, 40, 25, 8, 2, 1, 0];
@@ -613,7 +612,7 @@ export function InfluencerProfileScreen({ publicUserId, matchId, onBack }: {
   onBack?: () => void,
 }) {
   const { user, signOut, deleteAccount } = useAuth();
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const isPremium = false; // Mock premium check

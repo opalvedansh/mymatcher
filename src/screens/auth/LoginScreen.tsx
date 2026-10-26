@@ -11,7 +11,6 @@ import {
   Text,
   TextInput,
   View,
-  useWindowDimensions,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { DismissKeyboard } from '@/components/DismissKeyboard';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 import { tapFeedback } from '@/utils/optionalModules';
 
 type SignInProvider = 'google' | 'apple' | 'linkedin';
@@ -196,7 +195,7 @@ function EmailAuthForm({
   onForgotPassword: (email: string) => void;
 }) {
   const { signInWithEmail, signUpWithEmail } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const contentWidth = Math.min(width - sz(28), 500);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -376,7 +375,7 @@ function OtpVerificationForm({
   onVerified?: () => void;
 }) {
   const { verifyOtpCode, resendOtp, verifyPasswordResetCode, resetPassword } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const contentWidth = Math.min(width - sz(28), 500);
 
   const isRecovery = purpose === 'recovery';
@@ -567,7 +566,7 @@ function ForgotPasswordForm({
   onSent: (email: string) => void;
 }) {
   const { resetPassword } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const contentWidth = Math.min(width - sz(28), 500);
 
   const [email, setEmail] = useState(initialEmail);
@@ -673,7 +672,7 @@ function ForgotPasswordForm({
 
 function NewPasswordForm({ onDone }: { onDone: () => void }) {
   const { updatePassword } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const contentWidth = Math.min(width - sz(28), 500);
 
   const [password, setPassword] = useState('');
@@ -792,7 +791,7 @@ function AuthPage({
   onSwitchMode: (mode: AuthMode) => void;
 }) {
   const { signInWithGoogle, signInWithApple, signInWithLinkedIn } = useAuth();
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppDimensions();
   const contentWidth = Math.min(width - sz(28), 500);
   const titleSize = sz(48);
   const subtitleSize = sz(18);

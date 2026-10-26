@@ -1,7 +1,7 @@
-const { body } = require('express-validator');
+const { body, query } = require('express-validator');
 const validate  = require('../middleware/validate');
 const { authenticate, authenticateTokenOnly } = require('../middleware/auth');
-const { syncUser, me, getOnboardingData, updateOnboardingData, updatePushToken } = require('../controllers/authController');
+const { syncUser, me, getOnboardingData, updateOnboardingData, updatePushToken, saveWebPush, deleteWebPush } = require('../controllers/authController');
 
 const { Expo } = require('expo-server-sdk');
 const router = require('express').Router();
@@ -70,5 +70,23 @@ router.put ('/onboarding', authenticateTokenOnly, updateOnboardingData);
 
 // Push token registration
 router.put ('/push-token', authenticate, pushTokenRules, validate, updatePushToken);
+
+// Browser push subscriptions (the web app); one per browser.
+// The server POSTs to this URL, so only the browsers' push services are accepted.
+const PUSH_SERVICE_HOST = /^(fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|([a-z0-9-]+\.)*push\.apple\.com|([a-z0-9-]+\.)*notify\.windows\.com)$/;
+const webPushEndpointRule = (check) => check('endpoint')
+  .isString().isLength({ max: 1000 })
+  .custom((value) => {
+    const url = new URL(value);
+    return url.protocol === 'https:' && PUSH_SERVICE_HOST.test(url.hostname);
+  })
+  .withMessage('endpoint must be a browser push service URL');
+const webPushRules = [
+  webPushEndpointRule(body),
+  body('keys.p256dh').isString().isLength({ min: 1, max: 200 }),
+  body('keys.auth').isString().isLength({ min: 1, max: 100 }),
+];
+router.put   ('/web-push', authenticate, webPushRules, validate, saveWebPush);
+router.delete('/web-push', authenticate, [webPushEndpointRule(query)], validate, deleteWebPush);
 
 module.exports = router;

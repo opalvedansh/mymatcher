@@ -12,7 +12,6 @@ import {
   FlatList,
   ActivityIndicator,
   Linking,
-  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,7 +35,7 @@ import { CLOSE_FRIENDS_GREEN } from '@/features/story/StorySheets';
 import { openSafetyMenu } from '@/components/safetyMenu';
 import { showAlert } from '@/components/ActionSheet';
 import { canSaveToCameraRoll, getMediaLibrary, getViewShot } from '@/utils/optionalModules';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 
 type StoryItem = {
   id: string;
@@ -95,7 +94,7 @@ function findGroup(stories: StoryGroup[], from: number, dir: 1 | -1): number {
 }
 
 export function StoryViewer({ visible, stories, initialGroupIndex = 0, onClose }: StoryViewerProps) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppDimensions();
   const frame = useCanvasFrame(REPLY_BAR);
   const router = useRouter();
   const canvasRef = useRef<View>(null);

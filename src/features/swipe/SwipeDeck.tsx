@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   Extrapolation,
@@ -13,7 +13,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 import { tapFeedback } from '@/utils/optionalModules';
 
 export type SwipeDir = 'left' | 'right';
@@ -112,7 +112,7 @@ type CardProps<T> = {
 function SwipeCardImpl<T>({
   item, isTop, label, renderCard, likeStamp, nopeStamp, topX, exiting, flyRef, onCommit, onOpen,
 }: CardProps<T>) {
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
   // Whether the drag is past the commit threshold, for a single haptic tick.

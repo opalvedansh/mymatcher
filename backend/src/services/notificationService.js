@@ -1,9 +1,51 @@
 const db = require('../config/db');
 const { pushQueue } = require('../config/queue');
 const { Expo } = require('expo-server-sdk');
+const webpush = require('web-push');
 
 // Shared Expo client for inline fallback sending
 const expo = new Expo();
+
+// Browser push for the web app; off until the VAPID keys are configured.
+const webPushEnabled = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+if (webPushEnabled) {
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || 'mailto:support@mymatchr.in',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  );
+}
+
+/**
+ * Sends the notifications to every browser the recipients subscribed with.
+ * Subscriptions the push service reports as gone (404/410) are deleted.
+ * shortcut: sent inline, not through BullMQ; queue it like Expo pushes if web users grow large.
+ */
+async function sendWebPush(notifications, userIds) {
+  if (!webPushEnabled) return;
+  const { rows } = await db.query(
+    `SELECT user_id, endpoint, p256dh, auth FROM web_push_subscriptions WHERE user_id = ANY($1)`,
+    [userIds]
+  );
+  if (!rows.length) return;
+
+  const gone = [];
+  await Promise.all(notifications.flatMap(n => rows
+    .filter(s => s.user_id === n.userId)
+    .map(s => webpush
+      .sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify({ title: n.title, body: n.body, data: n.data || {} }),
+      )
+      .catch(err => {
+        if (err.statusCode === 404 || err.statusCode === 410) gone.push(s.endpoint);
+        else console.error('[Push] Web push failed:', err.statusCode || err.message);
+      }))));
+
+  if (gone.length) {
+    await db.query(`DELETE FROM web_push_subscriptions WHERE endpoint = ANY($1)`, [gone]);
+  }
+}
 
 // Maximum IDs to batch in a single DB query / BullMQ addBulk call
 const CHUNK_SIZE = 500;
@@ -36,6 +78,9 @@ async function sendBulkNotifications(notifications) {
   try {
     // ── 1. Gather unique user IDs ─────────────────────────────────────
     const userIds = [...new Set(notifications.map(n => n.userId))];
+
+    // Browsers first: the Expo path below returns early when no phone has a token.
+    await sendWebPush(notifications, userIds).catch(err => console.error('[Push] Web push batch failed:', err));
 
     // ── 2. Batch-fetch all push tokens in ONE round trip ─────────────
     const { rows } = await db.query(

@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions,
+  FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 import type { LocalFile } from './upload';
 import { formatDuration } from './format';
 import { SINGLE_ROW_ON_WEB, useAutoGrowInput } from './useAutoGrowInput';
@@ -38,7 +38,7 @@ export function MediaPreview({
   onCancel: () => void;
   onSend: (files: LocalFile[], caption: string) => void;
 }) {
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const [items, setItems] = useState<LocalFile[]>([]);
   const [index, setIndex] = useState(0);
   const [caption, setCaption] = useState('');

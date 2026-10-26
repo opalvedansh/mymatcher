@@ -1,5 +1,16 @@
-import { Dimensions, PixelRatio } from 'react-native';
+import { Dimensions, PixelRatio, Platform, useWindowDimensions } from 'react-native';
 import { initialWindowMetrics } from 'react-native-safe-area-context';
+
+// On web the app renders in a phone-width column centred in the browser
+// (see app/_layout.tsx), so layouts must size against that column, not the window.
+export const APP_MAX_WIDTH = 430;
+const clampWidth = (width: number) => (Platform.OS === 'web' ? Math.min(width, APP_MAX_WIDTH) : width);
+
+/** `useWindowDimensions()`, with the width of the app column on web. */
+export function useAppDimensions() {
+  const dims = useWindowDimensions();
+  return { ...dims, width: clampWidth(dims.width) };
+}
 
 // Every screen was designed on an iPhone 16. Sizes in the code are iPhone 16
 // points; `sz()` converts them for the phone the app is running on so each
@@ -24,7 +35,7 @@ const usableHeight = window.height - (insets?.top ?? 0) - (insets?.bottom ?? 0);
 // doesn't shrink text below it.
 export const SCALE = Math.min(
   1.25,
-  Math.max(0.8, Math.min(window.width / DESIGN_WIDTH, usableHeight / DESIGN_USABLE_HEIGHT)),
+  Math.max(0.8, Math.min(clampWidth(window.width) / DESIGN_WIDTH, usableHeight / DESIGN_USABLE_HEIGHT)),
 );
 
 /** Scales an iPhone 16 size to this device, snapped to the pixel grid. */

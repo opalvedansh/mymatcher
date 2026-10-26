@@ -158,4 +158,35 @@ async function updatePushToken(req, res, next) {
   }
 }
 
-module.exports = { syncUser, me, getOnboardingData, updateOnboardingData, updatePushToken };
+// ─── PUT /api/auth/web-push ──────────────────────────────────────
+// A browser belongs to whoever signed in last, so the endpoint moves to this user.
+async function saveWebPush(req, res, next) {
+  try {
+    const { endpoint, keys } = req.body;
+    await db.query(
+      `INSERT INTO web_push_subscriptions (user_id, endpoint, p256dh, auth)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (endpoint) DO UPDATE
+         SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth`,
+      [req.user.id, endpoint, keys.p256dh, keys.auth]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── DELETE /api/auth/web-push ───────────────────────────────────
+async function deleteWebPush(req, res, next) {
+  try {
+    await db.query(
+      `DELETE FROM web_push_subscriptions WHERE endpoint = $1 AND user_id = $2`,
+      [req.query.endpoint, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { syncUser, me, getOnboardingData, updateOnboardingData, updatePushToken, saveWebPush, deleteWebPush };

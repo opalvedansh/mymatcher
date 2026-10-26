@@ -46,3 +46,6 @@ backend/serviceAccountKey.json
 # Backend environment
 backend/.env
 .env
+
+# Netlify web app build output
+out/

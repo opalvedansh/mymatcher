@@ -3,13 +3,15 @@ import { ActionSheetHost } from '@/components/ActionSheet';
 import { DarkTheme, Stack, ThemeProvider, usePathname, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Platform, View } from 'react-native';
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { pushDataOf, pushSupported } from '@/services/pushNotifications';
+import { onWebPushOpen, pushDataOf, pushSupported } from '@/services/pushNotifications';
 import { notificationHref } from '@/services/notificationRoutes';
 import { refreshUnreadNotifications } from '@/hooks/useUnreadNotifications';
 import { setPendingDeepLink, takePendingDeepLink } from '@/services/pendingDeepLink';
 import { colors } from '@/theme/colors';
+import { APP_MAX_WIDTH } from '@/theme/scale';
 import * as SplashScreen from 'expo-splash-screen';
 
 // The dark splash stays up until we know where the user belongs, so launch
@@ -128,12 +130,27 @@ function PushResponseHandler() {
     return () => sub.remove();
   }, [ready, role, router]);
 
+  // Browser notification taps (web app), relayed by public/sw.js.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !ready) return;
+    return onWebPushOpen((data) => {
+      refreshUnreadNotifications();
+      router.navigate(notificationHref(role, data.type, data.matchId, data.authorId));
+    });
+  }, [ready, role, router]);
+
   return null;
 }
+
+// On a desktop browser the app keeps its phone layout in a centred column.
+const APP_COLUMN = Platform.OS === 'web'
+  ? { flex: 1, width: '100%', maxWidth: APP_MAX_WIDTH, alignSelf: 'center' } as const
+  : { flex: 1 };
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={APP_COLUMN}>
       <ThemeProvider value={NAV_THEME}>
       <AuthProvider>
         <AuthGuard>
@@ -149,6 +166,7 @@ export default function RootLayout() {
         </AuthGuard>
       </AuthProvider>
       </ThemeProvider>
+      </View>
     </GestureHandlerRootView>
   );
 }

@@ -16,12 +16,18 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// Configure Google Sign-In for native
-GoogleSignin.configure({
-  webClientId: '943950919478-l56meupro3lo2lsuq7lk84021bmm464l.apps.googleusercontent.com',
-  iosClientId: '943950919478-qdt1laap0hufg4f5cdh5vhkv7b75f48h.apps.googleusercontent.com',
-  scopes: ['profile', 'email'],
-});
+// Configure Google Sign-In for native (web signs in through Supabase OAuth)
+if (Platform.OS !== 'web') {
+  GoogleSignin.configure({
+    webClientId: '943950919478-l56meupro3lo2lsuq7lk84021bmm464l.apps.googleusercontent.com',
+    iosClientId: '943950919478-qdt1laap0hufg4f5cdh5vhkv7b75f48h.apps.googleusercontent.com',
+    scopes: ['profile', 'email'],
+  });
+}
+
+// The web app is served under a base path (/app), so OAuth must come back
+// there; the bare origin is the landing page, which would drop the session.
+const webRedirectUrl = () => window.location.origin + (process.env.EXPO_BASE_URL ?? '');
 
 // Onboarding data shape
 export interface OnboardingData {
@@ -388,7 +394,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (Platform.OS === 'web') {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.origin }
+        options: { redirectTo: webRedirectUrl() }
       });
       if (error) throw error;
     } else {
@@ -430,7 +436,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (Platform.OS === 'web') {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
-        options: { redirectTo: window.location.origin }
+        options: { redirectTo: webRedirectUrl() }
       });
       if (error) throw error;
     } else {
@@ -442,7 +448,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (Platform.OS === 'web') {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'linkedin_oidc',
-        options: { redirectTo: window.location.origin }
+        options: { redirectTo: webRedirectUrl() }
       });
       if (error) throw error;
     } else {

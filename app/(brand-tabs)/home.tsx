@@ -10,7 +10,6 @@ import {
   ScrollView,
   Animated,
   AccessibilityInfo,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { AntDesign, Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -29,7 +28,7 @@ import { showAlert } from '@/components/ActionSheet';
 import { openSafetyMenu } from '@/components/safetyMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Post } from '@/api/types';
-import { sz, tabBarClearance } from '@/theme/scale';
+import { sz, tabBarClearance, useAppDimensions } from '@/theme/scale';
 import { tapFeedback } from '@/utils/optionalModules';
 
 const ACCENT = '#FF6B2B';
@@ -283,7 +282,7 @@ const StoryBubble = memo(function StoryBubble({
 export default function BrandHomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
 
   const [stories, setStories] = useState<any[]>([]);
   const [viewerVisible, setViewerVisible] = useState(false);

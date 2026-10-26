@@ -50,7 +50,9 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "bundler": "metro"
     },
     "runtimeVersion": {
       "policy": "appVersion"
@@ -110,6 +112,9 @@
       ],
       "expo-system-ui"
     ],
-    "backgroundColor": "#0F0F0F"
+    "backgroundColor": "#0F0F0F",
+    "experiments": {
+      "baseUrl": "/app"
+    }
   }
 }

@@ -6,12 +6,11 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 import { tapFeedback } from '@/utils/optionalModules';
 
 type Role = 'Brand' | 'Influencer' | null;
@@ -25,7 +24,7 @@ export function RoleSelectionScreen({
   onBack?: () => void;
   onNext?: (role: Role) => void;
 }) {
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const [selectedRole, setSelectedRole] = useState<Role>(initialRole ?? null);
 
   const selectRole = (role: Role) => {

@@ -1,7 +1,7 @@
 import React from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 
 const EMOJI = (
   '😀 😂 🥹 😍 🥰 😘 😎 🤩 🥳 😇 🤔 🤫 😴 🥲 😭 😡 🤯 🥶 🤗 🙃 ' +
@@ -35,7 +35,7 @@ export function StickerSheet({
   onMention: () => void;
   onMusic: () => void;
 }) {
-  const { height } = useWindowDimensions();
+  const { height } = useAppDimensions();
   const insets = useSafeAreaInsets();
   const specials: Special[] = [
     { key: 'music', label: '♪ MUSIC', onPress: onMusic },

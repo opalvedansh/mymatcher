@@ -121,4 +121,37 @@ describe('Auth Routes', () => {
       expect(res.status).toBe(422);
     });
   });
+
+  describe('/api/auth/web-push', () => {
+    const sub = {
+      endpoint: 'https://fcm.googleapis.com/fcm/send/abc123',
+      keys: { p256dh: 'BPkey', auth: 'authkey' },
+    };
+
+    it('saves a browser subscription for the current user', async () => {
+      db.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const res = await request(server).put('/api/auth/web-push').send(sub);
+
+      expect(res.status).toBe(200);
+      expect(db.query.mock.calls.at(-1)[1]).toEqual(['test-user-id-123', sub.endpoint, 'BPkey', 'authkey']);
+    });
+
+    it('rejects endpoints that are not a browser push service', async () => {
+      for (const endpoint of ['http://169.254.169.254/latest', 'https://evil.example.com/push', 'not a url']) {
+        const res = await request(server).put('/api/auth/web-push').send({ ...sub, endpoint });
+        expect(res.status).toBe(422);
+      }
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('deletes only the current user\'s subscription', async () => {
+      db.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const res = await request(server).delete('/api/auth/web-push').query({ endpoint: sub.endpoint });
+
+      expect(res.status).toBe(200);
+      expect(db.query.mock.calls.at(-1)[1]).toEqual([sub.endpoint, 'test-user-id-123']);
+    });
+  });
 });

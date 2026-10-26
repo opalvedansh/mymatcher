@@ -16,6 +16,7 @@ import { Avatar } from '@/components/ChatAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { refreshUnreadNotifications } from '@/hooks/useUnreadNotifications';
 import { notificationHref } from '@/services/notificationRoutes';
+import { enableWebPush, webPushPermission } from '@/services/pushNotifications';
 import { formatListTime } from '@/utils/relativeTime';
 import { sz } from '@/theme/scale';
 
@@ -59,6 +60,8 @@ export function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  // Browsers only ask for notification permission from a tap, so the web app asks here.
+  const [pushPermission, setPushPermission] = useState(webPushPermission);
   const nextBefore = useRef<string | null>(null);
   const loadingMore = useRef(false);
 
@@ -209,6 +212,17 @@ export function NotificationsScreen() {
           <Text style={styles.markAllText}>Mark all read</Text>
         </Pressable>
       </View>
+      {pushPermission === 'default' && (
+        <Pressable
+          onPress={async () => setPushPermission(await enableWebPush())}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.pushBanner, pressed && { opacity: 0.8 }]}
+        >
+          <Ionicons name="notifications" size={sz(20)} color={ACCENT} />
+          <Text style={styles.pushBannerText}>Get notified about new matches and messages</Text>
+          <Text style={styles.markAllText}>Turn on</Text>
+        </Pressable>
+      )}
       {body}
     </SafeAreaView>
   );
@@ -228,6 +242,17 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, color: '#FFF', fontSize: sz(20), fontWeight: '700', letterSpacing: -0.3, marginLeft: sz(4) },
   markAll: { paddingHorizontal: sz(12), paddingVertical: sz(8) },
   markAllText: { color: ACCENT, fontSize: sz(14), fontWeight: '600' },
+  pushBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: sz(12),
+    margin: sz(12),
+    marginBottom: 0,
+    padding: sz(14),
+    borderRadius: sz(16),
+    backgroundColor: 'rgba(255,107,43,0.1)',
+  },
+  pushBannerText: { flex: 1, color: '#FFF', fontSize: sz(14), lineHeight: sz(19) },
   list: { width: '100%', maxWidth: sz(640), alignSelf: 'center', paddingHorizontal: sz(8), paddingTop: sz(8), paddingBottom: sz(24) },
   row: {
     flexDirection: 'row',

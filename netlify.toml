@@ -1,0 +1,21 @@
+# Web app (Expo web build), deployed as Netlify site "matchr-web" and served to
+# users at https://mymatchr.in/app through the landing site's proxy.
+# Built under /app to match app.json experiments.baseUrl.
+[build]
+  command = "npx expo export -p web && rm -rf out && mkdir -p out && mv dist out/app"
+  publish = "out"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Real files win; every other /app route is the single-page app.
+[[redirects]]
+  from = "/app/*"
+  to = "/app/index.html"
+  status = 200
+
+# The service worker must update as soon as a new one ships.
+[[headers]]
+  for = "/app/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
@@ -43,7 +43,25 @@ const GLASS = sz(42);
 const MODE_W = sz(76);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-export default function StoryCameraScreen() {
+// Stories are made in the phone app; on web this route only says so.
+export default function StoryCameraRoute() {
+  return Platform.OS === 'web' ? <StoriesInApp /> : <StoryCameraScreen />;
+}
+
+function StoriesInApp() {
+  const router = useRouter();
+  return (
+    <View style={styles.inApp}>
+      <Text style={styles.inAppTitle}>Stories are made in the app</Text>
+      <Text style={styles.inAppBody}>Open Matchr on your phone to post a story. You can still watch stories here.</Text>
+      <Pressable accessibilityRole="button" style={styles.inAppButton} onPress={() => router.back()}>
+        <Text style={styles.inAppButtonText}>Back</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function StoryCameraScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   // The viewfinder is the story canvas itself, placed exactly where the
@@ -516,6 +534,11 @@ const textShadow = {
 };
 
 const styles = StyleSheet.create({
+  inApp: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: sz(32), backgroundColor: '#0F0F0F' },
+  inAppTitle: { color: '#fff', fontSize: sz(22), fontWeight: '700', textAlign: 'center' },
+  inAppBody: { color: 'rgba(255,255,255,0.7)', fontSize: sz(15), lineHeight: sz(21), textAlign: 'center', marginTop: sz(10) },
+  inAppButton: { marginTop: sz(28), backgroundColor: '#F05A28', borderRadius: sz(28), paddingVertical: sz(14), paddingHorizontal: sz(40) },
+  inAppButtonText: { color: '#fff', fontSize: sz(16), fontWeight: '700' },
   screen: {
     flex: 1,
     backgroundColor: '#0A0A0A',

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '@/api/client';
 import { colors } from '@/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 
 type Stats = {
   total_users: string;
@@ -19,7 +19,7 @@ type Stats = {
 
 export default function AdminStatsScreen() {
   // Read live so rotation and split view resize the cards.
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const halfWidth = (width - sz(56)) / 2; // 20 padding on sides + 16 gap
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);

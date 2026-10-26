@@ -10,13 +10,12 @@ import {
   Text,
   TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { getStoryAudience, searchStoryMusic, setCloseFriends, type StoryAudienceMember } from '@/api';
 import { getAudio } from '@/utils/optionalModules';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 import type { Track } from './layout';
 import { Icon } from './icons';
 
@@ -36,7 +35,7 @@ function Sheet({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
-  const { height } = useWindowDimensions();
+  const { height } = useAppDimensions();
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>

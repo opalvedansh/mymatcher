@@ -12,7 +12,6 @@ import {
   Text,
   TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getCreatorReviews, removeCreatorReview, reviewCreator } from '@/api';
@@ -21,7 +20,7 @@ import { ApiError } from '@/api/client';
 import { showAlert } from '@/components/ActionSheet';
 import { openSafetyMenu } from '@/components/safetyMenu';
 import { useAuth } from '@/contexts/AuthContext';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 
 const ACCENT = '#FF6B2B';
 const DANGER = '#FF6B6B';
@@ -149,7 +148,7 @@ export function CreatorReviews({
   isOwnProfile: boolean;
 }) {
   const { user } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const [data, setData] = useState<ReviewsData | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);

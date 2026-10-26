@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   FlatList,
-  useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
@@ -16,7 +15,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { getMatches, getLikesReceived } from '@/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationBell } from '@/components/NotificationBell';
-import { sz, tabBarClearance } from '@/theme/scale';
+import { sz, tabBarClearance, useAppDimensions } from '@/theme/scale';
 
 const GRID_SPACING = sz(16);
 // The tab bar covers the bottom safe area and tabBarClearance already adds
@@ -52,7 +51,7 @@ const formatNum = (num: number) => {
 const keyExtractor = (item: GridItem) => (typeof item === 'number' ? `dummy-${item}` : item.id);
 
 export function LikesScreen() {
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const { onboardingData, user } = useAuth();
   const router = useRouter();
   const role = onboardingData?.role?.toLowerCase() as 'brand' | 'influencer' | undefined;

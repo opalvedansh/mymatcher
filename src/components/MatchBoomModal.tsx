@@ -6,10 +6,9 @@ import {
   Modal,
   Animated,
   Pressable,
-  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 
 interface MatchBoomModalProps {
   visible: boolean;
@@ -28,7 +27,7 @@ export function MatchBoomModal({
   onClose,
   onIntroduce,
 }: MatchBoomModalProps) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppDimensions();
   
   // Animation values
   const scaleAnim = useRef(new Animated.Value(0)).current;

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  useWindowDimensions,
   ActivityIndicator,
   Alert,
   Keyboard,
@@ -38,7 +37,7 @@ import { TaskIcon, HeartBubbleIcon, UsersIcon, CashIcon, EventIcon } from '@/com
 import type { BrandProfile, MatchRecord, PaymentMode, Responsiveness } from '@/api/types';
 import { PlatformFollowerInputs } from '@/components/PlatformFollowerInputs';
 import { compactCount, followerDrafts, typedFollowers, handleDrafts, typedHandles, platformLabel } from '@/utils/followers';
-import { sz, tabBarClearance } from '@/theme/scale';
+import { sz, tabBarClearance, useAppDimensions } from '@/theme/scale';
 
 const H = sz(20);
 const PRIMARY = '#F05A28';
@@ -850,7 +849,7 @@ export function BrandProfileScreen({ publicUserId, matchId, onBack }: {
   matchId?: string,
   onBack?: () => void,
 }) {
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, signOut, deleteAccount } = useAuth();

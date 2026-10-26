@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useWindowDimensions } from 'react-native';
+import { useAppDimensions } from '@/theme/scale';
 
 // A story is stored as its original photo plus a layout: where the photo sits,
 // what is drawn and written over it, and the background behind it. The viewer
@@ -133,7 +133,7 @@ export type CanvasFrame = { width: number; height: number; top: number; left: nu
  * fits the canvas by height instead.
  */
 export function useCanvasFrame(reserveBottom: number): CanvasFrame {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppDimensions();
   const insets = useSafeAreaInsets();
   const available = height - insets.top - reserveBottom - insets.bottom;
   let w = width;

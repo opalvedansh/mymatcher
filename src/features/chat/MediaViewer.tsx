@@ -1,11 +1,11 @@
 import React from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import type { ChatMessage } from '@/api/types';
 import { getVideo } from '@/utils/optionalModules';
-import { sz } from '@/theme/scale';
+import { sz, useAppDimensions } from '@/theme/scale';
 import { openLink } from './LinkifiedText';
 import { formatClock } from './format';
 
@@ -47,7 +47,7 @@ export function MediaViewer({
   onReply?: (message: ChatMessage) => void;
   onForward?: (message: ChatMessage) => void;
 }) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppDimensions();
   const source = message ? mediaSource(message) : null;
   const isVideo = message?.kind === 'video';
   const remoteUrl = message?.attachment?.url ?? null;
