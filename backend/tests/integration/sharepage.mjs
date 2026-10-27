@@ -50,9 +50,7 @@ try {
   const require = createRequire(`${BACKEND}/package.json`);
   const app = require('./src/app.js');
 
-  // src/app.js exports the server it already started listening.
-  httpServer = app;
-  if (!httpServer.listening) await new Promise((resolve) => httpServer.once('listening', resolve));
+  await new Promise((resolve) => { httpServer = app.listen(0, resolve); });
   const base = `http://127.0.0.1:${httpServer.address().port}`;
 
   // ── The page itself ────────────────────────────────────────────────

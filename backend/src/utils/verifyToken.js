@@ -150,11 +150,6 @@ async function verifySupabaseToken(token) {
   if (!header?.alg) {
     throw new Error('jwt malformed: missing algorithm header');
   }
-  // Supabase only issues these. Anything else ("none", "HS512", ...) is forged:
-  // reject it as invalid (401) before it can trigger a JWKS fetch.
-  if (!['HS256', 'ES256', 'RS256'].includes(header.alg)) {
-    throw new Error(`Invalid token: unsupported algorithm ${header.alg}`);
-  }
 
   logger.info({
     tokenLength: token.length,

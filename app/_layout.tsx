@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform, View } from 'react-native';
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { onWebPushOpen, pushDataOf, pushSupported } from '@/services/pushNotifications';
+import { pushDataOf, pushSupported } from '@/services/pushNotifications';
 import { notificationHref } from '@/services/notificationRoutes';
 import { refreshUnreadNotifications } from '@/hooks/useUnreadNotifications';
 import { setPendingDeepLink, takePendingDeepLink } from '@/services/pendingDeepLink';
@@ -137,15 +137,6 @@ function PushResponseHandler() {
     Notifications.getLastNotificationResponseAsync().then(open).catch(() => {});
     const sub = Notifications.addNotificationResponseReceivedListener(open);
     return () => sub.remove();
-  }, [ready, role, router]);
-
-  // Browser notification taps (web app), relayed by public/sw.js.
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !ready) return;
-    return onWebPushOpen((data) => {
-      refreshUnreadNotifications();
-      router.navigate(notificationHref(role, data.type, data.matchId, data.authorId));
-    });
   }, [ready, role, router]);
 
   return null;

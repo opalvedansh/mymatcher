@@ -14,12 +14,6 @@
   to = "/app/index.html"
   status = 200
 
-# The service worker must update as soon as a new one ships.
-[[headers]]
-  for = "/app/sw.js"
-  [headers.values]
-    Cache-Control = "no-cache"
-
 # Browser-side hardening. frame-ancestors/X-Frame-Options stop other sites from
 # framing the app (clickjacking a "Delete account" tap); the CSP only lets the
 # bundle talk to the API and Supabase and run its own scripts.

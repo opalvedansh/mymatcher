@@ -214,24 +214,9 @@ async function recordView(req, res, next) {
     const userId = req.user.id;
     const { storyId } = req.params;
 
-    // Only a story this user could see in their feed (same rules as
-    // getFeedStories): otherwise a blocked or non-close-friend user who knows
-    // the id could put themselves on the owner's viewer list.
-    const { rows: [story] } = await db.query(
-      `SELECT s.user_id FROM stories s
-        WHERE s.id = $1 AND s.expires_at > NOW()
-          AND (s.audience = 'all' OR s.user_id = $2 OR EXISTS (
-            SELECT 1 FROM close_friends cf WHERE cf.user_id = s.user_id AND cf.friend_id = $2
-          ))`,
-      [storyId, userId]
-    );
-    if (!story || (story.user_id !== userId && !(await matchedUsers(userId, [story.user_id])).size)) {
-      return res.status(404).json({ error: 'Story not found' });
-    }
-
     await db.query(
-      `INSERT INTO story_views (story_id, viewer_id)
-       VALUES ($1, $2)
+      `INSERT INTO story_views (story_id, viewer_id) 
+       VALUES ($1, $2) 
        ON CONFLICT (story_id, viewer_id) DO NOTHING`,
       [storyId, userId]
     );
