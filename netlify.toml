@@ -1,8 +1,10 @@
 # Web app (Expo web build), deployed as Netlify site "matchr-web" and served to
 # users at https://mymatchr.in/app through the landing site's proxy.
 # Built under /app to match app.json experiments.baseUrl.
+# .env is not in git, so the Supabase keys come from the Netlify site env; fail
+# the build without them rather than ship a bundle with placeholder keys.
 [build]
-  command = "npx expo export -p web && rm -rf out && mkdir -p out && mv dist out/app"
+  command = '[ -n "$EXPO_PUBLIC_SUPABASE_URL" ] && [ -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ] || { echo "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in the Netlify site env"; exit 1; }; npx expo export -p web && rm -rf out && mkdir -p out && mv dist out/app'
   publish = "out"
 
 [build.environment]
@@ -25,3 +27,14 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(self), microphone=(self), geolocation=(self), payment=()"
+
+# Bundles and assets have content hashes in their names, so they never change.
+[[headers]]
+  for = "/app/_expo/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/app/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
